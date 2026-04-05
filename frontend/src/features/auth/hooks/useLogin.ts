@@ -19,7 +19,12 @@ export function useLogin() {
     onSuccess: (data) => {
       setUser(data.user);
       queryClient.setQueryData(['auth', 'me'], data.user);
-      router.push(ROUTES.DASHBOARD);
+      // Super Admin goes to company picker; everyone else goes to dashboard
+      if (data.user.isSuperAdmin) {
+        router.push(ROUTES.COMPANY_SELECT);
+      } else {
+        router.push(ROUTES.DASHBOARD);
+      }
     },
     onError: (error: any) => {
       const message =

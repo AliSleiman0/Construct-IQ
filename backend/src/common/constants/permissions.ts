@@ -1,0 +1,128 @@
+/**
+ * Permission name constants — matches the `name` field in the `permissions` table.
+ * Format: `action:resource`
+ *
+ * Use @RequirePermissions(PERMISSIONS.PROJECTS.READ) in controllers.
+ * Never use raw strings like 'read:projects' — always use these constants.
+ */
+export const PERMISSIONS = {
+  // ── Wildcard ──────────────────────────────────────────────
+  ALL: 'manage:all',
+
+  // ── Organizations ─────────────────────────────────────────
+  ORGANIZATIONS: {
+    READ: 'read:organizations',
+    UPDATE: 'update:organizations',
+    MANAGE: 'manage:organizations',
+  },
+
+  // ── Users & Roles ─────────────────────────────────────────
+  USERS: {
+    READ: 'read:users',
+    CREATE: 'create:users',
+    UPDATE: 'update:users',
+    DELETE: 'delete:users',
+    MANAGE: 'manage:users',
+  },
+  ROLES: {
+    READ: 'read:roles',
+    MANAGE: 'manage:roles',
+  },
+
+  // ── Projects ──────────────────────────────────────────────
+  PROJECTS: {
+    READ: 'read:projects',
+    CREATE: 'create:projects',
+    UPDATE: 'update:projects',
+    DELETE: 'delete:projects',
+    MANAGE: 'manage:projects',
+    ASSIGN_MEMBERS: 'assign:project_members',
+  },
+
+  // ── Phases & Milestones ───────────────────────────────────
+  PHASES: {
+    READ: 'read:phases',
+    MANAGE: 'manage:phases',
+  },
+  MILESTONES: {
+    READ: 'read:milestones',
+    MANAGE: 'manage:milestones',
+  },
+
+  // ── Tasks ─────────────────────────────────────────────────
+  TASKS: {
+    READ: 'read:tasks',
+    CREATE: 'create:tasks',
+    UPDATE: 'update:tasks',
+    DELETE: 'delete:tasks',
+    ASSIGN: 'assign:tasks',
+    MANAGE: 'manage:tasks',
+  },
+
+  // ── Daily Reports ─────────────────────────────────────────
+  REPORTS: {
+    READ: 'read:reports',
+    CREATE: 'create:reports',
+    UPDATE: 'update:reports',
+    MANAGE: 'manage:reports',
+  },
+
+  // ── Issues ────────────────────────────────────────────────
+  ISSUES: {
+    READ: 'read:issues',
+    CREATE: 'create:issues',
+    UPDATE: 'update:issues',
+    ASSIGN: 'assign:issues',
+    MANAGE: 'manage:issues',
+  },
+
+  // ── Budget ────────────────────────────────────────────────
+  BUDGET: {
+    READ: 'read:budget',
+    MANAGE: 'manage:budget',
+  },
+
+  // ── Suppliers ─────────────────────────────────────────────
+  SUPPLIERS: {
+    READ: 'read:suppliers',
+    MANAGE: 'manage:suppliers',
+  },
+
+  // ── Purchase Orders ───────────────────────────────────────
+  PURCHASE_ORDERS: {
+    READ: 'read:purchase_orders',
+    CREATE: 'create:purchase_orders',
+    UPDATE: 'update:purchase_orders',
+    APPROVE: 'approve:purchase_orders',
+    MANAGE: 'manage:purchase_orders',
+  },
+
+  // ── Deliveries ────────────────────────────────────────────
+  DELIVERIES: {
+    READ: 'read:deliveries',
+    UPDATE: 'update:deliveries',
+    MANAGE: 'manage:deliveries',
+  },
+
+  // ── Documents ─────────────────────────────────────────────
+  DOCUMENTS: {
+    READ: 'read:documents',
+    UPLOAD: 'upload:documents',
+    DELETE: 'delete:documents',
+    MANAGE: 'manage:documents',
+  },
+
+  // ── AI ────────────────────────────────────────────────────
+  AI: {
+    READ: 'read:ai',
+    USE: 'use:ai',
+  },
+
+  // ── Audit Logs ────────────────────────────────────────────
+  AUDIT_LOGS: {
+    READ: 'read:audit_logs',
+  },
+} as const;
+
+/** Flat union type of all permission strings */
+export type PermissionName = string;

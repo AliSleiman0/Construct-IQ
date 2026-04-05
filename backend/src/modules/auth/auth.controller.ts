@@ -63,6 +63,13 @@ export class AuthController {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // Non-httpOnly flag so the frontend middleware knows if this is Super Admin
+    res.cookie('is_super_admin', result.user.isSuperAdmin ? 'true' : 'false', {
+      secure: this.isProd,
+      sameSite: this.isProd ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return { user: result.user };
   }
 
@@ -108,6 +115,7 @@ export class AuthController {
     res.clearCookie('access_token');
     res.clearCookie('refresh_token');
     res.clearCookie('logged_in');
+    res.clearCookie('is_super_admin');
 
     return { message: 'Logged out successfully' };
   }

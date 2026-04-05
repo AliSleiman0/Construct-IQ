@@ -18,4 +18,8 @@ export default () => ({
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD,
   },
+  superAdmin: {
+    email: process.env.SUPER_ADMIN_EMAIL || 'admin@constructiq.com',
+    password: process.env.SUPER_ADMIN_PASSWORD || 'Admin@1234',
+  },
 });

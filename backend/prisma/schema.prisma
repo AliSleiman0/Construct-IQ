@@ -140,20 +140,24 @@ model Organization {
 
 model User {
   id             String     @id @default(cuid())
-  organizationId String
-  email          String     @unique
+  organizationId String?    // nullable — external users (Supplier/Subcontractor) have no org
+  email          String     // no @unique here — enforced by partial DB index (WHERE deleted_at IS NULL)
   passwordHash   String
   firstName      String
   lastName       String
   phone          String?
   avatarUrl      String?
+  isExternal     Boolean    @default(false)  // true for Supplier/Subcontractor users
+  supplierId     String?    // FK to suppliers.id — set only when isExternal = true
   status         UserStatus @default(ACTIVE)
   lastLoginAt    DateTime?
   refreshToken   String?
+  deletedAt      DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  organization   Organization    @relation(fields: [organizationId], references: [id])
+  organization   Organization?   @relation(fields: [organizationId], references: [id])
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id])
   userRoles      UserRole[]
   projectMembers ProjectMember[]
 
@@ -169,6 +173,7 @@ model User {
   auditLogs    AuditLog[]
 
   @@index([organizationId])
+  @@index([email])
   @@map("users")
 }
 
@@ -507,13 +512,13 @@ model BudgetLine {
   category      String
   description   String?
   plannedAmount Decimal  @db.Decimal(15, 2)
-  actualAmount  Decimal  @default(0) @db.Decimal(15, 2)
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  budget   Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  expenses Expense[]
+  budget         Budget          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenses       Expense[]
+  purchaseOrders PurchaseOrder[] // committed costs auto-linked when PO is approved
 
   @@index([budgetId])
   @@map("budget_lines")
@@ -563,6 +568,7 @@ model Supplier {
 
   organization   Organization    @relation(fields: [organizationId], references: [id])
   purchaseOrders PurchaseOrder[]
+  externalUsers  User[]          // Supplier Users linked to this supplier
 
   @@index([organizationId])
   @@map("suppliers")
@@ -573,6 +579,7 @@ model PurchaseOrder {
   organizationId       String
   projectId            String
   supplierId           String
+  budgetLineId         String?             // links committed costs to a budget category
   poNumber             String
   status               PurchaseOrderStatus @default(DRAFT)
   totalAmount          Decimal?            @db.Decimal(15, 2)
@@ -588,6 +595,7 @@ model PurchaseOrder {
 
   project    Project             @relation(fields: [projectId], references: [id])
   supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  budgetLine BudgetLine?         @relation(fields: [budgetLineId], references: [id])
   items      PurchaseOrderItem[]
   deliveries Delivery[]
 

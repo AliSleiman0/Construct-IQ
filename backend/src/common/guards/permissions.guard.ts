@@ -45,8 +45,19 @@ export class PermissionsGuard implements CanActivate {
 
     const permissionNames = userPermissions.map((p: { name: any; }) => p.name);
 
-    return requiredPermissions.every((required) =>
-      permissionNames.includes(required),
-    );
+    // Super Admin with manage:all bypasses every permission check
+    if (permissionNames.includes('manage:all')) {
+      return true;
+    }
+
+    // Hierarchical check: manage:<resource> satisfies read/create/update/delete:<resource>
+    const satisfies = (required: string): boolean => {
+      if (permissionNames.includes(required)) return true;
+      const match = required.match(/^(?:read|create|update|delete|assign|approve|upload|use):(.+)$/);
+      if (match) return permissionNames.includes(`manage:${match[1]}`);
+      return false;
+    };
+
+    return requiredPermissions.every(satisfies);
   }
 }

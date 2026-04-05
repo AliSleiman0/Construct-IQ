@@ -14,6 +14,7 @@ export interface AuthUser {
   avatarUrl?: string | null;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   lastLoginAt?: string | null;
+  isSuperAdmin?: boolean;
   organization: Organization;
   roles: string[];
   permissions: string[];

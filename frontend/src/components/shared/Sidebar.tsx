@@ -12,7 +12,7 @@ import {
   Avatar,
 } from '@mui/material';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
@@ -24,8 +24,11 @@ import FolderIcon from '@mui/icons-material/Folder';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ChatIcon from '@mui/icons-material/Chat';
 import SettingsIcon from '@mui/icons-material/Settings';
+import PeopleIcon from '@mui/icons-material/People';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { ROUTES } from '@/constants/routes';
 import { useAuthStore } from '@/store/auth.store';
+import { useCompanyStore } from '@/store/company.store';
 
 interface NavItem {
   label: string;
@@ -45,6 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Documents', href: ROUTES.DOCUMENTS, icon: FolderIcon, group: 'Resources' },
   { label: 'AI Insights', href: ROUTES.AI_INSIGHTS, icon: AutoAwesomeIcon, group: 'AI' },
   { label: 'AI Assistant', href: ROUTES.AI_ASSISTANT, icon: ChatIcon },
+  { label: 'Team Members', href: ROUTES.USERS, icon: PeopleIcon, group: 'Settings' },
 ];
 
 const SIDEBAR_WIDTH = 260;
@@ -55,10 +59,17 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const { selectedCompany, clearSelectedCompany } = useCompanyStore();
+
+  const handleSwitchCompany = () => {
+    clearSelectedCompany();
+    router.push(ROUTES.COMPANY_SELECT);
+  };
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
+    if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
   };
 
@@ -125,7 +136,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               ConstructIQ
             </Typography>
             <Typography sx={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.7rem' }}>
-              {user?.organization?.name ?? 'Management Platform'}
+              {selectedCompany?.name ?? user?.organization?.name ?? 'Management Platform'}
             </Typography>
           </Box>
         )}
@@ -202,6 +213,35 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
           py: 1,
         }}
       >
+        {/* Switch Company — visible to Super Admin only */}
+        {user?.isSuperAdmin && (
+          <Tooltip title={collapsed ? 'Switch Company' : ''} placement="right">
+            <ListItemButton
+              onClick={handleSwitchCompany}
+              sx={{
+                mx: 1,
+                px: collapsed ? 1.5 : 2,
+                py: 1,
+                borderRadius: 1.5,
+                color: 'rgba(255,193,7,0.9)',
+                '&:hover': {
+                  backgroundColor: 'rgba(255,193,7,0.1)',
+                  color: '#ffc107',
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: collapsed ? 'auto' : 36, color: 'inherit' }}>
+                <SwapHorizIcon sx={{ fontSize: 20 }} />
+              </ListItemIcon>
+              {!collapsed && (
+                <ListItemText
+                  primary="Switch Company"
+                  primaryTypographyProps={{ fontSize: '0.875rem' }}
+                />
+              )}
+            </ListItemButton>
+          </Tooltip>
+        )}
         <Tooltip title={collapsed ? 'Settings' : ''} placement="right">
           <ListItemButton
             component={Link}

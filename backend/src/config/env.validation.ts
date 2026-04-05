@@ -54,6 +54,14 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   FRONTEND_URL: string = 'http://localhost:3000';
+
+  @IsString()
+  @IsOptional()
+  SUPER_ADMIN_EMAIL: string = 'admin@constructiq.com';
+
+  @IsString()
+  @IsOptional()
+  SUPER_ADMIN_PASSWORD: string = 'Admin@1234';
 }
 
 export function validate(config: Record<string, unknown>) {

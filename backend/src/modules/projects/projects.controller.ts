@@ -1,0 +1,84 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PERMISSIONS } from '../../common/constants/permissions';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { ProjectsService } from './projects.service';
+import { CreateProjectDto } from './dto/create-project.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
+import { AddProjectMemberDto } from './dto/add-project-member.dto';
+
+@Controller('projects')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+export class ProjectsController {
+  constructor(private readonly projectsService: ProjectsService) {}
+
+  @Post()
+  @RequirePermissions(PERMISSIONS.PROJECTS.CREATE)
+  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateProjectDto) {
+    return this.projectsService.create(user.organizationId, user.sub, dto);
+  }
+
+  @Get()
+  @RequirePermissions(PERMISSIONS.PROJECTS.READ)
+  findAll(@CurrentUser() user: JwtPayload) {
+    return this.projectsService.findAll(
+      user.organizationId,
+      user.sub,
+      user.isSuperAdmin,
+    );
+  }
+
+  @Get(':id')
+  @RequirePermissions(PERMISSIONS.PROJECTS.READ)
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.projectsService.findById(id, user.organizationId, user.sub, user.isSuperAdmin);
+  }
+
+  @Patch(':id')
+  @RequirePermissions(PERMISSIONS.PROJECTS.UPDATE)
+  update(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateProjectDto,
+  ) {
+    return this.projectsService.update(id, user.organizationId, dto, user.isSuperAdmin);
+  }
+
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.PROJECTS.DELETE)
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.projectsService.softDelete(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  @Post(':id/members')
+  @RequirePermissions(PERMISSIONS.PROJECTS.ASSIGN_MEMBERS)
+  addMember(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AddProjectMemberDto,
+  ) {
+    return this.projectsService.addMember(id, user.organizationId, dto);
+  }
+
+  @Delete(':id/members/:userId')
+  @RequirePermissions(PERMISSIONS.PROJECTS.ASSIGN_MEMBERS)
+  removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.projectsService.removeMember(id, user.organizationId, userId);
+  }
+}

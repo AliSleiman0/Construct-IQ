@@ -12,13 +12,16 @@ import {
   Divider,
   Avatar,
   Badge,
+  Chip,
 } from '@mui/material';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
+import BusinessIcon from '@mui/icons-material/Business';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
+import { useCompanyStore } from '@/store/company.store';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { ROUTES } from '@/constants/routes';
 
@@ -31,6 +34,7 @@ interface HeaderProps {
 export function Header({ pageTitle }: HeaderProps) {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const selectedCompany = useCompanyStore((s) => s.selectedCompany);
   const { logout } = useLogout();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -69,6 +73,18 @@ export function Header({ pageTitle }: HeaderProps) {
           </Typography>
         )}
         <Box sx={{ flex: 1 }} />
+
+        {/* Super Admin — current company context badge */}
+        {user?.isSuperAdmin && selectedCompany && (
+          <Chip
+            icon={<BusinessIcon sx={{ fontSize: '16px !important' }} />}
+            label={selectedCompany.name}
+            size="small"
+            color="warning"
+            variant="outlined"
+            sx={{ mr: 1, fontWeight: 600, fontSize: '0.75rem' }}
+          />
+        )}
 
         {/* Actions */}
         <Box display="flex" alignItems="center" gap={0.5}>

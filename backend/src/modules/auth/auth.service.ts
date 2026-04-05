@@ -24,10 +24,10 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+    const user = await this.prisma.user.findFirst({
+      where: { email: dto.email, deletedAt: null },
       include: {
-        organization: { select: { id: true, name: true, slug: true } },
+        organization: { select: { id: true, name: true, slug: true, isActive: true } },
         userRoles: {
           include: {
             role: {
@@ -50,6 +50,11 @@ export class AuthService {
       throw new ForbiddenException('Your account has been suspended');
     }
 
+    // Super Admin has no org; regular users must belong to an active org
+    if (user.organization && !user.organization.isActive) {
+      throw new ForbiddenException('Your organization subscription has been suspended. Please contact support.');
+    }
+
     const isPasswordValid = await bcrypt.compare(
       dto.password,
       user.passwordHash,
@@ -58,7 +63,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.organizationId);
+    const permissions = user.userRoles.flatMap(
+      (ur: { role: { rolePermissions: { permission: { name: string } }[] } }) =>
+        ur.role.rolePermissions.map((rp: { permission: { name: string } }) => rp.permission.name),
+    );
+
+    const isSuperAdmin = permissions.includes('manage:all');
+    const tokens = await this.generateTokens(user.id, user.email, user.organizationId ?? '', isSuperAdmin);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -68,15 +79,10 @@ export class AuthService {
       },
     });
 
-    const permissions = user.userRoles.flatMap(
-      (ur: { role: { rolePermissions: { permission: { name: string } }[] } }) =>
-        ur.role.rolePermissions.map((rp: { permission: { name: string } }) => rp.permission.name),
-    );
-
     const { passwordHash, refreshToken, ...safeUser } = user;
 
     return {
-      user: { ...safeUser, permissions },
+      user: { ...safeUser, permissions, isSuperAdmin },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };
@@ -99,7 +105,12 @@ export class AuthService {
       throw new ForbiddenException('Access denied');
     }
 
-    const tokens = await this.generateTokens(user.id, user.email, user.organizationId);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      user.organizationId ?? '',
+      await this.userHasSuperAdminPermission(user.id),
+    );
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -161,15 +172,17 @@ export class AuthService {
       (ur: { role: { name: string } }) => ur.role.name,
     );
 
-    return { ...user, permissions, roles };
+    const isSuperAdmin = permissions.includes('manage:all');
+    return { ...user, permissions, roles, isSuperAdmin };
   }
 
   private async generateTokens(
     userId: string,
     email: string,
-    organizationId: string,
+    organizationId: string | null,
+    isSuperAdmin = false,
   ) {
-    const payload: JwtPayload = { sub: userId, email, organizationId };
+    const payload: JwtPayload = { sub: userId, email, organizationId: organizationId ?? '', isSuperAdmin };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
@@ -183,5 +196,17 @@ export class AuthService {
     ]);
 
     return { accessToken, refreshToken };
+  }
+
+  private async userHasSuperAdminPermission(userId: string): Promise<boolean> {
+    const p = await this.prisma.permission.findFirst({
+      where: {
+        name: 'manage:all',
+        rolePermissions: {
+          some: { role: { userRoles: { some: { userId } } } },
+        },
+      },
+    });
+    return !!p;
   }
 }

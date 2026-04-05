@@ -12,6 +12,25 @@ export const apiClient = axios.create({
   },
 });
 
+// Request interceptor — inject X-Organization-Id when Super Admin has selected a company
+apiClient.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('constructiq-selected-company');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const orgId: string | undefined = parsed?.state?.selectedCompany?.id;
+        if (orgId) {
+          config.headers['X-Organization-Id'] = orgId;
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return config;
+});
+
 // Response interceptor — unwrap the `data` envelope from the API
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {

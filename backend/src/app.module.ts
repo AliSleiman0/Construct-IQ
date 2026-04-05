@@ -7,9 +7,12 @@ import { validate } from './config/env.validation';
 import { PrismaModule } from './database/prisma/prisma.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { OrgContextInterceptor } from './common/interceptors/org-context.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 @Module({
   imports: [
@@ -33,6 +36,8 @@ import { UsersModule } from './modules/users/users.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    OrganizationsModule,
+    ProjectsModule,
   ],
   providers: [
     {
@@ -46,6 +51,10 @@ import { UsersModule } from './modules/users/users.module';
     {
       provide: APP_INTERCEPTOR,
       useClass: ResponseInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: OrgContextInterceptor,
     },
   ],
 })

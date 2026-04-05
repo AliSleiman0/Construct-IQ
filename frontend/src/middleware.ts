@@ -2,36 +2,50 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login'];
+const COMPANY_SELECT = '/company-select';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // The `logged_in` cookie is a non-httpOnly flag set by the backend.
-  // It is never used to derive identity — it only gates route access.
-  // The actual auth tokens (access_token, refresh_token) are httpOnly.
   const loggedIn = request.cookies.get('logged_in')?.value === 'true';
+  const isSuperAdmin = request.cookies.get('is_super_admin')?.value === 'true';
+  const selectedCompany = request.cookies.get('selected_company')?.value;
 
   const isPublicPath = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(path + '/'),
   );
 
-  // Unauthenticated user trying to access protected route
+  const isCompanySelectPath = pathname === COMPANY_SELECT;
+
+  // Unauthenticated user → login
   if (!loggedIn && !isPublicPath) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user trying to access auth pages
+  // Authenticated user on public page → redirect appropriately
   if (loggedIn && isPublicPath) {
+    if (isSuperAdmin) {
+      return NextResponse.redirect(new URL(COMPANY_SELECT, request.url));
+    }
     return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // Super Admin without a selected company → must pick one first
+  if (loggedIn && isSuperAdmin && !selectedCompany && !isCompanySelectPath) {
+    return NextResponse.redirect(new URL(COMPANY_SELECT, request.url));
+  }
+
+  // Super Admin already has a company selected → don't show the picker again
+  if (loggedIn && isSuperAdmin && selectedCompany && isCompanySelectPath) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  // Match all routes except Next.js internals, static files, and API proxy routes
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|icons|images|api/).*)',
   ],

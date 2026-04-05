@@ -1,7 +1,8 @@
 export const ROUTES = {
   LOGIN: '/login',
-  HOME: '/',
-  DASHBOARD: '/',
+  HOME: '/dashboard',
+  DASHBOARD: '/dashboard',
+  COMPANY_SELECT: '/company-select',
   PROJECTS: '/projects',
   PROJECT_DETAIL: (id: string) => `/projects/${id}`,
   TASKS: '/tasks',
@@ -14,6 +15,7 @@ export const ROUTES = {
   DOCUMENTS: '/documents',
   AI_INSIGHTS: '/ai/insights',
   AI_ASSISTANT: '/ai/assistant',
+  USERS: '/users',
   SETTINGS: '/settings',
   PROFILE: '/profile',
 } as const;
