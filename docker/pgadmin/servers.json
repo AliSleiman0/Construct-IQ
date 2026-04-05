@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "ConstructIQ DB",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "constructiq_db",
+      "Username": "constructiq",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}

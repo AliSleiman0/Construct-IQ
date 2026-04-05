@@ -1,0 +1,1974 @@
+# AI Construction Management Platform
+
+## Step-by-Step Complete Plan
+
+### Next.js + TypeScript + NestJS + PostgreSQL + Prisma + AI
+
+---
+
+# 1. Project Purpose
+
+Build a web platform for construction companies to manage:
+
+* projects
+* phases
+* tasks
+* milestones
+* daily site reports
+* issues
+* budgets
+* suppliers
+* purchase orders
+* deliveries
+* documents
+* AI summaries
+* AI risk insights
+* AI assistant
+
+The platform should help teams:
+
+* reduce project delays
+* improve daily visibility
+* control budget leakage
+* organize procurement
+* centralize communication
+* automate repetitive reporting
+
+---
+
+# 2. Product Goals
+
+## Business goals
+
+* create a sellable B2B SaaS product
+* solve real construction workflow pain
+* keep MVP small enough to launch fast
+* make architecture scalable for future expansion
+* use AI where it adds clear value
+
+## Technical goals
+
+* use a modular backend
+* use reusable frontend components
+* support multiple organizations
+* support multiple projects per organization
+* keep data secure and isolated
+* make the system maintainable and extensible
+
+---
+
+# 3. Main User Roles
+
+## Internal roles
+
+* Super Admin
+* Organization Admin
+* Project Manager
+* Site Engineer
+* Planning Engineer
+* Quantity Surveyor
+* Procurement Officer
+* Finance / Management Viewer
+
+## External or limited roles
+
+* Client Viewer
+* Supplier User (future)
+* Subcontractor User (future)
+
+---
+
+# 4. Main Product Modules
+
+## Core modules for MVP
+
+* Authentication
+* Organizations
+* Users and Roles
+* Projects
+* Phases and Milestones
+* Tasks
+* Daily Reports
+* Issues
+* Budgets
+* Suppliers
+* Purchase Orders
+* Deliveries
+* Documents
+* Dashboard
+* AI Summaries
+* AI Risk Insights
+* AI Assistant
+
+## Future modules
+
+* BOQ
+* Quality Control
+* Safety Management
+* RFIs and Approvals
+* Subcontractors
+* Equipment Management
+* Mobile-first field mode
+* Photo intelligence
+* Advanced forecasting
+
+---
+
+# 5. Recommended Tech Stack
+
+## Frontend
+
+* Next.js
+* TypeScript
+* Tailwind CSS
+* MUI
+* TanStack Query
+* React Hook Form
+* Zod
+* Zustand
+
+## Backend
+
+* NestJS
+* TypeScript
+* PostgreSQL
+* Prisma ORM
+* JWT
+* class-validator
+* Redis
+* BullMQ
+
+## AI Layer
+
+* LLM provider for summarization and assistant
+* rule-based engine for risk detection in MVP
+* vector search later for document Q&A
+
+## Storage and Infrastructure
+
+* S3-compatible storage for files
+* Docker
+* Nginx
+* DigitalOcean or AWS
+* GitHub Actions for CI/CD
+
+---
+
+# 6. High-Level Architecture
+
+```text
+Frontend (Next.js)
+    |
+    v
+Backend API (NestJS)
+    |
+    +--> PostgreSQL
+    |
+    +--> Redis / BullMQ
+    |
+    +--> AI Services
+    |
+    +--> S3 File Storage
+```
+
+---
+
+# 7. Delivery Strategy
+
+Build in this order:
+
+1. foundation
+2. authentication and permissions
+3. organizations and projects
+4. tasks and milestones
+5. daily reports and issues
+6. budget and procurement
+7. documents and dashboard
+8. AI summaries
+9. AI assistant
+10. polish, security, deployment
+
+---
+
+# 8. Repository Strategy
+
+Use 2 repositories first.
+
+## Frontend repository
+
+`construction-ai-web`
+
+## Backend repository
+
+`construction-ai-api`
+
+This keeps deployment and ownership simple.
+
+---
+
+# 9. Frontend Architecture Plan
+
+## Main frontend folders
+
+```text
+src/
+  app/
+  components/
+  features/
+  hooks/
+  lib/
+  providers/
+  store/
+  types/
+  constants/
+```
+
+## Folder responsibilities
+
+### `app/`
+
+route-level pages and layouts
+
+### `components/`
+
+shared and reusable presentational components
+
+### `features/`
+
+domain-specific business UI
+
+### `hooks/`
+
+reusable logic hooks
+
+### `lib/`
+
+API client, utilities, helpers
+
+### `providers/`
+
+React providers like query provider, theme provider
+
+### `store/`
+
+small client state
+
+### `types/`
+
+frontend-specific types
+
+---
+
+# 10. Reusable Frontend Component Strategy
+
+Build the frontend with reusable and composable components.
+
+## 10.1 Base UI components
+
+These must be generic and reusable.
+
+```text
+components/ui/
+  AppButton.tsx
+  AppInput.tsx
+  AppTextarea.tsx
+  AppSelect.tsx
+  AppDatePicker.tsx
+  AppModal.tsx
+  AppDrawer.tsx
+  AppTable.tsx
+  AppBadge.tsx
+  AppCard.tsx
+  AppTabs.tsx
+  AppPagination.tsx
+  AppSearchInput.tsx
+  AppEmptyState.tsx
+  AppErrorState.tsx
+  AppLoader.tsx
+  AppAvatar.tsx
+  AppTooltip.tsx
+  AppConfirmDialog.tsx
+```
+
+## 10.2 Shared layout components
+
+```text
+components/shared/
+  AppLayout.tsx
+  Sidebar.tsx
+  Header.tsx
+  PageHeader.tsx
+  PageSection.tsx
+  FilterBar.tsx
+  SummaryCard.tsx
+  StatsGrid.tsx
+  ProtectedRoute.tsx
+```
+
+## 10.3 Domain components by feature
+
+```text
+features/projects/components/
+features/tasks/components/
+features/reports/components/
+features/issues/components/
+features/budgets/components/
+features/procurement/components/
+features/documents/components/
+features/ai/components/
+```
+
+## 10.4 Smart container components
+
+These connect to APIs and pass data to presentational components.
+
+Examples:
+
+* `ProjectListContainer.tsx`
+* `TaskBoardContainer.tsx`
+* `DailyReportListContainer.tsx`
+
+## 10.5 Form architecture
+
+Use reusable field components.
+
+```text
+components/form/
+  FormTextField.tsx
+  FormSelectField.tsx
+  FormDateField.tsx
+  FormTextareaField.tsx
+  FormFileUploadField.tsx
+```
+
+This prevents repeated form code in every screen.
+
+---
+
+# 11. Frontend Feature Structure
+
+Example for tasks:
+
+```text
+features/tasks/
+  api/
+    task.api.ts
+  hooks/
+    useTasks.ts
+    useCreateTask.ts
+    useUpdateTask.ts
+  components/
+    TaskTable.tsx
+    TaskCard.tsx
+    TaskForm.tsx
+    TaskStatusBadge.tsx
+    TaskFilters.tsx
+  types/
+    task.types.ts
+  utils/
+    task.helpers.ts
+```
+
+Use the same structure for each feature.
+
+---
+
+# 12. Backend Architecture Plan
+
+## Main backend folders
+
+```text
+src/
+  main.ts
+  app.module.ts
+  common/
+  config/
+  database/
+  modules/
+```
+
+## Common folder
+
+```text
+common/
+  decorators/
+  guards/
+  interceptors/
+  filters/
+  pipes/
+  utils/
+  constants/
+  interfaces/
+```
+
+## Config folder
+
+```text
+config/
+  configuration.ts
+  env.validation.ts
+```
+
+## Database folder
+
+```text
+database/
+  prisma/
+    prisma.module.ts
+    prisma.service.ts
+```
+
+---
+
+# 13. Backend Module Structure
+
+Each module should follow the same pattern:
+
+```text
+modules/tasks/
+  dto/
+  controllers/
+  services/
+  repositories/
+  tasks.module.ts
+  tasks.controller.ts
+  tasks.service.ts
+  tasks.repository.ts
+```
+
+Not every module needs a repository at the beginning, but larger modules should use one.
+
+---
+
+# 14. Database Modeling Rules
+
+Use a relational model with normalized tables.
+
+## Use relations for
+
+* organizations and users
+* projects and project members
+* projects and phases
+* projects and milestones
+* projects and tasks
+* tasks and dependencies
+* daily reports and report entries
+* budgets and budget lines
+* purchase orders and purchase order items
+* suppliers and purchase orders
+* documents and related entities
+
+## Use JSONB columns only when needed for flexible metadata
+
+Examples:
+
+* AI prompt metadata
+* audit log metadata
+* optional document metadata
+* assistant response context snapshots
+
+## Main rules
+
+* prefer normalized tables
+* use foreign keys
+* enforce unique constraints
+* use join tables for many-to-many relationships
+* use enums for stable statuses and categories
+* use JSONB only for flexible fields, not core business structure
+
+---
+
+# 15. Main Database Tables
+
+## Core tables
+
+* organizations
+* users
+* roles
+* permissions
+* user_roles
+* role_permissions
+* projects
+* project_members
+* phases
+* milestones
+* tasks
+* task_dependencies
+* daily_reports
+* daily_report_manpower_entries
+* daily_report_material_entries
+* issues
+* budgets
+* budget_lines
+* expenses
+* suppliers
+* purchase_orders
+* purchase_order_items
+* deliveries
+* documents
+* ai_insights
+* chat_sessions
+* chat_messages
+* notifications
+* audit_logs
+
+---
+
+# 16. Multi-Tenant Design
+
+This platform must be multi-tenant from day one.
+
+## Rules
+
+Every major table should contain:
+
+* `organization_id`
+* `project_id` where applicable
+
+This gives:
+
+* clean data isolation
+* faster filtering
+* easier permission checks
+
+Examples:
+
+* a user belongs to one organization
+* a project belongs to one organization
+* a task belongs to one project and one organization
+
+## Recommendation
+
+Use application-level tenant isolation with strict query scoping by `organization_id`.
+
+---
+
+# 17. Authentication Plan
+
+## Auth features
+
+* login
+* refresh token
+* logout
+* current user profile
+* password hashing
+* protected routes
+
+## Auth implementation
+
+* access token JWT
+* refresh token JWT
+* bcrypt password hashing
+* role-based guards
+* permission decorators
+
+## Core endpoints
+
+* `POST /auth/login`
+* `POST /auth/refresh`
+* `POST /auth/logout`
+* `GET /auth/me`
+
+---
+
+# 18. Authorization Plan
+
+Use both roles and permissions.
+
+## Example permissions
+
+* `organization.read`
+* `organization.update`
+* `project.create`
+* `project.read`
+* `task.create`
+* `task.update`
+* `task.delete`
+* `daily_report.create`
+* `issue.manage`
+* `budget.read`
+* `purchase_order.approve`
+* `ai.use`
+
+## Permission strategy
+
+* role contains permission array through role_permissions
+* user has one or more roles through user_roles
+* backend checks permission before business action
+
+---
+
+# 19. Project Setup Module Plan
+
+## Features
+
+* create organization
+* create project
+* assign team members
+* define start date and end date
+* add budget total
+* add project location
+* set project status
+
+## Frontend screens
+
+* organization settings page
+* project list page
+* project create form
+* project details page
+
+## Backend work
+
+* organization model
+* project model
+* CRUD endpoints
+* member assignment endpoints
+
+---
+
+# 20. Phases and Milestones Plan
+
+## Features
+
+* create project phases
+* create milestones
+* assign target dates
+* connect milestones to project progress
+
+## Frontend screens
+
+* milestones list
+* milestone create / edit modal
+* phase timeline view
+
+## Backend work
+
+* `phases` module
+* `milestones` module
+* validation for project linkage
+
+---
+
+# 21. Task Management Plan
+
+This is one of the most important MVP modules.
+
+## Features
+
+* create task
+* edit task
+* assign task
+* set priority
+* set due date
+* set progress percentage
+* set dependencies
+* move task status
+* add comments later
+
+## Task statuses
+
+* TODO
+* IN_PROGRESS
+* BLOCKED
+* REVIEW
+* DONE
+
+## Frontend screens
+
+* task list page
+* task board page
+* task details drawer
+* task create / edit modal
+* task filters
+
+## Reusable task components
+
+* `TaskTable`
+* `TaskBoard`
+* `TaskForm`
+* `TaskFilters`
+* `TaskStatusBadge`
+* `TaskPriorityBadge`
+
+## Backend work
+
+* task model
+* task dependency model
+* status update endpoint
+* filters by project, status, assignee, due date
+
+---
+
+# 22. Daily Reports Plan
+
+This is a high-value construction-specific feature.
+
+## Features
+
+* create report per day
+* add weather
+* add achievements
+* add blockers
+* add manpower entries
+* add material usage
+* upload photos
+* auto-generate AI summary
+
+## Frontend screens
+
+* daily report list
+* create report page
+* report details page
+
+## Reusable report components
+
+* `DailyReportForm`
+* `DailyReportCard`
+* `ManpowerEntryFieldArray`
+* `MaterialUsageFieldArray`
+* `PhotoUploadSection`
+
+## Backend work
+
+* daily report model
+* daily report manpower entry model
+* daily report material entry model
+* validation for report date
+* file upload metadata
+* queue AI summary job
+
+---
+
+# 23. Issue Management Plan
+
+## Features
+
+* create issue
+* assign issue
+* set severity
+* set type
+* track status
+* attach files
+* close issue
+
+## Issue types
+
+* GENERAL
+* TECHNICAL
+* QUALITY
+* SAFETY
+* PROCUREMENT
+* BUDGET
+
+## Severity levels
+
+* LOW
+* MEDIUM
+* HIGH
+* CRITICAL
+
+## Frontend screens
+
+* issues list
+* issue create / edit form
+* issue details page
+* issue dashboard widget
+
+## Reusable issue components
+
+* `IssueTable`
+* `IssueForm`
+* `IssueSeverityBadge`
+* `IssueStatusBadge`
+
+## Backend work
+
+* issue model
+* filtering and pagination
+* status transitions
+
+---
+
+# 24. Budget Management Plan
+
+## Features
+
+* define project budget
+* add budget lines by category
+* track actual amount
+* compare planned vs actual
+* show total budget and spent
+
+## Suggested categories
+
+* labor
+* materials
+* equipment
+* subcontractors
+* logistics
+* permits
+* miscellaneous
+
+## Frontend screens
+
+* budget summary page
+* budget lines table
+* budget chart cards
+
+## Reusable budget components
+
+* `BudgetSummaryCard`
+* `BudgetLineTable`
+* `BudgetVarianceBadge`
+
+## Backend work
+
+* budget model
+* budget line model
+* aggregation methods for totals
+
+---
+
+# 25. Supplier and Procurement Plan
+
+## Supplier features
+
+* create supplier
+* update supplier
+* view supplier list
+* track supplier status
+
+## Purchase order features
+
+* create purchase order
+* select supplier
+* add PO items
+* set expected delivery date
+* update PO status
+
+## Delivery features
+
+* record delivery
+* connect delivery to purchase order
+* update delivery status
+* detect delays
+
+## Frontend screens
+
+* suppliers page
+* purchase orders page
+* create purchase order form
+* deliveries page
+
+## Reusable procurement components
+
+* `SupplierTable`
+* `SupplierForm`
+* `PurchaseOrderForm`
+* `PurchaseOrderTable`
+* `DeliveryStatusBadge`
+
+## Backend work
+
+* supplier model
+* purchase order model
+* purchase order item model
+* delivery model
+* PO status updates
+
+---
+
+# 26. Document Management Plan
+
+## Features
+
+* upload documents
+* categorize documents
+* link documents to project or issue or report
+* save file metadata
+* allow preview or download later
+
+## Document types
+
+* DRAWING
+* REPORT
+* CONTRACT
+* PURCHASE_DOCUMENT
+* TECHNICAL_FILE
+* IMAGE
+* OTHER
+
+## Frontend screens
+
+* document center
+* upload dialog
+* document list by project
+
+## Reusable document components
+
+* `DocumentTable`
+* `DocumentUploadModal`
+* `DocumentTypeBadge`
+
+## Backend work
+
+* document model
+* upload endpoint
+* signed URL or secure file retrieval strategy
+
+---
+
+# 27. Dashboard Plan
+
+## Dashboard goals
+
+Show managers a quick project overview.
+
+## Main metrics
+
+* total tasks
+* completed tasks
+* delayed tasks
+* open issues
+* critical issues
+* budget used
+* number of reports this week
+* delayed deliveries
+* AI health insights
+
+## Frontend dashboard sections
+
+* summary cards
+* charts
+* recent activity
+* risk alerts
+* upcoming deadlines
+
+## Reusable dashboard components
+
+* `SummaryCard`
+* `MetricCard`
+* `BarChartCard`
+* `LineChartCard`
+* `RecentActivityList`
+* `RiskAlertPanel`
+
+## Backend work
+
+* dashboard aggregation service
+* optimized indexed queries
+* project summary endpoint
+
+---
+
+# 28. AI Feature Plan for MVP
+
+Do not overbuild AI first. Start with 3 useful AI capabilities.
+
+## 28.1 AI Daily Report Summary
+
+When a daily report is submitted:
+
+1. save the report and related rows
+2. enqueue a background job
+3. collect report data
+4. send structured prompt to LLM
+5. save generated summary in report
+
+## 28.2 AI Weekly Project Summary
+
+Every week or on demand:
+
+1. collect tasks completed
+2. collect open issues
+3. collect budget changes
+4. collect delayed items
+5. generate short executive summary
+
+## 28.3 AI Assistant
+
+User asks:
+
+* what tasks are delayed
+* summarize this project
+* what risks are active
+* what deliveries are late
+
+Assistant flow:
+
+1. validate access to project
+2. fetch structured project data
+3. optionally fetch related docs later
+4. build safe prompt
+5. return concise answer
+6. store chat history
+
+---
+
+# 29. Rule-Based Risk Engine Plan
+
+Start with rules before machine learning.
+
+## Delay rules
+
+* due date passed and status not done
+* task dependency delayed
+* report blockers repeated multiple days
+
+## Cost rules
+
+* actual spend exceeds planned threshold
+* purchase orders spike unexpectedly
+
+## Procurement rules
+
+* expected delivery date passed and not delivered
+* too many pending purchase orders
+
+## Output
+
+Create AI insight records with:
+
+* type
+* severity
+* title
+* message
+* recommendation
+* project_id
+* organization_id
+
+---
+
+# 30. AI Module Structure
+
+```text
+modules/ai/
+  dto/
+  controllers/
+  services/
+    ai-chat.service.ts
+    ai-summary.service.ts
+    ai-risk.service.ts
+  processors/
+    ai.processor.ts
+```
+
+---
+
+# 31. Background Jobs Plan
+
+Use BullMQ.
+
+## Jobs needed
+
+* `generate-daily-report-summary`
+* `generate-weekly-project-summary`
+* `generate-risk-insights`
+* `process-document-upload`
+* `send-notification`
+
+## Why queues are needed
+
+* faster API responses
+* better reliability
+* retry support
+* less blocking in user flow
+
+---
+
+# 32. Frontend API Layer Plan
+
+Create centralized API modules.
+
+```text
+lib/api/
+  client.ts
+  auth.api.ts
+  organizations.api.ts
+  projects.api.ts
+  tasks.api.ts
+  reports.api.ts
+  issues.api.ts
+  budgets.api.ts
+  suppliers.api.ts
+  purchaseOrders.api.ts
+  documents.api.ts
+  ai.api.ts
+```
+
+## Rule
+
+Never write raw fetch logic inside many components. Keep API calls centralized.
+
+---
+
+# 33. Frontend Hooks Plan
+
+Create hooks for each feature.
+
+Examples:
+
+```text
+features/projects/hooks/
+  useProjects.ts
+  useProject.ts
+  useCreateProject.ts
+  useUpdateProject.ts
+```
+
+Same structure for tasks, reports, issues, budgets, procurement, AI.
+
+---
+
+# 34. State Management Plan
+
+Use Zustand only for small client state.
+
+## Good Zustand use cases
+
+* auth session state
+* sidebar open / close
+* selected organization or project in UI
+* modal state if needed
+
+## Avoid using Zustand for server data
+
+Use React Query for server data.
+
+---
+
+# 35. Form Strategy
+
+Use:
+
+* React Hook Form
+* Zod validation
+* shared form field components
+
+## Example forms
+
+* login form
+* project form
+* task form
+* daily report form
+* issue form
+* supplier form
+* purchase order form
+
+## Benefits
+
+* consistent validation
+* reusable form UI
+* less repeated logic
+
+---
+
+# 36. Prisma Schema Plan
+
+Create Prisma models for:
+
+* Organization
+* User
+* Role
+* Permission
+* UserRole
+* RolePermission
+* Project
+* ProjectMember
+* Phase
+* Milestone
+* Task
+* TaskDependency
+* DailyReport
+* DailyReportManpowerEntry
+* DailyReportMaterialEntry
+* Issue
+* Budget
+* BudgetLine
+* Expense
+* Supplier
+* PurchaseOrder
+* PurchaseOrderItem
+* Delivery
+* Document
+* AIInsight
+* ChatSession
+* ChatMessage
+* Notification
+* AuditLog
+
+---
+
+# 37. PostgreSQL Indexing Plan
+
+Create indexes early.
+
+## Important indexes
+
+### Users
+
+* unique index on `email`
+* index on `organization_id`
+
+### Projects
+
+* index on `organization_id`
+* index on `status`
+
+### Tasks
+
+* index on `project_id`
+* index on `organization_id`
+* index on `status`
+* index on `assigned_to`
+* index on `due_date`
+* composite index on `(project_id, status)`
+* composite index on `(organization_id, project_id)`
+
+### Daily Reports
+
+* index on `project_id`
+* index on `report_date`
+* composite index on `(project_id, report_date desc)`
+
+### Issues
+
+* index on `project_id`
+* index on `status`
+* index on `severity`
+* index on `assigned_to`
+
+### Purchase Orders
+
+* index on `project_id`
+* index on `supplier_id`
+* index on `status`
+* index on `expected_delivery_date`
+
+### AI Insights
+
+* index on `project_id`
+* index on `severity`
+* index on `type`
+* index on `created_at`
+
+---
+
+# 38. API Endpoint Plan
+
+## Auth
+
+* `POST /auth/login`
+* `POST /auth/refresh`
+* `POST /auth/logout`
+* `GET /auth/me`
+
+## Organizations
+
+* `POST /organizations`
+* `GET /organizations/:id`
+
+## Projects
+
+* `POST /projects`
+* `GET /projects`
+* `GET /projects/:id`
+* `PATCH /projects/:id`
+
+## Tasks
+
+* `POST /tasks`
+* `GET /tasks`
+* `GET /tasks/:id`
+* `PATCH /tasks/:id`
+* `PATCH /tasks/:id/status`
+
+## Daily Reports
+
+* `POST /daily-reports`
+* `GET /daily-reports`
+* `GET /daily-reports/:id`
+
+## Issues
+
+* `POST /issues`
+* `GET /issues`
+* `PATCH /issues/:id`
+
+## Budgets
+
+* `POST /budgets`
+* `GET /budgets/project/:projectId`
+* `PATCH /budgets/:id`
+
+## Suppliers
+
+* `POST /suppliers`
+* `GET /suppliers`
+
+## Purchase Orders
+
+* `POST /purchase-orders`
+* `GET /purchase-orders`
+* `PATCH /purchase-orders/:id/status`
+
+## Documents
+
+* `POST /documents/upload`
+* `GET /documents`
+
+## AI
+
+* `POST /ai/chat`
+* `GET /ai/insights`
+* `POST /ai/projects/:projectId/weekly-summary`
+
+---
+
+# 39. Security Plan
+
+## Backend security checklist
+
+* bcrypt password hashing
+* JWT validation
+* refresh token handling
+* role and permission checks
+* organization access validation
+* DTO validation
+* helmet middleware
+* CORS configuration
+* request throttling for auth routes
+* file upload type validation
+* audit logging for important actions
+
+---
+
+# 40. Audit Logging Plan
+
+Track important actions:
+
+* login
+* create project
+* update task
+* delete task
+* create report
+* create issue
+* update budget
+* create purchase order
+* generate AI summary
+
+## Audit log fields
+
+* actor_user_id
+* organization_id
+* project_id
+* action
+* entity_type
+* entity_id
+* metadata
+* created_at
+
+---
+
+# 41. Notifications Plan
+
+MVP notifications can be simple.
+
+## Trigger events
+
+* task assigned
+* issue assigned
+* purchase order delayed
+* AI risk created
+* weekly summary ready
+
+## Delivery channel for MVP
+
+* in-app notifications
+
+## Future channels
+
+* email
+* SMS
+* WhatsApp
+
+---
+
+# 42. Frontend Screen Plan
+
+## Auth
+
+* login page
+
+## Organization
+
+* organization settings page
+
+## Projects
+
+* project list page
+* project create page
+* project overview page
+
+## Tasks
+
+* task list page
+* task board page
+
+## Reports
+
+* report list page
+* create report page
+* report details page
+
+## Issues
+
+* issue list page
+* issue details page
+
+## Budget
+
+* budget summary page
+
+## Procurement
+
+* suppliers page
+* purchase orders page
+* deliveries page
+
+## Documents
+
+* document center page
+
+## AI
+
+* AI insights page
+* AI assistant page or side drawer
+
+---
+
+# 43. Development Phases with Detailed Order
+
+## Phase 1: Foundation
+
+### Backend
+
+* initialize NestJS
+* setup env validation
+* setup Prisma
+* setup PostgreSQL connection
+* create first migration
+* setup Redis
+* setup Swagger
+* setup common error filters
+* setup auth module
+* setup users and roles
+
+### Frontend
+
+* initialize Next.js
+* setup Tailwind
+* setup MUI
+* setup React Query
+* setup global layout
+* setup login page
+* setup route protection
+
+---
+
+## Phase 2: Organization and Project Core
+
+### Backend
+
+* organization module
+* project module
+* project members
+
+### Frontend
+
+* project list screen
+* project form
+* project overview shell
+
+---
+
+## Phase 3: Tasks and Milestones
+
+### Backend
+
+* phases module
+* milestones module
+* tasks module
+* task dependencies
+
+### Frontend
+
+* task list page
+* task board page
+* task create / edit modal
+* milestone list
+
+---
+
+## Phase 4: Daily Reports and Issues
+
+### Backend
+
+* daily reports module
+* issues module
+* file upload module
+
+### Frontend
+
+* report create form
+* report list
+* issues page
+* issue form
+
+---
+
+## Phase 5: Budget and Procurement
+
+### Backend
+
+* budgets module
+* suppliers module
+* purchase orders module
+* deliveries module
+
+### Frontend
+
+* budget summary
+* suppliers screen
+* purchase order form
+* delivery screen
+
+---
+
+## Phase 6: Dashboard and Analytics
+
+### Backend
+
+* aggregation queries
+* project summary endpoint
+* dashboard metrics endpoint
+
+### Frontend
+
+* dashboard cards
+* charts
+* recent activity
+* deadline panels
+
+---
+
+## Phase 7: AI Features
+
+### Backend
+
+* AI summary service
+* AI risk service
+* AI chat service
+* queue processors
+
+### Frontend
+
+* AI insights page
+* AI assistant UI
+* summary display blocks
+
+---
+
+## Phase 8: Hardening and Release
+
+### Backend
+
+* audit logs
+* notifications
+* performance tuning
+* index review
+* security review
+
+### Frontend
+
+* loading states
+* error states
+* empty states
+* UX polish
+* responsive checks
+
+---
+
+# 44. MVP Definition
+
+The MVP should include only:
+
+* login and auth
+* organizations and users
+* projects
+* tasks and milestones
+* daily reports
+* issues
+* budget overview
+* suppliers
+* purchase orders
+* deliveries
+* project dashboard
+* AI daily summary
+* AI weekly summary
+* basic AI risk panel
+
+Do not add advanced ML, photo analysis, BOQ, safety, or RFI in MVP.
+
+---
+
+# 45. Timeline Suggestion
+
+## Week 1
+
+foundation and auth
+
+## Week 2
+
+organizations and projects
+
+## Week 3
+
+tasks and milestones
+
+## Week 4
+
+daily reports and issues
+
+## Week 5
+
+budget and procurement
+
+## Week 6
+
+dashboard and analytics
+
+## Week 7
+
+AI summaries and AI insights
+
+## Week 8
+
+polish, testing, deployment
+
+---
+
+# 46. Testing Plan
+
+## Backend tests
+
+* unit tests for services
+* auth tests
+* permission guard tests
+* integration tests for critical modules
+* repository tests for Prisma queries where needed
+
+## Frontend tests
+
+* component tests for reusable UI
+* form validation tests
+* feature flow tests for key screens
+
+## Manual QA flows
+
+* login
+* create project
+* create task
+* submit daily report
+* create issue
+* create budget
+* create purchase order
+* generate AI summary
+
+---
+
+# 47. Deployment Plan
+
+## Backend
+
+* Docker container
+* deploy to DigitalOcean or AWS
+* configure environment variables
+* connect PostgreSQL
+* run Prisma migrations
+* connect Redis
+* connect S3
+
+## Frontend
+
+* deploy Next.js app
+* configure API base URL
+* configure auth cookie or token handling
+
+## CI/CD
+
+* run lint
+* run tests
+* generate Prisma client
+* run migrations
+* build
+* deploy on merge to main
+
+---
+
+# 48. Success Metrics
+
+Measure:
+
+* number of projects created
+* number of active users
+* number of daily reports submitted
+* number of issues resolved
+* task completion rate
+* delayed task reduction
+* budget variance visibility
+* AI summary usage
+* AI insight usage
+
+---
+
+# 49. Risks and Mitigation
+
+## Risk: too many features
+
+Mitigation:
+keep strict MVP boundaries
+
+## Risk: poor performance
+
+Mitigation:
+index early, paginate, optimize queries
+
+## Risk: weak AI usefulness
+
+Mitigation:
+start with summaries and rule-based insights
+
+## Risk: repeated frontend code
+
+Mitigation:
+base UI library and feature component structure
+
+---
+
+# 50. Final Build Order Summary
+
+Build in this exact sequence:
+
+1. project setup and architecture
+2. auth and roles
+3. organizations
+4. projects
+5. phases and milestones
+6. tasks
+7. daily reports
+8. issues
+9. file uploads
+10. budgets
+11. suppliers
+12. purchase orders
+13. deliveries
+14. dashboard
+15. AI summaries
+16. AI risk engine
+17. AI assistant
+18. audit logs and notifications
+19. security hardening
+20. deployment
+
+---
+
+# 51. Prisma and PostgreSQL Implementation Notes
+
+## Prisma setup
+
+Install:
+
+```bash
+npm install prisma @prisma/client
+npm install -D prisma
+```
+
+Initialize:
+
+```bash
+npx prisma init
+```
+
+## Database URL
+
+Use in `.env`:
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DB_NAME?schema=public"
+```
+
+## Recommended Prisma workflow
+
+* define models in `prisma/schema.prisma`
+* run migrations with `npx prisma migrate dev`
+* generate client with `npx prisma generate`
+* use PrismaService in NestJS for DB access
+
+## Recommended relation strategy
+
+### one-to-many
+
+* organization → users
+* project → tasks
+* project → daily reports
+* supplier → purchase orders
+
+### many-to-many
+
+* users ↔ roles
+* roles ↔ permissions
+* users ↔ projects through `project_members`
+
+## Recommended enum usage
+
+Use PostgreSQL / Prisma enums for stable values such as:
+
+* project status
+* task status
+* task priority
+* issue severity
+* issue type
+* purchase order status
+* delivery status
+* document type
+
+## Recommended timestamp fields
+
+Add these to all major tables:
+
+* `created_at`
+* `updated_at`
+
+Add these where needed:
+
+* `deleted_at` for soft delete
+* `created_by`
+* `updated_by`
+
+## Recommended constraints
+
+* unique email per user
+* unique PO number per organization if needed
+* one budget per project
+* prevent duplicate project member rows with composite unique constraints
+* prevent duplicate task dependency pairs
+
+## Recommended transaction usage
+
+Use Prisma transactions for flows like:
+
+* creating purchase order with items
+* creating budget with budget lines
+* creating daily report with manpower and material rows
+* assigning project members in bulk
+
+## Recommended soft delete strategy
+
+Use `deleted_at` for entities that may need recovery, such as:
+
+* projects
+* tasks
+* issues
+* suppliers
+* documents
+
+Avoid hard delete for critical business records.
+
+---
+
+# 52. Relational Design Adjustments by Module
+
+## Tasks
+
+Tasks need:
+
+* `tasks` table
+* `task_dependencies` table instead of dependency arrays
+
+## Daily Reports
+
+Daily reports should use:
+
+* `daily_reports`
+* `daily_report_manpower_entries`
+* `daily_report_material_entries`
+
+This is better for reporting, filtering, and analytics.
+
+## Budgets
+
+Budgets should use:
+
+* `budgets`
+* `budget_lines`
+
+This makes totals and variance easier to query.
+
+## Purchase Orders
+
+Purchase orders should use:
+
+* `purchase_orders`
+* `purchase_order_items`
+
+Deliveries stay separate and reference purchase orders.
+
+## Roles and Permissions
+
+Use proper many-to-many structure:
+
+* `roles`
+* `permissions`
+* `user_roles`
+* `role_permissions`
+
+This is better than storing permission arrays in a single record.
+
+---
+
+# 53. Final Product Positioning
+
+This product is not just a task manager.
+
+It is an:
+
+* operations platform for construction teams
+* reporting platform for site activities
+* control platform for budget and procurement
+* intelligence platform with AI summaries and risk signals
+
+That is what makes it valuable and sellable.
+
+---
+
+# 54. Final Recommendation
+
+Start by building the workflow system first:
+
+* projects
+* tasks
+* reports
+* issues
+* budget
+* procurement
+
+Then add the intelligence layer:
+
+* AI summaries
+* AI risk signals
+* AI assistant
+
+That is the safest and strongest path.
+
+---

@@ -1,0 +1,783 @@
+// ConstructIQ — Complete Prisma Schema
+// Version: 1.0 — Phase 1 Foundation
+// All MVP models defined upfront for migration stability
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum IssueType {
+  GENERAL
+  TECHNICAL
+  QUALITY
+  SAFETY
+  PROCUREMENT
+  BUDGET
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  DELIVERED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  DELAYED
+  CANCELLED
+}
+
+enum DocumentType {
+  DRAWING
+  REPORT
+  CONTRACT
+  PURCHASE_DOCUMENT
+  TECHNICAL_FILE
+  IMAGE
+  OTHER
+}
+
+enum AIInsightType {
+  DELAY_RISK
+  COST_OVERRUN
+  PROCUREMENT_DELAY
+  SAFETY_CONCERN
+  GENERAL
+}
+
+enum AIInsightSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─────────────────────────────────────────
+// IDENTITY & ACCESS
+// ─────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  address   String?
+  phone     String?
+  email     String?
+  website   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  projects       Project[]
+  roles          Role[]
+  suppliers      Supplier[]
+  aiInsights     AIInsight[]
+  chatSessions   ChatSession[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  organizationId String
+  email          String     @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  phone          String?
+  avatarUrl      String?
+  status         UserStatus @default(ACTIVE)
+  lastLoginAt    DateTime?
+  refreshToken   String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  userRoles      UserRole[]
+  projectMembers ProjectMember[]
+
+  assignedTasks  Task[]  @relation("TaskAssignee")
+  createdTasks   Task[]  @relation("TaskCreator")
+  assignedIssues Issue[] @relation("IssueAssignee")
+  createdIssues  Issue[] @relation("IssueCreator")
+
+  dailyReports DailyReport[]
+  chatSessions ChatSession[]
+  chatMessages ChatMessage[]
+  notifications Notification[] @relation("NotificationUser")
+  auditLogs    AuditLog[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([organizationId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  resource    String
+  action      String
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────
+// PROJECTS
+// ─────────────────────────────────────────
+
+model Project {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  code           String?
+  location       String?
+  status         ProjectStatus @default(PLANNING)
+  startDate      DateTime?
+  endDate        DateTime?
+  totalBudget    Decimal?      @db.Decimal(15, 2)
+  currency       String        @default("USD")
+  createdById    String?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  members        ProjectMember[]
+  phases         Phase[]
+  milestones     Milestone[]
+  tasks          Task[]
+  dailyReports   DailyReport[]
+  issues         Issue[]
+  budget         Budget?
+  documents      Document[]
+  aiInsights     AIInsight[]
+  chatSessions   ChatSession[]
+  auditLogs      AuditLog[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([organizationId, status])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String?
+  joinedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+model Phase {
+  id             String        @id @default(cuid())
+  organizationId String
+  projectId      String
+  name           String
+  description    String?
+  order          Int           @default(0)
+  startDate      DateTime?
+  endDate        DateTime?
+  status         ProjectStatus @default(PLANNING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
+  tasks      Task[]
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@map("phases")
+}
+
+model Milestone {
+  id             String        @id @default(cuid())
+  organizationId String
+  projectId      String
+  phaseId        String?
+  name           String
+  description    String?
+  targetDate     DateTime?
+  completedDate  DateTime?
+  status         ProjectStatus @default(PLANNING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase   Phase?  @relation(fields: [phaseId], references: [id])
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@map("milestones")
+}
+
+// ─────────────────────────────────────────
+// TASKS
+// ─────────────────────────────────────────
+
+model Task {
+  id             String       @id @default(cuid())
+  organizationId String
+  projectId      String
+  phaseId        String?
+  title          String
+  description    String?
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  assignedToId   String?
+  createdById    String?
+  startDate      DateTime?
+  dueDate        DateTime?
+  completedAt    DateTime?
+  progress       Int          @default(0)
+  estimatedHours Decimal?     @db.Decimal(8, 2)
+  actualHours    Decimal?     @db.Decimal(8, 2)
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase      Phase?  @relation(fields: [phaseId], references: [id])
+  assignedTo User?   @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy  User?   @relation("TaskCreator", fields: [createdById], references: [id])
+
+  dependsOn  TaskDependency[] @relation("DependentTask")
+  dependedBy TaskDependency[] @relation("DependencyTask")
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([dueDate])
+  @@index([projectId, status])
+  @@index([organizationId, projectId])
+  @@map("tasks")
+}
+
+model TaskDependency {
+  id          String   @id @default(cuid())
+  taskId      String
+  dependsOnId String
+  createdAt   DateTime @default(now())
+
+  task      Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn Task @relation("DependencyTask", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnId])
+  @@map("task_dependencies")
+}
+
+// ─────────────────────────────────────────
+// DAILY REPORTS
+// ─────────────────────────────────────────
+
+model DailyReport {
+  id             String    @id @default(cuid())
+  organizationId String
+  projectId      String
+  reportDate     DateTime  @db.Date
+  weather        String?
+  temperature    String?
+  achievements   String?
+  blockers       String?
+  notes          String?
+  aiSummary      String?
+  aiSummaryAt    DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  project         Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy       User                       @relation(fields: [createdById], references: [id])
+  manpowerEntries DailyReportManpowerEntry[]
+  materialEntries DailyReportMaterialEntry[]
+  documents       Document[]
+
+  @@unique([projectId, reportDate])
+  @@index([projectId])
+  @@index([organizationId])
+  @@index([projectId, reportDate(sort: Desc)])
+  @@map("daily_reports")
+}
+
+model DailyReportManpowerEntry {
+  id            String   @id @default(cuid())
+  dailyReportId String
+  trade         String
+  count         Int
+  contractor    String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@map("daily_report_manpower_entries")
+}
+
+model DailyReportMaterialEntry {
+  id            String   @id @default(cuid())
+  dailyReportId String
+  material      String
+  quantity      Decimal  @db.Decimal(10, 2)
+  unit          String
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+
+  @@index([dailyReportId])
+  @@map("daily_report_material_entries")
+}
+
+// ─────────────────────────────────────────
+// ISSUES
+// ─────────────────────────────────────────
+
+model Issue {
+  id             String        @id @default(cuid())
+  organizationId String
+  projectId      String
+  title          String
+  description    String?
+  type           IssueType     @default(GENERAL)
+  severity       IssueSeverity @default(MEDIUM)
+  status         IssueStatus   @default(OPEN)
+  assignedToId   String?
+  createdById    String?
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo User?    @relation("IssueAssignee", fields: [assignedToId], references: [id])
+  createdBy  User?    @relation("IssueCreator", fields: [createdById], references: [id])
+  documents  Document[]
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([severity])
+  @@index([assignedToId])
+  @@map("issues")
+}
+
+// ─────────────────────────────────────────
+// BUDGET
+// ─────────────────────────────────────────
+
+model Budget {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String   @unique
+  totalAmount    Decimal  @db.Decimal(15, 2)
+  currency       String   @default("USD")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  budgetLines BudgetLine[]
+  expenses    Expense[]
+
+  @@index([organizationId])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id            String   @id @default(cuid())
+  budgetId      String
+  category      String
+  description   String?
+  plannedAmount Decimal  @db.Decimal(15, 2)
+  actualAmount  Decimal  @default(0) @db.Decimal(15, 2)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  budget   Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+model Expense {
+  id             String   @id @default(cuid())
+  organizationId String
+  budgetId       String?
+  budgetLineId   String?
+  description    String
+  amount         Decimal  @db.Decimal(15, 2)
+  currency       String   @default("USD")
+  date           DateTime @db.Date
+  reference      String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  budget     Budget?     @relation(fields: [budgetId], references: [id])
+  budgetLine BudgetLine? @relation(fields: [budgetLineId], references: [id])
+
+  @@index([organizationId])
+  @@index([budgetId])
+  @@map("expenses")
+}
+
+// ─────────────────────────────────────────
+// PROCUREMENT
+// ─────────────────────────────────────────
+
+model Supplier {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  contactName    String?
+  email          String?
+  phone          String?
+  address        String?
+  taxId          String?
+  website        String?
+  isActive       Boolean   @default(true)
+  notes          String?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  purchaseOrders PurchaseOrder[]
+
+  @@index([organizationId])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  projectId            String
+  supplierId           String
+  poNumber             String
+  status               PurchaseOrderStatus @default(DRAFT)
+  totalAmount          Decimal?            @db.Decimal(15, 2)
+  currency             String              @default("USD")
+  orderDate            DateTime            @db.Date
+  expectedDeliveryDate DateTime?           @db.Date
+  notes                String?
+  approvedById         String?
+  approvedAt           DateTime?
+  deletedAt            DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  project    Project             @relation(fields: [projectId], references: [id])
+  supplier   Supplier            @relation(fields: [supplierId], references: [id])
+  items      PurchaseOrderItem[]
+  deliveries Delivery[]
+
+  @@unique([organizationId, poNumber])
+  @@index([projectId])
+  @@index([supplierId])
+  @@index([status])
+  @@index([expectedDeliveryDate])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  description     String
+  quantity        Decimal  @db.Decimal(10, 2)
+  unit            String?
+  unitPrice       Decimal  @db.Decimal(15, 2)
+  totalPrice      Decimal  @db.Decimal(15, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@map("purchase_order_items")
+}
+
+model Delivery {
+  id              String         @id @default(cuid())
+  organizationId  String
+  purchaseOrderId String
+  deliveryDate    DateTime?      @db.Date
+  status          DeliveryStatus @default(PENDING)
+  receivedById    String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  @@index([purchaseOrderId])
+  @@index([organizationId])
+  @@index([status])
+  @@map("deliveries")
+}
+
+// ─────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────
+
+model Document {
+  id             String       @id @default(cuid())
+  organizationId String
+  projectId      String?
+  dailyReportId  String?
+  issueId        String?
+  type           DocumentType @default(OTHER)
+  name           String
+  description    String?
+  fileKey        String
+  fileUrl        String?
+  mimeType       String?
+  sizeBytes      Int?
+  uploadedById   String?
+  metadata       Json?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  project     Project?     @relation(fields: [projectId], references: [id])
+  dailyReport DailyReport? @relation(fields: [dailyReportId], references: [id])
+  issue       Issue?       @relation(fields: [issueId], references: [id])
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────
+// AI
+// ─────────────────────────────────────────
+
+model AIInsight {
+  id             String            @id @default(cuid())
+  organizationId String
+  projectId      String
+  type           AIInsightType     @default(GENERAL)
+  severity       AIInsightSeverity @default(MEDIUM)
+  title          String
+  message        String
+  recommendation String?
+  metadata       Json?
+  isRead         Boolean           @default(false)
+  resolvedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  project      Project      @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@index([organizationId])
+  @@index([severity])
+  @@index([type])
+  @@index([createdAt])
+  @@map("ai_insights")
+}
+
+model ChatSession {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String?
+  userId         String
+  title          String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  project      Project?       @relation(fields: [projectId], references: [id])
+  user         User           @relation(fields: [userId], references: [id])
+  messages     ChatMessage[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id            String   @id @default(cuid())
+  chatSessionId String
+  userId        String?
+  role          String
+  content       String
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  chatSession ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id])
+
+  @@index([chatSessionId])
+  @@map("chat_messages")
+}
+
+// ─────────────────────────────────────────
+// NOTIFICATIONS & AUDIT
+// ─────────────────────────────────────────
+
+model Notification {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  title          String
+  message        String
+  type           String
+  entityType     String?
+  entityId       String?
+  isRead         Boolean  @default(false)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation("NotificationUser", fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([organizationId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String?
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  actor        User?         @relation(fields: [actorUserId], references: [id])
+
+  @@index([organizationId])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
