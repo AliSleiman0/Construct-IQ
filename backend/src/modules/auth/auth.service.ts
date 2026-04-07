@@ -81,8 +81,12 @@ export class AuthService {
 
     const { passwordHash, refreshToken, ...safeUser } = user;
 
+    const roles = user.userRoles.map(
+      (ur: { role: { name: string } }) => ur.role.name,
+    );
+
     return {
-      user: { ...safeUser, permissions, isSuperAdmin },
+      user: { ...safeUser, permissions, roles, isSuperAdmin },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };

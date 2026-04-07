@@ -18,7 +18,7 @@ export function useLogin() {
     mutationFn: (credentials: LoginCredentials) => authApi.login(credentials),
     onSuccess: (data) => {
       setUser(data.user);
-      queryClient.setQueryData(['auth', 'me'], data.user);
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
       // Super Admin goes to company picker; everyone else goes to dashboard
       if (data.user.isSuperAdmin) {
         router.push(ROUTES.COMPANY_SELECT);

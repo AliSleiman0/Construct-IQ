@@ -10,9 +10,10 @@ export function useCurrentUser() {
     queryKey: ['auth', 'me'],
     queryFn: authApi.getMe,
     retry: false,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 0,             // always refetch to pick up permission changes
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
