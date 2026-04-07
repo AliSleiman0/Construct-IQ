@@ -9,6 +9,7 @@ export interface OrgListItem {
   address?: string | null;
   phone?: string | null;
   website?: string | null;
+  maxUsers?: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -22,6 +23,7 @@ export interface CreateOrgPayload {
   address?: string;
   phone?: string;
   website?: string;
+  maxUsers?: number;
   adminFirstName: string;
   adminLastName: string;
   adminEmail: string;
@@ -46,6 +48,11 @@ export const organizationsApi = {
 
   getStats: async (id: string): Promise<{ totalUsers: number; totalProjects: number; activeProjects: number }> => {
     const res = await apiClient.get(`/organizations/${id}/stats`);
+    return res.data;
+  },
+
+  getById: async (id: string): Promise<OrgListItem> => {
+    const res = await apiClient.get<OrgListItem>(`/organizations/${id}`);
     return res.data;
   },
 };

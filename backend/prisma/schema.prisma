@@ -122,6 +122,7 @@ model Organization {
   phone     String?
   email     String?
   website   String?
+  maxUsers  Int?     // null = unlimited
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

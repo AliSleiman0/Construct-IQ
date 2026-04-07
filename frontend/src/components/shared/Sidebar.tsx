@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
@@ -60,11 +61,15 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const { selectedCompany, clearSelectedCompany } = useCompanyStore();
 
   const handleSwitchCompany = () => {
     clearSelectedCompany();
+    // Clear all cached queries so selecting a new company always loads
+    // fresh data — no stale data from the outgoing company leaks through.
+    queryClient.clear();
     router.push(ROUTES.COMPANY_SELECT);
   };
 

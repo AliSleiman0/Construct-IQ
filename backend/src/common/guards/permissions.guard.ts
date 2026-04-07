@@ -50,6 +50,12 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
+    // Company Admin with manage:company bypasses all checks within their org
+    // (org scoping is enforced at service layer, not here)
+    if (permissionNames.includes('manage:company')) {
+      return true;
+    }
+
     // Hierarchical check: manage:<resource> satisfies read/create/update/delete:<resource>
     const satisfies = (required: string): boolean => {
       if (permissionNames.includes(required)) return true;

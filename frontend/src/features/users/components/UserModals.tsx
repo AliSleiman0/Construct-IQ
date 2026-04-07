@@ -17,9 +17,17 @@ const createSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(64),
   lastName: z.string().min(1, 'Last name is required').max(64),
   email: z.string().email('Enter a valid email'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password must be at most 128 characters'),
+  confirmPassword: z.string().min(1, 'Please confirm the password'),
   roleId: z.string().min(1, 'Please select a role'),
   phone: z.string().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']).default('ACTIVE'),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: 'Passwords do not match',
+  path: ['confirmPassword'],
 });
 
 const editSchema = z.object({
@@ -52,7 +60,16 @@ interface CreateUserFormProps {
 export function CreateUserModal({ open, roles, isLoading, error, onClose, onSubmit }: CreateUserFormProps) {
   const { control, handleSubmit, reset } = useForm<CreateFormValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { firstName: '', lastName: '', email: '', password: '', roleId: '', phone: '' },
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      roleId: '',
+      phone: '',
+      status: 'ACTIVE',
+    },
   });
 
   useEffect(() => {
@@ -65,8 +82,8 @@ export function CreateUserModal({ open, roles, isLoading, error, onClose, onSubm
     <AppModal
       open={open}
       onClose={onClose}
-      title="Add New User"
-      subtitle="Create a team member account and assign their role."
+      title="Add New Team Member"
+      subtitle="Fill in all details to create a new user account."
       actions={
         <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
           <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
@@ -78,14 +95,39 @@ export function CreateUserModal({ open, roles, isLoading, error, onClose, onSubm
     >
       <Stack spacing={2.5} px={3} pb={1}>
         {error && <Alert severity="error">{error}</Alert>}
+
+        {/* Personal Info */}
+        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+          Personal Information
+        </Typography>
         <Stack direction="row" spacing={2}>
-          <FormTextField name="firstName" control={control} label="First Name" fullWidth />
-          <FormTextField name="lastName" control={control} label="Last Name" fullWidth />
+          <FormTextField name="firstName" control={control} label="First Name" fullWidth required />
+          <FormTextField name="lastName" control={control} label="Last Name" fullWidth required />
         </Stack>
-        <FormTextField name="email" control={control} label="Email Address" type="email" fullWidth />
-        <FormTextField name="password" control={control} label="Password" type="password" fullWidth />
-        <FormSelectField name="roleId" control={control} label="Role" options={roleOptions} fullWidth />
-        <FormTextField name="phone" control={control} label="Phone (optional)" fullWidth />
+        <FormTextField name="phone" control={control} label="Phone Number" fullWidth />
+
+        <Divider />
+
+        {/* Account */}
+        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+          Account Details
+        </Typography>
+        <FormTextField name="email" control={control} label="Email Address" type="email" fullWidth required />
+        <Stack direction="row" spacing={2}>
+          <FormTextField name="password" control={control} label="Password" type="password" fullWidth required />
+          <FormTextField name="confirmPassword" control={control} label="Confirm Password" type="password" fullWidth required />
+        </Stack>
+
+        <Divider />
+
+        {/* Role & Status */}
+        <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
+          Role &amp; Access
+        </Typography>
+        <Stack direction="row" spacing={2}>
+          <FormSelectField name="roleId" control={control} label="Role" options={roleOptions} fullWidth />
+          <FormSelectField name="status" control={control} label="Initial Status" options={STATUS_OPTIONS} fullWidth />
+        </Stack>
       </Stack>
     </AppModal>
   );

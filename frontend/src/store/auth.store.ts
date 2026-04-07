@@ -16,7 +16,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   hasPermission: (permission: string) => {
     const { user } = get();
-    return user?.permissions?.includes(permission) ?? false;
+    const perms = user?.permissions ?? [];
+    // manage:all (Super Admin) and manage:company (Admin) satisfy every permission
+    if (perms.includes('manage:all') || perms.includes('manage:company')) return true;
+    return perms.includes(permission);
   },
 
   hasRole: (role: string) => {

@@ -13,6 +13,7 @@ import {
   Menu,
   MenuItem,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import BusinessIcon from '@mui/icons-material/Business';
@@ -25,9 +26,10 @@ import { useSetCompanyActive } from '../hooks/useCompanyMutations';
 interface CompanyCardProps {
   company: OrgListItem;
   onSelect: (company: OrgListItem) => void;
+  loading?: boolean;
 }
 
-export function CompanyCard({ company, onSelect }: CompanyCardProps) {
+export function CompanyCard({ company, onSelect, loading = false }: CompanyCardProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const { mutate: setActive, isPending } = useSetCompanyActive();
 
@@ -43,16 +45,33 @@ export function CompanyCard({ company, onSelect }: CompanyCardProps) {
       sx={{
         borderRadius: 3,
         border: '1px solid',
-        borderColor: company.isActive ? 'divider' : 'error.light',
+        borderColor: loading ? 'primary.main' : company.isActive ? 'divider' : 'error.light',
         transition: 'all 0.2s ease',
         opacity: company.isActive ? 1 : 0.75,
         '&:hover': {
-          boxShadow: company.isActive ? 6 : 2,
-          transform: company.isActive ? 'translateY(-2px)' : 'none',
+          boxShadow: company.isActive && !loading ? 6 : 2,
+          transform: company.isActive && !loading ? 'translateY(-2px)' : 'none',
         },
         position: 'relative',
       }}
     >
+      {/* Loading overlay while switching to this company */}
+      {loading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(255,255,255,0.7)',
+            borderRadius: 3,
+          }}
+        >
+          <CircularProgress size={32} />
+        </Box>
+      )}
       {/* Overflow menu */}
       <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 1 }}>
         <Tooltip title="Options">
@@ -86,8 +105,8 @@ export function CompanyCard({ company, onSelect }: CompanyCardProps) {
       </Box>
 
       <CardActionArea
-        onClick={() => company.isActive && onSelect(company)}
-        disabled={!company.isActive}
+        onClick={() => company.isActive && !loading && onSelect(company)}
+        disabled={!company.isActive || loading}
         sx={{ p: 0 }}
       >
         <CardContent sx={{ p: 3 }}>

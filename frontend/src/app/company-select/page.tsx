@@ -16,6 +16,7 @@ import BusinessIcon from '@mui/icons-material/Business';
 import LogoutIcon from '@mui/icons-material/Logout';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppButton } from '@/components/ui/AppButton';
 import { CompanyCard } from '@/features/companies/components/CompanyCard';
 import { AddCompanyModal } from '@/features/companies/components/AddCompanyModal';
@@ -28,8 +29,10 @@ import type { OrgListItem } from '@/lib/api/organizations.api';
 
 export default function CompanySelectPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
   const { setSelectedCompany } = useCompanyStore();
   const user = useAuthStore((s) => s.user);
   const { logout } = useLogout();
@@ -50,13 +53,20 @@ export default function CompanySelectPage() {
   const activeCount = companies?.filter((c) => c.isActive).length ?? 0;
   const suspendedCount = companies?.filter((c) => !c.isActive).length ?? 0;
 
-  const handleSelect = (company: OrgListItem) => {
+  const handleSelect = async (company: OrgListItem) => {
+    if (switching) return;
+    setSwitching(company.id);
+    // Store the new company identity first so the cookie & localStorage are
+    // updated before any subsequent request fires.
     setSelectedCompany({
       id: company.id,
       name: company.name,
       slug: company.slug,
       logoUrl: company.logoUrl,
     });
+    // Wipe every cached query so the dashboard loads fresh data for the new
+    // company — no stale data from the previous context leaks through.
+    await queryClient.resetQueries();
     router.push(ROUTES.DASHBOARD);
   };
 
@@ -242,7 +252,11 @@ export default function CompanySelectPage() {
           <Grid container spacing={3}>
             {filtered.map((company) => (
               <Grid item xs={12} sm={6} md={4} key={company.id}>
-                <CompanyCard company={company} onSelect={handleSelect} />
+                <CompanyCard
+                  company={company}
+                  onSelect={handleSelect}
+                  loading={switching === company.id}
+                />
               </Grid>
             ))}
           </Grid>

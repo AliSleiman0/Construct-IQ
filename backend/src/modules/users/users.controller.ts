@@ -33,9 +33,9 @@ export class UsersController {
 
   @Get('roles')
   @RequirePermissions(PERMISSIONS.USERS.READ)
-  @ApiOperation({ summary: 'List all available roles for assignment' })
-  listRoles() {
-    return this.usersService.findAllRoles();
+  @ApiOperation({ summary: 'List roles available in the current organization' })
+  listRoles(@CurrentUser() user: JwtPayload) {
+    return this.usersService.findAllRoles(user.organizationId, user.isSuperAdmin);
   }
 
   // ── Own profile ────────────────────────────────────────────────────────

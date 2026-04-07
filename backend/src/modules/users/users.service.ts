@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../database/prisma/prisma.service';
@@ -67,6 +68,22 @@ export class UsersService {
     });
     if (existing) {
       throw new ConflictException('A user with this email already exists');
+    }
+
+    // Enforce per-organization user cap
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { maxUsers: true },
+    });
+    if (org?.maxUsers !== null && org?.maxUsers !== undefined) {
+      const currentCount = await this.prisma.user.count({
+        where: { organizationId, deletedAt: null },
+      });
+      if (currentCount >= org.maxUsers) {
+        throw new ForbiddenException(
+          `This organization has reached its user limit of ${org.maxUsers}`,
+        );
+      }
     }
 
     // Validate the role exists
@@ -164,9 +181,10 @@ export class UsersService {
     return { message: 'Role removed successfully' };
   }
 
-  /** List all roles — used by UI to populate the role dropdown when creating a user */
-  async findAllRoles() {
+  /** List roles scoped to the user's organization (Super Admin sees all). */
+  async findAllRoles(organizationId: string, isSuperAdmin = false) {
     return this.prisma.role.findMany({
+      where: isSuperAdmin ? undefined : { organizationId },
       select: { id: true, name: true, description: true },
       orderBy: { name: 'asc' },
     });

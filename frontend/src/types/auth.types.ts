@@ -3,6 +3,7 @@ export interface Organization {
   name: string;
   slug: string;
   logoUrl?: string | null;
+  maxUsers?: number | null;
 }
 
 export interface AuthUser {

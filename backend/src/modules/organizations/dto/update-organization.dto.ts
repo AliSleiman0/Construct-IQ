@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsUrl } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsUrl, IsInt, Min } from 'class-validator';
 
 export class UpdateOrganizationDto {
   @IsOptional()
@@ -24,4 +24,10 @@ export class UpdateOrganizationDto {
   @IsOptional()
   @IsUrl()
   logoUrl?: string;
+
+  /** Update the user cap for this organization. Null = unlimited. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxUsers?: number | null;
 }

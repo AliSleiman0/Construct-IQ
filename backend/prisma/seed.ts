@@ -23,6 +23,7 @@ async function main() {
   const permissionDefs = [
     // Wildcard
     { name: 'manage:all',                 resource: '*',               action: 'manage',  description: 'Full access to everything' },
+    { name: 'manage:company',             resource: 'company',         action: 'manage',  description: 'Full access within own organization' },
     // Organizations
     { name: 'read:organizations',         resource: 'organizations',   action: 'read',    description: 'View organization details' },
     { name: 'update:organizations',       resource: 'organizations',   action: 'update',  description: 'Update organization settings' },
@@ -115,7 +116,7 @@ async function main() {
   // â”€â”€ Roles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const roleDefs = [
     { name: 'Super Admin',                   description: 'Platform-wide administrator â€” manages all organizations' },
-    { name: 'Organization Admin',            description: 'Full control within own organization' },
+    { name: 'Admin',                          description: 'Full control within own organization' },
     { name: 'Project Manager',               description: 'Manages assigned projects, team, tasks, and approves POs' },
     { name: 'Site Engineer',                 description: 'Submits daily reports, creates issues, updates assigned tasks' },
     { name: 'Planning Engineer',             description: 'Manages phases, milestones, and project schedule' },
@@ -141,22 +142,7 @@ async function main() {
   const rolePermissionMap: Record<string, string[]> = {
     'Super Admin': ['manage:all'],
 
-    'Organization Admin': [
-      'manage:organizations',
-      'manage:users', 'manage:roles',
-      'manage:projects', 'assign:project_members',
-      'manage:phases', 'manage:milestones',
-      'manage:tasks', 'assign:tasks',
-      'manage:reports',
-      'manage:issues', 'assign:issues',
-      'manage:budget',
-      'manage:suppliers',
-      'manage:purchase_orders', 'approve:purchase_orders',
-      'manage:deliveries',
-      'manage:documents',
-      'read:ai', 'use:ai',
-      'read:audit_logs',
-    ],
+    'Admin': ['manage:company'],
 
     'Project Manager': [
       'read:organizations',
@@ -298,7 +284,7 @@ async function main() {
 
   // â”€â”€ Demo Users (one per role for development) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const demoUsers = [
-    { email: 'orgadmin@constructiq.com',   firstName: 'Org',        lastName: 'Admin',      role: 'Organization Admin' },
+    { email: 'orgadmin@constructiq.com',   firstName: 'Org',        lastName: 'Admin',      role: 'Admin' },
     { email: 'pm@constructiq.com',         firstName: 'Project',    lastName: 'Manager',    role: 'Project Manager' },
     { email: 'engineer@constructiq.com',   firstName: 'Site',       lastName: 'Engineer',   role: 'Site Engineer' },
     { email: 'planning@constructiq.com',   firstName: 'Planning',   lastName: 'Engineer',   role: 'Planning Engineer' },

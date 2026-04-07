@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, UseGuards,
+  Controller, Get, Post, Patch, Param, Body, UseGuards, ForbiddenException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -24,8 +24,11 @@ export class OrganizationsController {
 
   /** Super Admin only — list all organizations on the platform */
   @Get()
-  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.MANAGE)
-  findAll() {
+  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.READ)
+  findAll(@CurrentUser() user: JwtPayload) {
+    if (!user.isSuperAdmin) {
+      throw new ForbiddenException('Only Super Admins can list all organizations');
+    }
     return this.organizationsService.findAll();
   }
 
@@ -38,8 +41,8 @@ export class OrganizationsController {
 
   @Get(':id')
   @RequirePermissions(PERMISSIONS.ORGANIZATIONS.READ)
-  findOne(@Param('id') id: string) {
-    return this.organizationsService.findById(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.organizationsService.findById(id, user.organizationId, user.isSuperAdmin);
   }
 
   @Patch(':id')
@@ -55,7 +58,10 @@ export class OrganizationsController {
   /** Super Admin only — suspend / reactivate a tenant */
   @Patch(':id/status')
   @RequirePermissions(PERMISSIONS.ORGANIZATIONS.MANAGE)
-  setActive(@Param('id') id: string, @Body() dto: SetActiveDto) {
+  setActive(@Param('id') id: string, @Body() dto: SetActiveDto, @CurrentUser() user: JwtPayload) {
+    if (!user.isSuperAdmin) {
+      throw new ForbiddenException('Only Super Admins can change organization status');
+    }
     return this.organizationsService.setActive(id, dto.isActive);
   }
 

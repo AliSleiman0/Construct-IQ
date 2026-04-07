@@ -9,6 +9,11 @@ export const PERMISSIONS = {
   // ── Wildcard ──────────────────────────────────────────────
   ALL: 'manage:all',
 
+  // ── Company-scoped wildcard (Admin role) ──────────────────
+  COMPANY: {
+    MANAGE: 'manage:company',
+  },
+
   // ── Organizations ─────────────────────────────────────────
   ORGANIZATIONS: {
     READ: 'read:organizations',

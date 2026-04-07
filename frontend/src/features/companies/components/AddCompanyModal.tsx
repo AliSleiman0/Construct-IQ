@@ -27,6 +27,11 @@ const schema = z.object({
   address: z.string().optional(),
   phone: z.string().optional(),
   website: z.string().optional(),
+  maxUsers: z
+    .string()
+    .optional()
+    .transform((v) => (v && v !== '' ? parseInt(v, 10) : undefined))
+    .pipe(z.number().int().min(1, 'Must be at least 1').optional()),
   adminFirstName: z.string().min(1, 'First name is required'),
   adminLastName: z.string().min(1, 'Last name is required'),
   adminEmail: z.string().email('Enter a valid email'),
@@ -55,6 +60,7 @@ export function AddCompanyModal({ open, onClose }: AddCompanyModalProps) {
       address: values.address || undefined,
       phone: values.phone || undefined,
       website: values.website || undefined,
+      maxUsers: values.maxUsers,
       adminFirstName: values.adminFirstName,
       adminLastName: values.adminLastName,
       adminEmail: values.adminEmail,
@@ -89,6 +95,16 @@ export function AddCompanyModal({ open, onClose }: AddCompanyModalProps) {
             </Grid>
             <Grid item xs={12}>
               <FormTextField<FormValues> name="address" control={control} label="Address" fullWidth />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormTextField<FormValues>
+                name="maxUsers"
+                control={control}
+                label="User Limit"
+                type="number"
+                fullWidth
+                inputProps={{ min: 1 }}
+              />
             </Grid>
           </Grid>
 

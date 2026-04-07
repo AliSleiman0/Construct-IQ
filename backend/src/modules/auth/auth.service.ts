@@ -141,7 +141,7 @@ export class AuthService {
         lastLoginAt: true,
         createdAt: true,
         organization: {
-          select: { id: true, name: true, slug: true, logoUrl: true },
+          select: { id: true, name: true, slug: true, logoUrl: true, maxUsers: true },
         },
         userRoles: {
           include: {

@@ -3,6 +3,8 @@ import {
   IsEmail,
   IsNotEmpty,
   IsOptional,
+  IsInt,
+  Min,
   MinLength,
   Matches,
 } from 'class-validator';
@@ -49,4 +51,10 @@ export class CreateOrganizationDto {
   @IsString()
   @MinLength(8)
   adminPassword!: string;
+
+  /** Maximum number of users allowed in this organization. Null = unlimited. */
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  maxUsers?: number;
 }

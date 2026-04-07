@@ -5,7 +5,7 @@
  */
 export const ROLES = {
   SUPER_ADMIN: 'Super Admin',
-  ORGANIZATION_ADMIN: 'Organization Admin',
+  ADMIN: 'Admin',
   PROJECT_MANAGER: 'Project Manager',
   SITE_ENGINEER: 'Site Engineer',
   PLANNING_ENGINEER: 'Planning Engineer',

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Box, Alert, Stack, Typography, InputAdornment, TextField } from '@mui/material';
+import { Box, Alert, Stack, Typography, InputAdornment, TextField, Tooltip } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import SearchIcon from '@mui/icons-material/Search';
+import BlockIcon from '@mui/icons-material/Block';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppLoader } from '@/components/ui/AppLoader';
@@ -13,16 +14,36 @@ import { UserTable } from '@/features/users/components/UserTable';
 import { CreateUserModal, EditUserModal } from '@/features/users/components/UserModals';
 import { useUsers, useRoles } from '@/features/users/hooks/useUsers';
 import { useCreateUser, useUpdateUser, useDeactivateUser } from '@/features/users/hooks/useUserMutations';
+import { useOrganization } from '@/features/companies/hooks/useCompanies';
 import { useAuthStore } from '@/store/auth.store';
+import { useCompanyStore } from '@/store/company.store';
 import { usersApi } from '@/lib/api/users.api';
 import type { User } from '@/types/user.types';
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user);
-  const canCreate = useAuthStore((s) => s.hasPermission('create:users'));
-  const canManage = useAuthStore((s) => s.hasPermission('manage:users'));
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const isSuperAdmin = !!currentUser?.isSuperAdmin;
+  const canCreate = isSuperAdmin || hasPermission('create:users');
+  const canManage = isSuperAdmin || hasPermission('manage:users');
 
   const { data: users, isLoading, isError, refetch } = useUsers();
+
+  // Seat-limit logic:
+  // - Super Admin: fetch the selected company's org (informational only — never blocked).
+  // - Regular org user: maxUsers comes from /auth/me → currentUser.organization.maxUsers
+  //   (no extra API call needed, no permission issues).
+  const { selectedCompany } = useCompanyStore();
+  const { data: selectedOrgData } = useOrganization(isSuperAdmin ? selectedCompany?.id ?? null : null);
+
+  const maxUsers: number | null = isSuperAdmin
+    ? (selectedOrgData?.maxUsers ?? null)
+    : (currentUser?.organization?.maxUsers ?? null);
+
+  const activeUserCount = (users ?? []).filter((u) => u.status === 'ACTIVE').length;
+  const seatsLeft = maxUsers !== null ? maxUsers - activeUserCount : null;
+  // Super Admins are never blocked — they set the limits themselves.
+  const limitReached = !isSuperAdmin && seatsLeft !== null && seatsLeft <= 0;
   const { data: roles = [] } = useRoles();
 
   const [search, setSearch] = useState('');
@@ -47,10 +68,11 @@ export default function UsersPage() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  const handleCreate = async (values: Parameters<typeof createMutation.mutateAsync>[0]) => {
+  const handleCreate = async (values: Parameters<typeof createMutation.mutateAsync>[0] & { confirmPassword?: string }) => {
     setFormError(null);
     try {
-      await createMutation.mutateAsync(values);
+      const { confirmPassword: _, ...payload } = values as any;
+      await createMutation.mutateAsync(payload);
       setCreateOpen(false);
     } catch (e: any) {
       setFormError(e?.response?.data?.message ?? 'Failed to create user');
@@ -107,13 +129,46 @@ export default function UsersPage() {
         breadcrumbs={[{ label: 'Settings' }, { label: 'Team Members' }]}
         actions={
           canCreate ? (
-            <AppButton
-              variant="contained"
-              startIcon={<PersonAddIcon />}
-              onClick={() => { setFormError(null); setCreateOpen(true); }}
-            >
-              Add User
-            </AppButton>
+            <Box display="flex" flexDirection="column" alignItems="flex-end" gap={0.75}>
+              <Tooltip
+                title={
+                  limitReached
+                    ? 'You have reached your seat limit. Please contact the Super Admin to increase the number of allowed seats.'
+                    : ''
+                }
+                arrow
+              >
+                <span>
+                  <AppButton
+                    variant="contained"
+                    startIcon={limitReached ? <BlockIcon /> : <PersonAddIcon />}
+                    disabled={limitReached}
+                    onClick={() => { setFormError(null); setCreateOpen(true); }}
+                  >
+                    Add User
+                  </AppButton>
+                </span>
+              </Tooltip>
+              {maxUsers !== null && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: limitReached
+                      ? 'error.main'
+                      : seatsLeft! <= 2
+                        ? 'warning.main'
+                        : 'text.secondary',
+                    fontWeight: limitReached ? 600 : 400,
+                  }}
+                >
+                  {limitReached
+                    ? 'Seat limit reached — contact the Super Admin to add more seats.'
+                    : isSuperAdmin
+                      ? `${activeUserCount} of ${maxUsers} seat${maxUsers === 1 ? '' : 's'} used`
+                      : `${seatsLeft} of ${maxUsers} seat${maxUsers === 1 ? '' : 's'} remaining`}
+                </Typography>
+              )}
+            </Box>
           ) : undefined
         }
       />

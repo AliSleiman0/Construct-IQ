@@ -8,3 +8,12 @@ export function useCompanies() {
     staleTime: 30_000,
   });
 }
+
+export function useOrganization(id: string | null | undefined) {
+  return useQuery({
+    queryKey: ['organization', id],
+    queryFn: () => organizationsApi.getById(id!),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+}
