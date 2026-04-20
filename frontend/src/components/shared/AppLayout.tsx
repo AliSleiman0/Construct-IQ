@@ -4,6 +4,7 @@ import { Box } from '@mui/material';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAuthInitializer } from '@/features/auth/hooks/useCurrentUser';
+import { AiChatFab } from '@/features/ai/components/AiChatFab';
 
 const SIDEBAR_WIDTH = 260;
 const HEADER_HEIGHT = 64;
@@ -41,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {children}
         </Box>
       </Box>
+      <AiChatFab />
     </Box>
   );
 }
