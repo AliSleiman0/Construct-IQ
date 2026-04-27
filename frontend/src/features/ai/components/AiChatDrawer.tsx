@@ -192,9 +192,14 @@ export function AiChatDrawer() {
           maxRows={4}
         />
         <IconButton
-          color="primary"
           onClick={handleSend}
           disabled={chatMutation.isPending || !input.trim()}
+          sx={{
+            color: chatMode === 'dark' ? '#ffffff' : 'primary.main',
+            '&.Mui-disabled': {
+              color: chatMode === 'dark' ? 'rgba(255,255,255,0.3)' : undefined,
+            },
+          }}
         >
           <SendIcon />
         </IconButton>
