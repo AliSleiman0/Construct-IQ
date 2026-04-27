@@ -209,40 +209,51 @@ export function AiChatDrawer() {
 
   if (isPinned) {
     return (
-      <Drawer
-        anchor="right"
-        open={isOpen}
-        onClose={handleClose}
-        PaperProps={{ sx: { width: DRAWER_WIDTH, display: 'flex', flexDirection: 'column' } }}
-      >
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-          }}
+      <ThemeProvider theme={floatTheme}>
+        <Drawer
+          anchor="right"
+          open={isOpen}
+          onClose={handleClose}
+          PaperProps={{ sx: { width: DRAWER_WIDTH, display: 'flex', flexDirection: 'column' } }}
         >
-          <Typography variant="h6" fontWeight={600}>
-            AI Assistant
-          </Typography>
-          <Box>
-            {pinButton}
-            <Tooltip title="New chat">
-              <IconButton size="small" onClick={resetConversation}>
-                <RefreshIcon fontSize="small" />
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Typography variant="h6" fontWeight={600}>
+              AI Assistant
+            </Typography>
+            <Box>
+              <Tooltip title={chatMode === 'light' ? 'Dark mode' : 'Light mode'}>
+                <IconButton size="small" onClick={toggleChatMode}>
+                  {chatMode === 'light' ? (
+                    <DarkModeIcon fontSize="small" />
+                  ) : (
+                    <LightModeIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </Tooltip>
+              {pinButton}
+              <Tooltip title="New chat">
+                <IconButton size="small" onClick={resetConversation}>
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <IconButton size="small" onClick={handleClose}>
+                <CloseIcon fontSize="small" />
               </IconButton>
-            </Tooltip>
-            <IconButton size="small" onClick={handleClose}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
+            </Box>
           </Box>
-        </Box>
-        {chatBody}
-      </Drawer>
+          {chatBody}
+        </Drawer>
+      </ThemeProvider>
     );
   }
 
