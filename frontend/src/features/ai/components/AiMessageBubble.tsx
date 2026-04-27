@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Paper, Typography, useTheme } from '@mui/material';
 import type { AiMessage } from '../types';
 
 interface AiMessageBubbleProps {
@@ -9,6 +9,8 @@ interface AiMessageBubbleProps {
 
 export function AiMessageBubble({ message }: AiMessageBubbleProps) {
   const isUser = message.role === 'user';
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
 
   return (
     <Box
@@ -25,7 +27,7 @@ export function AiMessageBubble({ message }: AiMessageBubbleProps) {
           py: 1,
           maxWidth: '80%',
           borderRadius: 2,
-          bgcolor: isUser ? 'primary.main' : 'grey.100',
+          bgcolor: isUser ? 'primary.main' : (isDark ? '#2a2a2a' : 'grey.100'),
           color: isUser ? 'primary.contrastText' : 'text.primary',
           border: isUser ? 'none' : '1px solid',
           borderColor: 'divider',
