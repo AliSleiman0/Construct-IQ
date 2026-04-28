@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login'];
-const COMPANY_SELECT = '/company-select';
+const PUBLIC_PATHS = ['/login', '/'];
+const AUTH_PATHS = ['/login'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -14,27 +14,29 @@ export function middleware(request: NextRequest) {
   const isPublicPath = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(path + '/'),
   );
+  const isAuthPath = AUTH_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(path + '/'),
+  );
+  const isCompanySelectPath = pathname === '/company-select';
 
-  const isCompanySelectPath = pathname === COMPANY_SELECT;
-
-  // Unauthenticated user → login
+  // Unauthenticated user → login (but not for public paths)
   if (!loggedIn && !isPublicPath) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user on public page → redirect appropriately
-  if (loggedIn && isPublicPath) {
+  // Authenticated user on auth page (login) → redirect appropriately
+  if (loggedIn && isAuthPath) {
     if (isSuperAdmin) {
-      return NextResponse.redirect(new URL(COMPANY_SELECT, request.url));
+      return NextResponse.redirect(new URL('/company-select', request.url));
     }
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   // Super Admin without a selected company → must pick one first
   if (loggedIn && isSuperAdmin && !selectedCompany && !isCompanySelectPath) {
-    return NextResponse.redirect(new URL(COMPANY_SELECT, request.url));
+    return NextResponse.redirect(new URL('/company-select', request.url));
   }
 
   // Super Admin already has a company selected → don't show the picker again
