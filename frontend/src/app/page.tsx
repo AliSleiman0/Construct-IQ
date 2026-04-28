@@ -422,49 +422,81 @@ export default function LandingPage() {
 
       {/* ── PROBLEMS ── */}
       <section className="py-32 bg-navy-900" id="problems">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-20 reveal">
-            <h2 className="text-4xl lg:text-5xl font-extrabold mb-5">Construction runs on chaos.<br/>It doesn&apos;t have to.</h2>
-            <p className="text-white/45 max-w-lg mx-auto text-lg">Most job sites are still managed via spreadsheets, WhatsApp groups, and guesswork.</p>
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Heading */}
+          <div className="mb-20 reveal">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+              <h2 className="text-5xl lg:text-6xl font-extrabold leading-[1.05] tracking-tight max-w-xl">
+                Construction runs<br/>on chaos.<br/>
+                <em className="not-italic" style={{ color: 'rgba(255,255,255,0.3)' }}>It doesn&apos;t have to.</em>
+              </h2>
+              <p className="text-white/40 max-w-xs text-sm leading-relaxed lg:text-right lg:pb-2">
+                Most sites are still run via spreadsheets, WhatsApp groups, and guesswork. Here&apos;s the cost.
+              </p>
+            </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              {
-                delay: 'delay-1',
-                icon: <svg width="20" height="20" fill="none" stroke="#f87171" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>,
-                problem: 'No single source of truth',
-                desc: 'Project data lives in email threads, shared drives, and separate apps. Nobody knows the real status until something goes wrong.',
-                fix: 'One unified platform — projects, tasks, budgets, docs — visible in real-time to everyone with the right permissions.',
-              },
-              {
-                delay: 'delay-2',
-                icon: <svg width="20" height="20" fill="none" stroke="#f87171" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
-                problem: 'Reporting wastes hours',
-                desc: 'Site supervisors spend 30–60 min per day filling out daily logs and chasing updates. That\'s time not spent managing the site.',
-                fix: 'Structured daily report forms that auto-populate from task updates. AI summarizes reports for management in seconds.',
-              },
-              {
-                delay: 'delay-3',
-                icon: <svg width="20" height="20" fill="none" stroke="#f87171" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6"/></svg>,
-                problem: 'Budget overruns sneak up',
-                desc: 'By the time you notice a cost overrun it\'s too late to course-correct. POs get approved without proper budget context.',
-                fix: 'Live budget tracking against every phase and PO. Get alerts before costs spiral, with a full audit trail of every approval.',
-              },
-            ].map(({ delay, icon, problem, desc, fix }) => (
-              <div key={problem} className={`reveal ${delay} rounded-2xl border border-white/[0.08] overflow-hidden`} style={{ background: 'rgba(255,255,255,0.02)' }}>
-                <div className="p-1 bg-gradient-to-r from-red-500/20 to-transparent"/>
-                <div className="p-7">
-                  <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center mb-5">{icon}</div>
-                  <div className="text-xs text-red-400 font-semibold uppercase tracking-wider mb-2">Problem</div>
-                  <h3 className="text-lg font-bold mb-3">{problem}</h3>
-                  <p className="text-sm text-white/45 mb-6 leading-relaxed">{desc}</p>
-                  <div className="border-t border-white/[0.08] pt-5">
-                    <div className="text-xs text-emerald-400 font-semibold uppercase tracking-wider mb-2">ConstructIQ Fix</div>
-                    <p className="text-sm text-white/65 leading-relaxed">{fix}</p>
-                  </div>
-                </div>
+          {/* Rows */}
+          <div>
+            {/* Row 1 */}
+            <div className="prob-row reveal delay-1 grid grid-cols-[auto_1fr] lg:grid-cols-[auto_1fr_1fr] gap-x-8 lg:gap-x-16 items-start py-10 cursor-default">
+              <div className="prob-num row-span-2 lg:row-span-1 pr-4 lg:pr-0">01</div>
+              <div className="lg:col-span-1">
+                <p className="text-xs text-red-400/70 font-semibold uppercase tracking-widest mb-3">The problem</p>
+                <h3 className="text-2xl lg:text-3xl font-bold mb-3 leading-snug">
+                  <span className="prob-strike">No single source of truth.</span>
+                </h3>
+                <p className="text-white/40 text-sm leading-relaxed max-w-sm">Project data lives across email threads, shared drives, and disconnected apps. Nobody knows the real status until something breaks.</p>
               </div>
-            ))}
+              <div className="col-start-2 lg:col-start-auto mt-6 lg:mt-0 flex flex-col justify-start">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="prob-arrow">
+                    <svg width="14" height="14" fill="none" stroke="rgba(52,211,153,0.7)" strokeWidth="2"><path d="M2 7h10M8 3l4 4-4 4"/></svg>
+                  </div>
+                  <div className="fix-tag">ConstructIQ fixes this</div>
+                </div>
+                <p className="fix-text">One unified platform — projects, tasks, budgets, and docs — visible in real-time to everyone with the right permissions.</p>
+              </div>
+            </div>
+            {/* Row 2 */}
+            <div className="prob-row reveal delay-2 grid grid-cols-[auto_1fr] lg:grid-cols-[auto_1fr_1fr] gap-x-8 lg:gap-x-16 items-start py-10 cursor-default">
+              <div className="prob-num row-span-2 lg:row-span-1 pr-4 lg:pr-0">02</div>
+              <div className="lg:col-span-1">
+                <p className="text-xs text-red-400/70 font-semibold uppercase tracking-widest mb-3">The problem</p>
+                <h3 className="text-2xl lg:text-3xl font-bold mb-3 leading-snug">
+                  <span className="prob-strike">Reporting eats half the day.</span>
+                </h3>
+                <p className="text-white/40 text-sm leading-relaxed max-w-sm">Site supervisors spend 30–60 minutes filling out daily logs and chasing updates — time that belongs on the site, not in spreadsheets.</p>
+              </div>
+              <div className="col-start-2 lg:col-start-auto mt-6 lg:mt-0 flex flex-col justify-start">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="prob-arrow">
+                    <svg width="14" height="14" fill="none" stroke="rgba(52,211,153,0.7)" strokeWidth="2"><path d="M2 7h10M8 3l4 4-4 4"/></svg>
+                  </div>
+                  <div className="fix-tag">ConstructIQ fixes this</div>
+                </div>
+                <p className="fix-text">Structured report forms that auto-populate from task updates. AI summarizes everything for management — in seconds, not hours.</p>
+              </div>
+            </div>
+            {/* Row 3 */}
+            <div className="prob-row reveal delay-3 grid grid-cols-[auto_1fr] lg:grid-cols-[auto_1fr_1fr] gap-x-8 lg:gap-x-16 items-start py-10 cursor-default">
+              <div className="prob-num row-span-2 lg:row-span-1 pr-4 lg:pr-0">03</div>
+              <div className="lg:col-span-1">
+                <p className="text-xs text-red-400/70 font-semibold uppercase tracking-widest mb-3">The problem</p>
+                <h3 className="text-2xl lg:text-3xl font-bold mb-3 leading-snug">
+                  <span className="prob-strike">Overruns blindside you.</span>
+                </h3>
+                <p className="text-white/40 text-sm leading-relaxed max-w-sm">By the time a cost overrun shows up in a report, the damage is done. Purchase orders get approved with no budget context at all.</p>
+              </div>
+              <div className="col-start-2 lg:col-start-auto mt-6 lg:mt-0 flex flex-col justify-start">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="prob-arrow">
+                    <svg width="14" height="14" fill="none" stroke="rgba(52,211,153,0.7)" strokeWidth="2"><path d="M2 7h10M8 3l4 4-4 4"/></svg>
+                  </div>
+                  <div className="fix-tag">ConstructIQ fixes this</div>
+                </div>
+                <p className="fix-text">Live budget tracking against every phase and PO. Alerts fire before costs spiral — with a full audit trail behind every approval.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
