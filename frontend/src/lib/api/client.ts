@@ -1,4 +1,7 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
+import { MOCK_MODE } from '@/lib/mock/mode';
+import { mockAdapter } from '@/lib/mock/mock-client';
+import { useCompanyStore } from '@/store/company.store';
 
 // API_BASE points to the Next.js rewrite prefix
 // All calls go through /api/v1/* which proxies to the NestJS backend
@@ -12,20 +15,19 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor — inject X-Organization-Id when Super Admin has selected a company
+// Mock mode toggle — keeps non-auth modules functional during incremental
+// migration from POC mocks to real backend. Auth always uses the real backend.
+if (MOCK_MODE) {
+  apiClient.defaults.adapter = mockAdapter;
+}
+
+// Request interceptor — inject X-Organization-Id from the company store
+// (non-httpOnly cookie + localStorage mirror managed by useCompanyStore).
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    try {
-      const raw = localStorage.getItem('constructiq-selected-company');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const orgId: string | undefined = parsed?.state?.selectedCompany?.id;
-        if (orgId) {
-          config.headers['X-Organization-Id'] = orgId;
-        }
-      }
-    } catch {
-      // ignore parse errors
+    const orgId = useCompanyStore.getState().selectedCompany?.id;
+    if (orgId) {
+      config.headers['X-Organization-Id'] = orgId;
     }
   }
   return config;

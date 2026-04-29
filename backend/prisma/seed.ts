@@ -1,12 +1,12 @@
-﻿import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('ðŸŒ± Seeding database...');
+  console.log('Seeding database...');
 
-  // â”€â”€ Organization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Organization ---------------------------------------------------------
   const org = await prisma.organization.upsert({
     where: { slug: 'constructiq' },
     update: {},
@@ -17,9 +17,9 @@ async function main() {
       isActive: true,
     },
   });
-  console.log(`âœ… Organization: ${org.name} (${org.id})`);
+  console.log(`Organization: ${org.name} (${org.id})`);
 
-  // â”€â”€ Permissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Permissions ----------------------------------------------------------
   const permissionDefs = [
     // Wildcard
     { name: 'manage:all',                 resource: '*',               action: 'manage',  description: 'Full access to everything' },
@@ -91,6 +91,9 @@ async function main() {
     // AI
     { name: 'read:ai',                    resource: 'ai',              action: 'read',    description: 'View AI insights and summaries' },
     { name: 'use:ai',                     resource: 'ai',              action: 'use',     description: 'Use AI assistant and generate summaries' },
+    // Support Tickets
+    { name: 'read:tickets',               resource: 'tickets',         action: 'read',    description: 'View support tickets' },
+    { name: 'manage:tickets',             resource: 'tickets',         action: 'manage',  description: 'Triage and resolve support tickets' },
     // Audit Logs
     { name: 'read:audit_logs',            resource: 'audit_logs',      action: 'read',    description: 'View audit logs' },
   ];
@@ -104,7 +107,7 @@ async function main() {
       }),
     ),
   );
-  console.log(`âœ… Permissions: ${permissions.length} created/verified`);
+  console.log(`Permissions: ${permissions.length} created/verified`);
 
   // Helper: find permission by name
   const perm = (name: string) => {
@@ -113,38 +116,47 @@ async function main() {
     return p;
   };
 
-  // â”€â”€ Roles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Roles ----------------------------------------------------------------
+  // Names are canonical enum keys that match the frontend `Role` union
+  // (frontend src/config/roles.ts). They are returned verbatim in
+  // `user.roles` from /auth/login and consumed by the Next.js layout
+  // role-prefix gate. Do not rename without updating the frontend in lockstep.
   const roleDefs = [
-    { name: 'Super Admin',                   description: 'Platform-wide administrator â€” manages all organizations' },
-    { name: 'Admin',                          description: 'Full control within own organization' },
-    { name: 'Project Manager',               description: 'Manages assigned projects, team, tasks, and approves POs' },
-    { name: 'Site Engineer',                 description: 'Submits daily reports, creates issues, updates assigned tasks' },
-    { name: 'Planning Engineer',             description: 'Manages phases, milestones, and project schedule' },
-    { name: 'Quantity Surveyor',             description: 'Owns budget management and cost tracking' },
-    { name: 'Procurement Officer',           description: 'Manages suppliers, purchase orders, and deliveries' },
-    { name: 'Finance / Management Viewer',   description: 'Read-only visibility across projects, budget, and procurement' },
-    { name: 'Client Viewer',                 description: 'External client â€” limited read access to assigned project overview' },
-    { name: 'Supplier User',                 description: 'External supplier â€” view own POs and update delivery status' },
+    { name: 'SUPER_ADMIN',   description: 'Platform-wide administrator. Manages all organizations.' },
+    { name: 'SUPPORT_AGENT', description: 'ConstructIQ staff. Cross-org support and ticket triage.' },
+    { name: 'ORG_ADMIN',     description: 'Full control within own organization.' },
+    { name: 'PM',            description: 'Project Manager. Manages assigned projects, team, tasks, and approves POs.' },
+    { name: 'PROCUREMENT',   description: 'Procurement Officer. Manages suppliers, purchase orders, and deliveries.' },
+    { name: 'SURVEYOR',      description: 'Quantity Surveyor. Owns budget management and cost tracking.' },
+    { name: 'SITE_ENG',      description: 'Site Engineer. Submits daily reports, creates issues, updates assigned tasks.' },
+    { name: 'CLIENT',        description: 'External client. Limited read access to assigned project overview.' },
   ];
 
   const roles: Record<string, { id: string; name: string }> = {};
   for (const def of roleDefs) {
     const role = await prisma.role.upsert({
       where: { organizationId_name: { organizationId: org.id, name: def.name } },
-      update: {},
+      update: { description: def.description, isSystem: true },
       create: { organizationId: org.id, name: def.name, description: def.description, isSystem: true },
     });
     roles[def.name] = role;
   }
-  console.log(`âœ… Roles: ${Object.keys(roles).length} created/verified`);
+  console.log(`Roles: ${Object.keys(roles).length} created/verified`);
 
-  // â”€â”€ Role Permission Assignments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Role Permission Assignments -----------------------------------------
   const rolePermissionMap: Record<string, string[]> = {
-    'Super Admin': ['manage:all'],
+    SUPER_ADMIN: ['manage:all'],
 
-    'Admin': ['manage:company'],
+    SUPPORT_AGENT: [
+      'read:organizations',
+      'read:users',
+      'read:tickets',
+      'manage:tickets',
+    ],
 
-    'Project Manager': [
+    ORG_ADMIN: ['manage:company'],
+
+    PM: [
       'read:organizations',
       'read:users', 'read:roles',
       'manage:projects', 'assign:project_members',
@@ -160,30 +172,19 @@ async function main() {
       'read:ai', 'use:ai',
     ],
 
-    'Site Engineer': [
+    PROCUREMENT: [
       'read:projects',
       'read:users',
-      'read:tasks', 'update:tasks',
-      'create:reports', 'read:reports', 'update:reports',
-      'create:issues', 'read:issues', 'update:issues',
-      'read:phases', 'read:milestones',
+      'read:tasks',
+      'read:budget',
+      'manage:suppliers',
+      'manage:purchase_orders', 'update:deliveries',
+      'manage:deliveries',
       'read:documents', 'upload:documents',
       'read:ai',
     ],
 
-    'Planning Engineer': [
-      'read:projects',
-      'read:users',
-      'manage:phases', 'manage:milestones',
-      'manage:tasks', 'assign:tasks',
-      'read:reports',
-      'read:issues',
-      'read:budget',
-      'read:documents',
-      'read:ai',
-    ],
-
-    'Quantity Surveyor': [
+    SURVEYOR: [
       'read:projects',
       'read:users',
       'read:tasks',
@@ -198,43 +199,23 @@ async function main() {
       'read:ai',
     ],
 
-    'Procurement Officer': [
+    SITE_ENG: [
       'read:projects',
       'read:users',
-      'read:tasks',
-      'read:budget',
-      'manage:suppliers',
-      'manage:purchase_orders', 'update:deliveries',
-      'manage:deliveries',
+      'read:tasks', 'update:tasks',
+      'create:reports', 'read:reports', 'update:reports',
+      'create:issues', 'read:issues', 'update:issues',
+      'read:phases', 'read:milestones',
       'read:documents', 'upload:documents',
       'read:ai',
     ],
 
-    'Finance / Management Viewer': [
-      'read:projects',
-      'read:tasks',
-      'read:phases', 'read:milestones',
-      'read:reports',
-      'read:issues',
-      'read:budget',
-      'read:suppliers',
-      'read:purchase_orders',
-      'read:deliveries',
-      'read:documents',
-      'read:ai',
-    ],
-
-    'Client Viewer': [
+    CLIENT: [
       'read:projects',
       'read:milestones',
       'read:issues',
       'read:reports',
       'read:documents',
-    ],
-
-    'Supplier User': [
-      'read:purchase_orders',
-      'update:deliveries',
     ],
   };
 
@@ -252,54 +233,57 @@ async function main() {
       totalAssigned++;
     }
   }
-  console.log(`âœ… Role permissions: ${totalAssigned} assignments created/verified`);
+  console.log(`Role permissions: ${totalAssigned} assignments created/verified`);
 
-  // â”€â”€ Admin User â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Demo Users -----------------------------------------------------------
+  // One per frontend role module. Passwords come from env or fall back to
+  // documented defaults so a fresh `npm run prisma:seed` is enough to log in.
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL ?? 'admin@constructiq.com';
   const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@1234';
-  const passwordHash = await bcrypt.hash(superAdminPassword, 12);
 
   async function findOrCreateUser(data: {
-    email: string; organizationId: string; passwordHash: string; firstName: string; lastName: string;
+    email: string;
+    organizationId: string;
+    passwordHash: string;
+    firstName: string;
+    lastName: string;
   }) {
     const existing = await prisma.user.findFirst({ where: { email: data.email, deletedAt: null } });
     if (existing) return existing;
     return prisma.user.create({ data: { ...data, status: 'ACTIVE' } });
   }
 
+  const superAdminHash = await bcrypt.hash(superAdminPassword, 12);
   const adminUser = await findOrCreateUser({
     organizationId: org.id,
     email: superAdminEmail,
-    passwordHash,
+    passwordHash: superAdminHash,
     firstName: 'System',
     lastName: 'Admin',
   });
-
   await prisma.userRole.upsert({
-    where: { userId_roleId: { userId: adminUser.id, roleId: roles['Super Admin'].id } },
+    where: { userId_roleId: { userId: adminUser.id, roleId: roles.SUPER_ADMIN.id } },
     update: {},
-    create: { userId: adminUser.id, roleId: roles['Super Admin'].id },
+    create: { userId: adminUser.id, roleId: roles.SUPER_ADMIN.id },
   });
-  console.log(`âœ… Admin user: ${adminUser.email} â†’ Super Admin`);
+  console.log(`Admin user: ${adminUser.email} -> SUPER_ADMIN`);
 
-  // â”€â”€ Demo Users (one per role for development) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const demoPasswordHash = await bcrypt.hash('Demo@1234', 12);
   const demoUsers = [
-    { email: 'orgadmin@constructiq.com',   firstName: 'Org',        lastName: 'Admin',      role: 'Admin' },
-    { email: 'pm@constructiq.com',         firstName: 'Project',    lastName: 'Manager',    role: 'Project Manager' },
-    { email: 'engineer@constructiq.com',   firstName: 'Site',       lastName: 'Engineer',   role: 'Site Engineer' },
-    { email: 'planning@constructiq.com',   firstName: 'Planning',   lastName: 'Engineer',   role: 'Planning Engineer' },
-    { email: 'qs@constructiq.com',         firstName: 'Quantity',   lastName: 'Surveyor',   role: 'Quantity Surveyor' },
-    { email: 'procurement@constructiq.com',firstName: 'Procurement',lastName: 'Officer',    role: 'Procurement Officer' },
-    { email: 'finance@constructiq.com',    firstName: 'Finance',    lastName: 'Viewer',     role: 'Finance / Management Viewer' },
-    { email: 'client@constructiq.com',     firstName: 'Client',     lastName: 'Viewer',     role: 'Client Viewer' },
+    { email: 'support@constructiq.com',     firstName: 'Support',     lastName: 'Agent',     role: 'SUPPORT_AGENT' },
+    { email: 'orgadmin@constructiq.com',    firstName: 'Org',         lastName: 'Admin',     role: 'ORG_ADMIN' },
+    { email: 'pm@constructiq.com',          firstName: 'Project',     lastName: 'Manager',   role: 'PM' },
+    { email: 'procurement@constructiq.com', firstName: 'Procurement', lastName: 'Officer',   role: 'PROCUREMENT' },
+    { email: 'qs@constructiq.com',          firstName: 'Quantity',    lastName: 'Surveyor',  role: 'SURVEYOR' },
+    { email: 'engineer@constructiq.com',    firstName: 'Site',        lastName: 'Engineer',  role: 'SITE_ENG' },
+    { email: 'client@constructiq.com',      firstName: 'Client',      lastName: 'Viewer',    role: 'CLIENT' },
   ];
 
   for (const u of demoUsers) {
-    const hash = await bcrypt.hash('Demo@1234', 12);
     const user = await findOrCreateUser({
       organizationId: org.id,
       email: u.email,
-      passwordHash: hash,
+      passwordHash: demoPasswordHash,
       firstName: u.firstName,
       lastName: u.lastName,
     });
@@ -312,20 +296,19 @@ async function main() {
       });
     }
   }
-  console.log(`âœ… Demo users: ${demoUsers.length} created/verified`);
+  console.log(`Demo users: ${demoUsers.length} created/verified`);
 
-  console.log(`\nðŸŽ‰ Seed complete!\n`);
+  console.log(`\nSeed complete.\n`);
   console.log(`  Login URL  : http://localhost:3000/login`);
   console.log(`  Credentials:`);
-  console.log(`    admin@constructiq.com      / Admin@1234  (Super Admin)`);
-  console.log(`    orgadmin@constructiq.com   / Demo@1234   (Organization Admin)`);
-  console.log(`    pm@constructiq.com         / Demo@1234   (Project Manager)`);
-  console.log(`    engineer@constructiq.com   / Demo@1234   (Site Engineer)`);
-  console.log(`    planning@constructiq.com   / Demo@1234   (Planning Engineer)`);
-  console.log(`    qs@constructiq.com         / Demo@1234   (Quantity Surveyor)`);
-  console.log(`    procurement@constructiq.com/ Demo@1234   (Procurement Officer)`);
-  console.log(`    finance@constructiq.com    / Demo@1234   (Finance Viewer)`);
-  console.log(`    client@constructiq.com     / Demo@1234   (Client Viewer)`);
+  console.log(`    admin@constructiq.com       / Admin@1234   (SUPER_ADMIN)`);
+  console.log(`    support@constructiq.com     / Demo@1234    (SUPPORT_AGENT)`);
+  console.log(`    orgadmin@constructiq.com    / Demo@1234    (ORG_ADMIN)`);
+  console.log(`    pm@constructiq.com          / Demo@1234    (PM)`);
+  console.log(`    procurement@constructiq.com / Demo@1234    (PROCUREMENT)`);
+  console.log(`    qs@constructiq.com          / Demo@1234    (SURVEYOR)`);
+  console.log(`    engineer@constructiq.com    / Demo@1234    (SITE_ENG)`);
+  console.log(`    client@constructiq.com      / Demo@1234    (CLIENT)`);
   console.log();
 }
 
@@ -337,6 +320,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-
-

@@ -4,24 +4,22 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { authApi } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/store/auth.store';
-import { useCompanyStore } from '@/store/company.store';
 
 export function useLogout() {
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
-  const clearAuth = useAuthStore((s) => s.clearAuth);
-  const clearSelectedCompany = useCompanyStore((s) => s.clearSelectedCompany);
+  const logoutFromStore = useAuthStore((s) => s.logout);
 
   const mutation = useMutation({
     mutationFn: () => authApi.logout(),
     onSuccess: () => {
-      clearAuth();
-      clearSelectedCompany();
+      logoutFromStore();
       queryClient.clear();
     },
     onError: () => {
-      clearAuth();
-      clearSelectedCompany();
+      // Even if the network call fails, drop local state so the UI doesn't
+      // appear "logged in" against a server that's already revoked the session.
+      logoutFromStore();
       queryClient.clear();
       enqueueSnackbar('Logout failed. Please try again.', { variant: 'warning' });
     },
