@@ -831,7 +831,7 @@ function JobsitePhoto() {
         </g>
       </svg>
 
-      {/* duotone overlays */}
+      {/* duotone overlays on the SVG base */}
       <div
         style={{
           position: 'absolute',
@@ -849,6 +849,18 @@ function JobsitePhoto() {
             'linear-gradient(135deg, rgba(63,167,214,0.18) 0%, transparent 50%, rgba(14,23,38,0.6) 100%)',
         }}
       />
+
+      {/* Real jobsite photo as full-bleed banner with bottom fade mask
+          so the SVG blueprint background shows through behind the caption. */}
+      <div className={styles.photoBanner}>
+        <img
+          src="/login/jobsite.jpg"
+          alt="Two workers in hard hats and hi-vis vests reviewing blueprints on-site"
+          className={styles.photoBannerImg}
+        />
+        <div className={styles.photoBannerNavy} />
+        <div className={styles.photoBannerCyan} />
+      </div>
     </div>
   );
 }
