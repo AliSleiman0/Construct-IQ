@@ -72,7 +72,9 @@ export function Header({ pageTitle }: HeaderProps) {
     closeAccount();
     clearSelectedCompany();
     await logout();
-    router.push('/login');
+    // Hard navigation ensures all React state, caches, and stale cookies are
+    // fully discarded — prevents re-login from seeing the previous user's session.
+    window.location.href = '/login';
   };
 
   const handleProfile = () => {
