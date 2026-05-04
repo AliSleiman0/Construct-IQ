@@ -38,6 +38,82 @@ import {
   DailyReport,
   DailyReportSchema,
 } from '../../modules/reports/schemas/daily-report.schema';
+import {
+  Issue,
+  IssueSchema,
+} from '../../modules/issues/schemas/issue.schema';
+import {
+  AuditLog,
+  AuditLogSchema,
+} from '../../modules/audit/schemas/audit-log.schema';
+import {
+  Notification,
+  NotificationSchema,
+} from '../../modules/notifications/schemas/notification.schema';
+import {
+  Ticket,
+  TicketSchema,
+} from '../../modules/tickets/schemas/ticket.schema';
+import {
+  Supplier,
+  SupplierSchema,
+} from '../../modules/procurement/schemas/supplier.schema';
+import {
+  PurchaseOrder,
+  PurchaseOrderSchema,
+} from '../../modules/procurement/schemas/purchase-order.schema';
+import {
+  Delivery,
+  DeliverySchema,
+} from '../../modules/procurement/schemas/delivery.schema';
+import {
+  Budget,
+  BudgetSchema,
+} from '../../modules/budget/schemas/budget.schema';
+import {
+  BudgetLine,
+  BudgetLineSchema,
+} from '../../modules/budget/schemas/budget-line.schema';
+import {
+  Expense,
+  ExpenseSchema,
+} from '../../modules/budget/schemas/expense.schema';
+import {
+  DocumentEntity,
+  DocumentEntitySchema,
+} from '../../modules/documents/schemas/document.schema';
+import {
+  Plan,
+  PlanSchema,
+} from '../../modules/plans/schemas/plan.schema';
+import {
+  Invoice,
+  InvoiceSchema,
+} from '../../modules/billing/schemas/invoice.schema';
+import {
+  Unit,
+  UnitSchema,
+} from '../../modules/units/schemas/unit.schema';
+import {
+  Payment,
+  PaymentSchema,
+} from '../../modules/units/schemas/payment.schema';
+import {
+  ProgressPhoto,
+  ProgressPhotoSchema,
+} from '../../modules/units/schemas/progress-photo.schema';
+import {
+  BoqItem,
+  BoqItemSchema,
+} from '../../modules/surveyor/schemas/boq-item.schema';
+import {
+  Variation,
+  VariationSchema,
+} from '../../modules/surveyor/schemas/variation.schema';
+import {
+  Valuation,
+  ValuationSchema,
+} from '../../modules/surveyor/schemas/valuation.schema';
 
 const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: User.name, schema: UserSchema },
@@ -51,14 +127,31 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: Milestone.name, schema: MilestoneSchema },
   { name: Task.name, schema: TaskSchema },
   { name: DailyReport.name, schema: DailyReportSchema },
+  { name: Issue.name, schema: IssueSchema },
+  { name: AuditLog.name, schema: AuditLogSchema },
+  { name: Notification.name, schema: NotificationSchema },
+  { name: Ticket.name, schema: TicketSchema },
+  { name: Supplier.name, schema: SupplierSchema },
+  { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
+  { name: Delivery.name, schema: DeliverySchema },
+  { name: Budget.name, schema: BudgetSchema },
+  { name: BudgetLine.name, schema: BudgetLineSchema },
+  { name: Expense.name, schema: ExpenseSchema },
+  { name: DocumentEntity.name, schema: DocumentEntitySchema },
+  { name: Plan.name, schema: PlanSchema },
+  { name: Invoice.name, schema: InvoiceSchema },
+  { name: Unit.name, schema: UnitSchema },
+  { name: Payment.name, schema: PaymentSchema },
+  { name: ProgressPhoto.name, schema: ProgressPhotoSchema },
+  { name: BoqItem.name, schema: BoqItemSchema },
+  { name: Variation.name, schema: VariationSchema },
+  { name: Valuation.name, schema: ValuationSchema },
 ]);
 
 /**
- * Global Mongoose module. Mirrors the previous @Global PrismaModule pattern:
- * one root connection + every model registered once and exported app-wide so
- * any service or guard can `@InjectModel(User.name)` without per-module
- * forFeature boilerplate. The schema files themselves carry the structural
- * contract (see *.schema.ts decorators).
+ * Global Mongoose module. One root connection + every model registered once
+ * and exported app-wide so any service can @InjectModel without per-module
+ * forFeature boilerplate.
  */
 @Global()
 @Module({
