@@ -1,5 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../../database/prisma/prisma.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import {
+  ChatSession,
+  ChatSessionDocument,
+} from '../schemas/chat-session.schema';
+import {
+  ChatMessage,
+  ChatMessageDocument,
+} from '../schemas/chat-message.schema';
 
 export interface ChatHistoryMessage {
   role: 'user' | 'assistant';
@@ -10,25 +19,29 @@ export interface ChatHistoryMessage {
 export class ChatSessionService {
   private readonly logger = new Logger(ChatSessionService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectModel(ChatSession.name)
+    private chatSessionModel: Model<ChatSessionDocument>,
+    @InjectModel(ChatMessage.name)
+    private chatMessageModel: Model<ChatMessageDocument>,
+  ) {}
 
   async getOrCreate(
     userId: string,
     organizationId: string,
     sessionId?: string,
-  ) {
+  ): Promise<ChatSessionDocument> {
     if (sessionId) {
-      const existing = await this.prisma.chatSession.findUnique({
-        where: { id: sessionId },
-      });
-      if (existing && existing.userId === userId && existing.organizationId === organizationId) {
+      const existing = await this.chatSessionModel.findOne({ _id: sessionId });
+      if (
+        existing &&
+        existing.userId === userId &&
+        existing.organizationId === organizationId
+      ) {
         return existing;
       }
     }
-
-    return this.prisma.chatSession.create({
-      data: { userId, organizationId },
-    });
+    return this.chatSessionModel.create({ userId, organizationId });
   }
 
   async appendMessage(
@@ -38,23 +51,24 @@ export class ChatSessionService {
     userId?: string,
     metadata?: Record<string, unknown>,
   ) {
-    return this.prisma.chatMessage.create({
-      data: {
-        chatSessionId,
-        role,
-        content,
-        userId: role === 'user' ? userId : null,
-        metadata: metadata ? (metadata as object) : undefined,
-      },
+    return this.chatMessageModel.create({
+      chatSessionId,
+      role,
+      content,
+      userId: role === 'user' ? userId ?? null : null,
+      metadata: metadata ?? null,
     });
   }
 
-  async loadHistory(chatSessionId: string, limit = 10): Promise<ChatHistoryMessage[]> {
-    const messages = await this.prisma.chatMessage.findMany({
-      where: { chatSessionId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+  async loadHistory(
+    chatSessionId: string,
+    limit = 10,
+  ): Promise<ChatHistoryMessage[]> {
+    const messages = await this.chatMessageModel
+      .find({ chatSessionId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
 
     return messages
       .reverse()

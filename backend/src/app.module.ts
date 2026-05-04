@@ -4,7 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import configuration from './config/configuration';
 import { validate } from './config/env.validation';
-import { PrismaModule } from './database/prisma/prisma.module';
+import { MongooseModule } from './database/mongoose/mongoose.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { OrgContextInterceptor } from './common/interceptors/org-context.interceptor';
@@ -34,7 +34,7 @@ import { AiModule } from './modules/ai/ai.module';
         limit: 10,
       },
     ]),
-    PrismaModule,
+    MongooseModule,
     AuthModule,
     UsersModule,
     OrganizationsModule,

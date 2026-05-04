@@ -7,7 +7,7 @@ import {
   Min,
   MaxLength,
 } from 'class-validator';
-import { ProjectStatus } from '@prisma/client';
+import { ProjectStatus } from '../../../common/enums';
 
 export class CreateProjectDto {
   @IsString()

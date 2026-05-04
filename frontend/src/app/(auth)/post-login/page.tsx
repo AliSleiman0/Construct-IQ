@@ -5,24 +5,20 @@ import { ROLE_HOME, roleFromUser } from '@/config/roles';
 
 /**
  * Lands here when middleware sees a `logged_in` cookie on /login. Resolves
- * the user's role server-side and redirects to the right home (or
- * /company-select for super admins without a selected org). If the cookie
+ * the user's role server-side and redirects to the right home. If the cookie
  * is stale and /auth/me returns 401, send the user back to /login.
  */
 export default async function PostLoginPage() {
-  const cookieStore = cookies();
-  const cookieHeader = cookieStore.toString();
+  const cookieHeader = cookies().toString();
 
   const user = await fetchMeServer(cookieHeader);
-  if (!user) redirect('/login');
-
-  if (user.isSuperAdmin) {
-    const selectedOrgId = cookieStore.get('selected_org_id')?.value;
-    redirect(selectedOrgId ? ROLE_HOME.SUPER_ADMIN : '/company-select');
-  }
+  // Stale `logged_in` cookie + dead tokens would loop /login → /post-login
+  // forever. Route through /api/auth/clear so the cookies get wiped before
+  // we hand the user back to /login.
+  if (!user) redirect('/api/auth/clear');
 
   const role = roleFromUser(user.roles);
-  if (!role) redirect('/login');
+  if (!role) redirect('/api/auth/clear');
 
   redirect(ROLE_HOME[role]);
 }

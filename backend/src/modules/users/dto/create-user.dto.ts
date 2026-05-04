@@ -7,7 +7,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserStatus } from '@prisma/client';
+import { UserStatus } from '../../../common/enums';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'john.doe@company.com' })

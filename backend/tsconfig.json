@@ -28,5 +28,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "prisma"]
+  "exclude": ["node_modules", "dist", "test", "scripts"]
 }

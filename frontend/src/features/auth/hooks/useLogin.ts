@@ -6,8 +6,7 @@ import type { LoginCredentials } from '@/types/auth.types';
 
 /**
  * Email + password login mutation. On success the auth store is populated
- * and the post-login route is returned (super admin -> /company-select,
- * everyone else -> their role's home).
+ * and the post-login route is returned (the user's role home).
  *
  * The cookies (access_token, refresh_token, logged_in, is_super_admin)
  * are set server-side by the NestJS /auth/login endpoint.

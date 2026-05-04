@@ -3,10 +3,7 @@ import type { AuthState, AuthUser, LoginCredentials } from '@/types/auth.types';
 import { ROLE_HOME, roleFromUser } from '@/config/roles';
 import { authApi } from '@/lib/api/auth.api';
 
-const COMPANY_SELECT_ROUTE = '/company-select';
-
 const resolveHome = (user: AuthUser): string => {
-  if (user.isSuperAdmin) return COMPANY_SELECT_ROUTE;
   const role = roleFromUser(user.roles);
   return role ? ROLE_HOME[role] : '/login';
 };

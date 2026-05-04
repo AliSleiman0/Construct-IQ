@@ -45,14 +45,19 @@ const DEMO_ACCOUNTS: { email: string; role: string; password: string }[] = [
   { email: 'client@constructiq.com', role: 'CLIENT', password: 'Demo@1234' },
 ];
 
+const hasPathPrefix = (path: string, prefix: string): boolean =>
+  path === prefix || path.startsWith(`${prefix}/`);
+
 const isAllowedRedirect = (path: string, home: string): boolean => {
-  if (!path.startsWith('/')) return false;
-  if (path === '/profile' || path === '/settings' || path.startsWith('/profile/') || path.startsWith('/settings/')) {
+  // Reject protocol-relative or absolute URLs ("//evil.com", "https://...")
+  // that would otherwise pass startsWith('/').
+  if (!path.startsWith('/') || path.startsWith('//')) return false;
+  if (hasPathPrefix(path, '/profile') || hasPathPrefix(path, '/settings')) {
     return true;
   }
   for (const r of ROLES) {
-    if (path.startsWith(ROLE_PREFIX[r])) {
-      return home.startsWith(ROLE_PREFIX[r]);
+    if (hasPathPrefix(path, ROLE_PREFIX[r])) {
+      return hasPathPrefix(home, ROLE_PREFIX[r]);
     }
   }
   return false;
@@ -146,13 +151,16 @@ function PhotoPane() {
 function FormPane() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, isLoading } = useLogin();
+  const { login } = useLogin();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lockedOut, setLockedOut] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  // Locked from click → through router.replace navigation. Only error paths
+  // reset it; on success the page unmounts before we'd need to.
+  const [submitting, setSubmitting] = useState(false);
 
   const {
     register,
@@ -169,13 +177,19 @@ function FormPane() {
   const passwordValue = watch('password');
 
   const onSubmit = async (data: LoginFormValues) => {
+    if (submitting) return;
     setSubmitError(null);
+    setSubmitting(true);
     try {
       const home = await login(data);
       const from = searchParams.get('from');
       const target = from && isAllowedRedirect(from, home) ? from : home;
       router.replace(target);
+      // Intentionally NOT clearing `submitting` — the page is navigating
+      // away. Clearing here would flicker the button back to "SIGN IN"
+      // between mutation success and the new route taking over.
     } catch (err) {
+      setSubmitting(false);
       if (isAxiosError(err)) {
         const status = err.response?.status;
         if (status === 401) {
@@ -403,7 +417,7 @@ function FormPane() {
           </div>
 
           {/* CTA */}
-          <PrimaryButton disabled={lockedOut} loading={isLoading} />
+          <PrimaryButton disabled={lockedOut} loading={submitting} />
 
           {/* Dev demo accounts */}
           {isDev && (

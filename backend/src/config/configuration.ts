@@ -11,7 +11,7 @@ export default () => ({
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   database: {
-    url: process.env.DATABASE_URL,
+    uri: process.env.MONGO_URL,
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

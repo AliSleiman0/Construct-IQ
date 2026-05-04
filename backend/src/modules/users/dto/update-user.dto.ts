@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsEnum, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { UserStatus } from '@prisma/client';
+import { UserStatus } from '../../../common/enums';
 
 export class UpdateUserDto {
   @ApiPropertyOptional({ example: 'John' })

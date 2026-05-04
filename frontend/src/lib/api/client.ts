@@ -33,6 +33,31 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+// Auth endpoints whose 401 must NOT trigger refresh-and-retry. /auth/login
+// 401 means wrong credentials, not session expiry — auto-refreshing would
+// reload the page and swallow the inline error. /auth/refresh is excluded
+// to avoid a refresh loop. /auth/logout is excluded because we're already
+// tearing down state.
+const NO_REFRESH_ON_401 = ['/auth/login', '/auth/refresh', '/auth/logout'];
+
+const isNoRefreshUrl = (url: string | undefined): boolean =>
+  !!url && NO_REFRESH_ON_401.some((p) => url.includes(p));
+
+// Singleton refresh promise — concurrent 401s wait on the same refresh
+// instead of each firing their own. The backend rotates refresh tokens
+// (see auth.service.ts), so parallel refreshes would race: only the first
+// gets a fresh token, the rest 401 and force-logout the user.
+let refreshInFlight: Promise<unknown> | null = null;
+
+const refreshOnce = (): Promise<unknown> => {
+  if (!refreshInFlight) {
+    refreshInFlight = apiClient.post('/auth/refresh').finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+};
+
 // Response interceptor — unwrap the `data` envelope from the API
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => {
@@ -45,17 +70,18 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as any;
 
-    // Never retry if the failing request IS the refresh endpoint — avoids infinite loop
-    const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh');
-
-    // Auto-refresh on 401 — only retry once, never on the refresh call itself
-    if (error.response?.status === 401 && !originalRequest._retried && !isRefreshRequest) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retried &&
+      !isNoRefreshUrl(originalRequest?.url)
+    ) {
       originalRequest._retried = true;
       try {
-        await apiClient.post('/auth/refresh');
+        await refreshOnce();
         return apiClient(originalRequest);
       } catch {
-        // Refresh failed — clear the logged_in flag so middleware won't bounce back
+        // Refresh failed — clear stale `logged_in` so middleware won't
+        // bounce us back through /post-login, then go to /login.
         if (typeof window !== 'undefined') {
           document.cookie = 'logged_in=; Max-Age=0; path=/';
           window.location.href = '/login';

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ConstructIQ is a multi-tenant construction management platform. Phase 1 (auth, users, organizations, RBAC) is complete. Phases 2–8 (projects, tasks, reports, budget, documents, AI, deployment) are pending but the full Prisma schema is already defined for all phases.
+ConstructIQ is a multi-tenant construction management platform. Phase 1 (auth, users, organizations, RBAC) is complete. Phases 2–8 (projects, tasks, reports, budget, documents, AI, deployment) are pending but every Mongoose schema is already defined for all phases.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ ConstructIQ is a multi-tenant construction management platform. Phase 1 (auth, u
 - `backend/` — NestJS REST API on port 4000
 - `frontend/` — Next.js 14 (App Router) on port 3000
 
-**Infrastructure (Docker):** PostgreSQL 16, Redis 7, PgAdmin (port 5050)
+**Infrastructure (Docker):** MongoDB 7 (single-node replica set `rs0`), Redis 7, mongo-express (port 5050)
 
 ### Request Flow
 
@@ -21,7 +21,7 @@ Browser → Next.js Middleware (auth check)
        → React Component (TanStack Query)
        → Axios Client (injects X-Organization-Id, handles 401 token refresh)
        → Next.js Rewrite Proxy (/api/v1/* → localhost:4000/api/v1/*)
-       → NestJS Controller → Service → Prisma → PostgreSQL
+       → NestJS Controller → Service → Mongoose Model → MongoDB
        → ResponseInterceptor wraps all responses: { success, data, timestamp }
 ```
 
@@ -46,7 +46,9 @@ All service queries must filter by `organizationId`. The `OrgContextInterceptor`
 - Permissions constants: `src/common/constants/permissions.ts` — always use these, never raw strings
 - Response/exception formatting: `src/common/interceptors/`, `src/common/filters/`
 - Config & env validation: `src/config/`
-- Prisma schema: `prisma/schema.prisma`
+- Mongoose foundation: `src/database/mongoose/` (global module + cuid-id / soft-delete plugins + `init.ts` for global plugin registration)
+- Per-feature schemas: `src/modules/{feature}/schemas/*.schema.ts` — `@Schema`/`@Prop` decorators carry every structural rule (required, enum, unique, index, ref). Pair with the existing class-validator DTOs at the API boundary.
+- Shared enums: `src/common/enums/` (replaces the old `@prisma/client` re-exports)
 
 **Rate limiting:** 100 req/min default, 10 req/min on auth endpoints.
 
@@ -64,7 +66,7 @@ All service queries must filter by `organizationId`. The `OrgContextInterceptor`
 - `NavigationAgent` — maps natural language to app routes using OpenAI tool-calling. Returns `{ action: { type: 'navigate', route } }`.
 - `ReportSummaryAgent` — fetches a `DailyReport`, summarizes via OpenAI, persists to `DailyReport.aiSummary`.
 
-**Persistence:** `ChatSessionService` persists conversations to `ChatSession` + `ChatMessage` tables, scoped per user + organization. The orchestrator loads prior messages and passes them as OpenAI context so follow-up intents work ("and now go to users").
+**Persistence:** `ChatSessionService` persists conversations to `ChatSession` + `ChatMessage` collections, scoped per user + organization. The orchestrator loads prior messages and passes them as OpenAI context so follow-up intents work ("and now go to users").
 
 **Provider:** OpenAI `gpt-4o-mini` (configurable via `AI_MODEL` env var). SDK: `openai` npm package.
 
@@ -90,7 +92,7 @@ All service queries must filter by `organizationId`. The `OrgContextInterceptor`
 
 ### Infrastructure
 ```bash
-docker-compose up -d          # Start PostgreSQL, Redis, PgAdmin
+docker-compose up -d          # Start MongoDB (replica set rs0), Redis, mongo-express
 ```
 
 ### Backend (`cd backend`)
@@ -105,10 +107,7 @@ npm run test:e2e              # End-to-end tests
 npm run lint                  # ESLint with auto-fix
 npm run format                # Prettier format
 
-npx prisma generate           # Regenerate Prisma client after schema changes
-npx prisma migrate dev        # Apply migrations in development
-npm run prisma:seed           # Seed database (super admin + sample data)
-npm run prisma:studio         # Open Prisma Studio GUI
+npm run seed                  # Seed database (super admin + 7 demo users + roles + permissions)
 ```
 
 ### Frontend (`cd frontend`)
@@ -122,7 +121,7 @@ npm run type-check            # TypeScript type check only
 ## Environment Setup
 
 **Backend** — copy `backend/.env.example` to `backend/.env`:
-- `DATABASE_URL` — PostgreSQL connection string
+- `MONGO_URL` — MongoDB connection string (replica set required for transactions; default: `mongodb://localhost:27017/constructiq?replicaSet=rs0&directConnection=true`)
 - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — must be set
 - `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 - `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` — seeded on first run
@@ -145,4 +144,4 @@ npm run type-check            # TypeScript type check only
 | 7 | 🟡 | AI Layer — orchestrator + navigation + report-summary agents + chat session persistence shipped |
 | 8 | ⏳ | Hardening, Deployment |
 
-All Prisma models for future phases are already defined in `prisma/schema.prisma`.
+All Mongoose schemas for future phases are already defined under `src/modules/*/schemas/`.

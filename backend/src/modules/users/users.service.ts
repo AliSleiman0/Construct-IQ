@@ -4,80 +4,160 @@ import {
   ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../database/prisma/prisma.service';
+import { User, UserDocument } from './schemas/user.schema';
+import { Role, RoleDocument } from './schemas/role.schema';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../organizations/schemas/organization.schema';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserStatus } from '../../common/enums';
 
-const USER_SELECT = {
-  id: true,
-  email: true,
-  firstName: true,
-  lastName: true,
-  phone: true,
-  avatarUrl: true,
-  status: true,
-  organizationId: true,
-  lastLoginAt: true,
-  createdAt: true,
-  updatedAt: true,
-  userRoles: {
-    select: {
-      role: { select: { id: true, name: true } },
-    },
-  },
-} as const;
+export interface UserResponse {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  avatarUrl: string | null;
+  status: UserStatus;
+  organizationId: string | null;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  userRoles: Array<{ role: { id: string; name: string } }>;
+}
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @InjectModel(Organization.name)
+    private organizationModel: Model<OrganizationDocument>,
+    @InjectConnection() private connection: Connection,
+  ) {}
 
-  async findById(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: USER_SELECT,
-    });
+  /** Shape a user doc to the API response format the frontend expects.
+   *  Roles must be passed in (already loaded) — keeps this pure & testable. */
+  private toUserResponse(
+    user: {
+      _id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      phone: string | null;
+      avatarUrl: string | null;
+      status: UserStatus;
+      organizationId: string | null;
+      lastLoginAt: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    },
+    roles: Array<{ _id: string; name: string }>,
+  ): UserResponse {
+    return {
+      id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+      organizationId: user.organizationId,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      userRoles: roles.map((r) => ({ role: { id: r._id, name: r.name } })),
+    };
+  }
+
+  private async loadRolesForUser(roleIds: string[]) {
+    if (roleIds.length === 0) return [];
+    return this.roleModel
+      .find({ _id: { $in: roleIds } }, { _id: 1, name: 1 })
+      .lean();
+  }
+
+  async findById(id: string): Promise<UserResponse> {
+    const user = await this.userModel.findOne({ _id: id }).lean();
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    const roles = await this.loadRolesForUser(user.roleIds ?? []);
+    return this.toUserResponse(user as any, roles as any);
   }
 
-  async findByEmail(email: string) {
-    return this.prisma.user.findFirst({ where: { email, deletedAt: null } });
+  /** Returns the raw user doc — used by auth flows that need passwordHash etc. */
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userModel
+      .findOne({ email: email.toLowerCase().trim() })
+      .lean<User | null>()
+      .exec();
   }
 
-  async findAllByOrganization(organizationId: string) {
-    return this.prisma.user.findMany({
-      where: { organizationId, deletedAt: null },
-      select: USER_SELECT,
-      orderBy: { createdAt: 'asc' },
-    });
+  async findAllByOrganization(organizationId: string): Promise<UserResponse[]> {
+    const users = await this.userModel
+      .find({ organizationId })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const allRoleIds = Array.from(new Set(users.flatMap((u) => u.roleIds ?? [])));
+    const roleDocs = await this.roleModel
+      .find({ _id: { $in: allRoleIds } }, { _id: 1, name: 1 })
+      .lean();
+    const roleById = new Map(roleDocs.map((r) => [r._id, r]));
+
+    return users.map((u) =>
+      this.toUserResponse(
+        u as any,
+        (u.roleIds ?? [])
+          .map((rid) => roleById.get(rid))
+          .filter((r): r is NonNullable<typeof r> => !!r),
+      ),
+    );
   }
 
-  /** Super Admin only — list every user across all organizations */
-  async findAllGlobal() {
-    return this.prisma.user.findMany({
-      where: { deletedAt: null },
-      select: USER_SELECT,
-      orderBy: { createdAt: 'asc' },
-    });
+  /** Super Admin only — list every user across every org */
+  async findAllGlobal(): Promise<UserResponse[]> {
+    const users = await this.userModel.find().sort({ createdAt: 1 }).lean();
+
+    const allRoleIds = Array.from(new Set(users.flatMap((u) => u.roleIds ?? [])));
+    const roleDocs = await this.roleModel
+      .find({ _id: { $in: allRoleIds } }, { _id: 1, name: 1 })
+      .lean();
+    const roleById = new Map(roleDocs.map((r) => [r._id, r]));
+
+    return users.map((u) =>
+      this.toUserResponse(
+        u as any,
+        (u.roleIds ?? [])
+          .map((rid) => roleById.get(rid))
+          .filter((r): r is NonNullable<typeof r> => !!r),
+      ),
+    );
   }
 
-  async create(organizationId: string, dto: CreateUserDto) {
-    const existing = await this.prisma.user.findFirst({
-      where: { email: dto.email, deletedAt: null },
+  async create(
+    organizationId: string,
+    dto: CreateUserDto,
+  ): Promise<UserResponse> {
+    const existing = await this.userModel.findOne({
+      email: dto.email.toLowerCase().trim(),
     });
     if (existing) {
       throw new ConflictException('A user with this email already exists');
     }
 
-    // Enforce per-organization user cap
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { maxUsers: true },
-    });
-    if (org?.maxUsers !== null && org?.maxUsers !== undefined) {
-      const currentCount = await this.prisma.user.count({
-        where: { organizationId, deletedAt: null },
+    // Per-organization user cap. `null` = unlimited.
+    const org = await this.organizationModel
+      .findOne({ _id: organizationId }, { maxUsers: 1 })
+      .lean();
+    if (org?.maxUsers != null) {
+      const currentCount = await this.userModel.countDocuments({
+        organizationId,
       });
       if (currentCount >= org.maxUsers) {
         throw new ForbiddenException(
@@ -86,108 +166,112 @@ export class UsersService {
       }
     }
 
-    // Validate the role exists
-    const role = await this.prisma.role.findUnique({ where: { id: dto.roleId } });
+    const role = await this.roleModel.findOne({ _id: dto.roleId }).lean();
     if (!role) throw new NotFoundException('Role not found');
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
-    // Create user + assign role in one transaction
-    return this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          organizationId,
-          email: dto.email,
-          passwordHash,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          phone: dto.phone,
-          status: dto.status,
-        },
-        select: USER_SELECT,
+    // create + role-attach in a single transaction (replica set required)
+    const session = await this.connection.startSession();
+    try {
+      let createdId: string | null = null;
+      await session.withTransaction(async () => {
+        const [created] = await this.userModel.create(
+          [
+            {
+              organizationId,
+              email: dto.email,
+              passwordHash,
+              firstName: dto.firstName,
+              lastName: dto.lastName,
+              phone: dto.phone ?? null,
+              status: dto.status ?? UserStatus.ACTIVE,
+              roleIds: [dto.roleId],
+            },
+          ],
+          { session },
+        );
+        createdId = created._id;
       });
 
-      await tx.userRole.create({
-        data: { userId: user.id, roleId: dto.roleId },
-      });
+      if (!createdId) {
+        // unreachable in practice — withTransaction throws on abort
+        throw new Error('Failed to create user');
+      }
 
-      // Return fresh record with roles populated
-      return tx.user.findUnique({ where: { id: user.id }, select: USER_SELECT });
-    });
+      return this.findById(createdId);
+    } finally {
+      await session.endSession();
+    }
   }
 
-  async update(id: string, organizationId: string, dto: UpdateUserDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { id, organizationId, deletedAt: null },
-    });
+  async update(
+    id: string,
+    organizationId: string,
+    dto: UpdateUserDto,
+  ): Promise<UserResponse> {
+    const user = await this.userModel.findOne({ _id: id, organizationId });
     if (!user) throw new NotFoundException('User not found');
 
-    return this.prisma.user.update({
-      where: { id },
-      data: dto,
-      select: USER_SELECT,
-    });
+    await this.userModel.updateOne({ _id: id }, dto);
+    return this.findById(id);
   }
 
   async softDelete(id: string, organizationId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id, organizationId, deletedAt: null },
-    });
+    const user = await this.userModel.findOne({ _id: id, organizationId });
     if (!user) throw new NotFoundException('User not found');
 
-    await this.prisma.user.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+    await this.userModel.updateOne({ _id: id }, { deletedAt: new Date() });
 
     return { message: 'User deactivated successfully' };
   }
 
   async assignRole(userId: string, organizationId: string, roleId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, organizationId, deletedAt: null },
-    });
+    const user = await this.userModel.findOne({ _id: userId, organizationId });
     if (!user) throw new NotFoundException('User not found');
 
-    const role = await this.prisma.role.findUnique({ where: { id: roleId } });
+    const role = await this.roleModel.findOne({ _id: roleId }).lean();
     if (!role) throw new NotFoundException('Role not found');
 
-    const existing = await this.prisma.userRole.findUnique({
-      where: { userId_roleId: { userId, roleId } },
-    });
-    if (existing) throw new ConflictException('Role already assigned to this user');
+    if (user.roleIds.includes(roleId)) {
+      throw new ConflictException('Role already assigned to this user');
+    }
 
-    return this.prisma.userRole.create({
-      data: { userId, roleId },
-      select: { role: { select: { id: true, name: true } } },
-    });
+    await this.userModel.updateOne(
+      { _id: userId },
+      { $addToSet: { roleIds: roleId } },
+    );
+
+    return { role: { id: role._id, name: role.name } };
   }
 
   async removeRole(userId: string, organizationId: string, roleId: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, organizationId, deletedAt: null },
-    });
+    const user = await this.userModel.findOne({ _id: userId, organizationId });
     if (!user) throw new NotFoundException('User not found');
 
-    const existing = await this.prisma.userRole.findUnique({
-      where: { userId_roleId: { userId, roleId } },
-    });
-    if (!existing) throw new NotFoundException('Role not assigned to this user');
+    if (!user.roleIds.includes(roleId)) {
+      throw new NotFoundException('Role not assigned to this user');
+    }
 
-    await this.prisma.userRole.delete({
-      where: { userId_roleId: { userId, roleId } },
-    });
+    await this.userModel.updateOne(
+      { _id: userId },
+      { $pull: { roleIds: roleId } },
+    );
 
     return { message: 'Role removed successfully' };
   }
 
   /** List roles scoped to the user's organization (Super Admin sees all). */
   async findAllRoles(organizationId: string, isSuperAdmin = false) {
-    return this.prisma.role.findMany({
-      where: isSuperAdmin ? undefined : { organizationId },
-      select: { id: true, name: true, description: true },
-      orderBy: { name: 'asc' },
-    });
+    const filter = isSuperAdmin ? {} : { organizationId };
+    const roles = await this.roleModel
+      .find(filter, { _id: 1, name: 1, description: 1 })
+      .sort({ name: 1 })
+      .lean();
+    return roles.map((r) => ({
+      id: r._id,
+      name: r.name,
+      description: r.description,
+    }));
   }
 }
-

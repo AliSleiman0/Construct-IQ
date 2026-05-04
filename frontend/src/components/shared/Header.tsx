@@ -21,7 +21,6 @@ import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
 import SettingsIcon from '@mui/icons-material/Settings';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
@@ -84,11 +83,6 @@ export function Header({ pageTitle }: HeaderProps) {
   const handleSettings = () => {
     closeAccount();
     router.push('/settings');
-  };
-
-  const handleSwitchOrg = () => {
-    closeAccount();
-    router.push('/company-select');
   };
 
   return (
@@ -255,12 +249,6 @@ export function Header({ pageTitle }: HeaderProps) {
             <SettingsIcon fontSize="small" color="action" />
             <Typography variant="body2">Settings</Typography>
           </MenuItem>
-          {user?.isSuperAdmin && (
-            <MenuItem onClick={handleSwitchOrg} sx={{ gap: 1.5, py: 1.25 }}>
-              <SwapHorizIcon fontSize="small" color="action" />
-              <Typography variant="body2">Switch organization</Typography>
-            </MenuItem>
-          )}
           <Divider />
           <MenuItem
             onClick={handleLogout}

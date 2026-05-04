@@ -1,7 +1,12 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import OpenAI from 'openai';
-import { PrismaService } from '../../../database/prisma/prisma.service';
+import {
+  DailyReport,
+  DailyReportDocument,
+} from '../../reports/schemas/daily-report.schema';
 
 @Injectable()
 export class ReportSummaryAgent {
@@ -10,7 +15,8 @@ export class ReportSummaryAgent {
 
   constructor(
     private configService: ConfigService,
-    private prisma: PrismaService,
+    @InjectModel(DailyReport.name)
+    private dailyReportModel: Model<DailyReportDocument>,
   ) {
     this.client = new OpenAI({
       apiKey: this.configService.get<string>('ai.openaiApiKey'),
@@ -18,15 +24,16 @@ export class ReportSummaryAgent {
   }
 
   async summarize(reportId: string): Promise<string> {
-    const report = await this.prisma.dailyReport.findUnique({
-      where: { id: reportId },
-      include: { manpowerEntries: true, materialEntries: true },
-    });
-
-    if (!report) throw new NotFoundException(`Daily report ${reportId} not found`);
+    const report = await this.dailyReportModel.findOne({ _id: reportId }).lean();
+    if (!report) {
+      throw new NotFoundException(`Daily report ${reportId} not found`);
+    }
 
     const manpowerText = report.manpowerEntries
-      .map((e) => `${e.trade}: ${e.count} workers${e.contractor ? ` (${e.contractor})` : ''}`)
+      .map(
+        (e) =>
+          `${e.trade}: ${e.count} workers${e.contractor ? ` (${e.contractor})` : ''}`,
+      )
       .join(', ');
 
     const materialsText = report.materialEntries
@@ -35,7 +42,9 @@ export class ReportSummaryAgent {
 
     const prompt = [
       `Daily Report for ${report.reportDate.toISOString().split('T')[0]}`,
-      report.weather ? `Weather: ${report.weather}${report.temperature ? `, ${report.temperature}` : ''}` : '',
+      report.weather
+        ? `Weather: ${report.weather}${report.temperature ? `, ${report.temperature}` : ''}`
+        : '',
       report.achievements ? `Achievements: ${report.achievements}` : '',
       report.blockers ? `Blockers: ${report.blockers}` : '',
       report.notes ? `Notes: ${report.notes}` : '',
@@ -63,10 +72,10 @@ export class ReportSummaryAgent {
 
     const summary = response.choices[0]?.message?.content ?? '';
 
-    await this.prisma.dailyReport.update({
-      where: { id: reportId },
-      data: { aiSummary: summary, aiSummaryAt: new Date() },
-    });
+    await this.dailyReportModel.updateOne(
+      { _id: reportId },
+      { aiSummary: summary, aiSummaryAt: new Date() },
+    );
 
     return summary;
   }
