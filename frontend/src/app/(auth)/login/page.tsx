@@ -868,7 +868,7 @@ function JobsitePhoto() {
           so the SVG blueprint background shows through behind the caption. */}
       <div className={styles.photoBanner}>
         <img
-          src="/login/jobsite.jpg"
+          src="/images/jobsite.jpg"
           alt="Two workers in hard hats and hi-vis vests reviewing blueprints on-site"
           className={styles.photoBannerImg}
         />
