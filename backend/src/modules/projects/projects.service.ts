@@ -7,7 +7,9 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project, ProjectDocument } from './schemas/project.schema';
+import { Task, TaskDocument } from './schemas/task.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
+import { Issue, IssueDocument } from '../issues/schemas/issue.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
@@ -36,6 +38,8 @@ export class ProjectsService {
   constructor(
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
+    @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
   ) {}
 
   private toProjectListItem(
@@ -102,12 +106,29 @@ export class ProjectsService {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Tasks/issues counts are placeholder zeroes until those modules ship.
+    if (projects.length === 0) return [];
+
+    const projectIds = projects.map((p) => p._id);
+
+    const [taskCounts, issueCounts] = await Promise.all([
+      this.taskModel.aggregate([
+        { $match: { projectId: { $in: projectIds }, deletedAt: null } },
+        { $group: { _id: '$projectId', count: { $sum: 1 } } },
+      ]),
+      this.issueModel.aggregate([
+        { $match: { projectId: { $in: projectIds }, deletedAt: null } },
+        { $group: { _id: '$projectId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const tasksByProject = new Map(taskCounts.map((r: any) => [r._id, r.count]));
+    const issuesByProject = new Map(issueCounts.map((r: any) => [r._id, r.count]));
+
     return projects.map((p) =>
       this.toProjectListItem(p, {
         members: (p.members ?? []).length,
-        tasks: 0,
-        issues: 0,
+        tasks: tasksByProject.get(p._id) ?? 0,
+        issues: issuesByProject.get(p._id) ?? 0,
       }),
     );
   }
@@ -147,11 +168,16 @@ export class ProjectsService {
       : [];
     const userById = new Map(users.map((u) => [u._id, u]));
 
+    const [taskCount, issueCount] = await Promise.all([
+      this.taskModel.countDocuments({ projectId: project._id, deletedAt: null }),
+      this.issueModel.countDocuments({ projectId: project._id, deletedAt: null }),
+    ]);
+
     return {
       ...this.toProjectListItem(project, {
         members: (project.members ?? []).length,
-        tasks: 0,
-        issues: 0,
+        tasks: taskCount,
+        issues: issueCount,
       }),
       members: (project.members ?? []).map((m) => {
         const u = userById.get(m.userId);
