@@ -5,6 +5,22 @@ import { IssueStatus, IssueType, IssueSeverity } from '../../../common/enums';
 
 export type IssueDocument = CuidHydratedDocument<Issue>;
 
+@Schema({ _id: true, timestamps: true })
+export class IssueComment {
+  _id: string;
+
+  @Prop({ type: String, ref: 'User', required: true })
+  authorId: string;
+
+  @Prop({ type: String, required: true })
+  body: string;
+
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const IssueCommentSchema = SchemaFactory.createForClass(IssueComment);
+
 @Schema({ collection: 'issues', timestamps: true })
 export class Issue {
   _id: string;
@@ -44,6 +60,12 @@ export class Issue {
   })
   status: IssueStatus;
 
+  @Prop({ type: String, default: null })
+  location: string | null;
+
+  @Prop({ type: String, default: null })
+  trade: string | null;
+
   @Prop({ type: String, ref: 'User', default: null, index: true })
   assignedToId: string | null;
 
@@ -56,6 +78,9 @@ export class Issue {
   @Prop({ type: Date, default: null })
   closedAt: Date | null;
 
+  @Prop({ type: [IssueCommentSchema], default: [] })
+  comments: IssueComment[];
+
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -64,3 +89,4 @@ export class Issue {
 export const IssueSchema = SchemaFactory.createForClass(Issue);
 
 IssueSchema.plugin(softDeletePlugin);
+IssueSchema.index({ organizationId: 1, projectId: 1, status: 1 });

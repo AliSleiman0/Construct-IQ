@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
-import { ProjectStatus } from '../../../common/enums';
+import { MilestoneStatus } from '../../../common/enums';
 
 export type MilestoneDocument = CuidHydratedDocument<Milestone>;
 
@@ -31,13 +31,19 @@ export class Milestone {
 
   @Prop({
     type: String,
-    enum: Object.values(ProjectStatus),
-    default: ProjectStatus.PLANNING,
+    enum: Object.values(MilestoneStatus),
+    default: MilestoneStatus.PENDING,
+    index: true,
   })
-  status: ProjectStatus;
+  status: MilestoneStatus;
+
+  @Prop({ type: Number, default: 0, min: 0, max: 100 })
+  percentComplete: number;
 
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const MilestoneSchema = SchemaFactory.createForClass(Milestone);
+
+MilestoneSchema.index({ projectId: 1, targetDate: 1 });

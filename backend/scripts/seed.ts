@@ -1,5 +1,4 @@
-// Plugin registration MUST happen before any schema is constructed —
-// see src/database/mongoose/init.ts. Keep this as the first import.
+// Plugin registration MUST happen before any schema is constructed.
 import '../src/database/mongoose/init';
 
 import * as fs from 'fs';
@@ -11,10 +10,9 @@ import { OrganizationSchema } from '../src/modules/organizations/schemas/organiz
 import { UserSchema } from '../src/modules/users/schemas/user.schema';
 import { RoleSchema } from '../src/modules/users/schemas/role.schema';
 import { PermissionSchema } from '../src/modules/users/schemas/permission.schema';
-import { UserStatus } from '../src/common/enums';
+import { ProjectSchema } from '../src/modules/projects/schemas/project.schema';
+import { UserStatus, ProjectStatus } from '../src/common/enums';
 
-// Load .env without pulling in dotenv as a runtime dep. The seed runs as a
-// detached Node process so it doesn't share NestJS's ConfigModule loader.
 function loadDotenv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
   if (!fs.existsSync(envPath)) return;
@@ -45,28 +43,63 @@ async function main() {
   await mongoose.connect(url);
   console.log('Seeding database...');
 
-  // Register models against the connected mongoose instance.
   const Organization = mongoose.model('Organization', OrganizationSchema);
   const User = mongoose.model('User', UserSchema);
   const Role = mongoose.model('Role', RoleSchema);
   const Permission = mongoose.model('Permission', PermissionSchema);
+  const Project = mongoose.model('Project', ProjectSchema);
 
-  // -- Organization ---------------------------------------------------------
-  const org = await Organization.findOneAndUpdate(
-    { slug: 'constructiq' },
+  // ── Organizations ─────────────────────────────────────────────────────────
+  // Three orgs matching frontend mocks/orgs.mock.ts
+  const orgDefs = [
     {
-      $setOnInsert: {
-        name: 'ConstructIQ',
-        slug: 'constructiq',
-        email: 'info@constructiq.com',
-        isActive: true,
-      },
+      slug: 'company-a',
+      name: 'Company A',
+      email: 'contact@companya.com',
+      address: '123 Builder Ave, Springfield',
+      phone: '+1-555-0101',
+      website: 'https://companya.com',
+      maxUsers: 50,
+      isActive: true,
     },
-    { new: true, upsert: true },
-  );
-  console.log(`Organization: ${org.name} (${org._id})`);
+    {
+      slug: 'company-b',
+      name: 'Company B',
+      email: 'hello@companyb.com',
+      address: '456 Concrete Rd, Riverside',
+      phone: '+1-555-0202',
+      website: 'https://companyb.com',
+      maxUsers: 25,
+      isActive: true,
+    },
+    {
+      slug: 'company-c',
+      name: 'Company C',
+      email: 'info@companyc.com',
+      address: '789 Steel Blvd, Lakewood',
+      phone: '+1-555-0303',
+      website: 'https://companyc.com',
+      maxUsers: 100,
+      isActive: false,
+    },
+  ];
 
-  // -- Permissions ----------------------------------------------------------
+  const orgs: Record<string, any> = {};
+  for (const def of orgDefs) {
+    const org = await Organization.findOneAndUpdate(
+      { slug: def.slug },
+      { $setOnInsert: def },
+      { new: true, upsert: true },
+    );
+    orgs[def.slug] = org;
+    console.log(`Organization: ${org.name} (${org._id})`);
+  }
+
+  const orgA = orgs['company-a'];
+  const orgB = orgs['company-b'];
+  const orgC = orgs['company-c'];
+
+  // ── Permissions ───────────────────────────────────────────────────────────
   const permissionDefs = [
     { name: 'manage:all', resource: '*', action: 'manage', description: 'Full access to everything' },
     { name: 'manage:company', resource: 'company', action: 'manage', description: 'Full access within own organization' },
@@ -137,22 +170,13 @@ async function main() {
   }
   console.log(`Permissions: ${permissionDefs.length} created/verified`);
 
-  // -- Roles ----------------------------------------------------------------
-  // Names are canonical enum keys consumed by the frontend role-prefix gate.
-  // Each role embeds its full permission key list directly (denormalised from
-  // the old role_permissions join table).
+  // ── Roles (scoped to Company A — shared by all demo users) ────────────────
   const rolePermissionMap: Record<string, string[]> = {
     SUPER_ADMIN: ['manage:all'],
-    SUPPORT_AGENT: [
-      'read:organizations',
-      'read:users',
-      'read:tickets',
-      'manage:tickets',
-    ],
+    SUPPORT_AGENT: ['read:organizations', 'read:users', 'read:tickets', 'manage:tickets'],
     ORG_ADMIN: ['manage:company'],
     PM: [
-      'read:organizations',
-      'read:users', 'read:roles',
+      'read:organizations', 'read:users', 'read:roles',
       'manage:projects', 'assign:project_members',
       'manage:phases', 'manage:milestones',
       'manage:tasks', 'assign:tasks',
@@ -166,47 +190,25 @@ async function main() {
       'read:ai', 'use:ai',
     ],
     PROCUREMENT: [
-      'read:projects',
-      'read:users',
-      'read:tasks',
-      'read:budget',
-      'manage:suppliers',
-      'manage:purchase_orders', 'update:deliveries',
-      'manage:deliveries',
-      'read:documents', 'upload:documents',
-      'read:ai',
+      'read:projects', 'read:users', 'read:tasks', 'read:budget',
+      'manage:suppliers', 'manage:purchase_orders', 'update:deliveries', 'manage:deliveries',
+      'read:documents', 'upload:documents', 'read:ai',
     ],
     SURVEYOR: [
-      'read:projects',
-      'read:users',
-      'read:tasks',
-      'read:phases', 'read:milestones',
-      'read:reports',
-      'read:issues',
-      'manage:budget',
-      'read:purchase_orders',
-      'read:deliveries',
-      'read:suppliers',
-      'read:documents',
-      'read:ai',
+      'read:projects', 'read:users', 'read:tasks',
+      'read:phases', 'read:milestones', 'read:reports', 'read:issues',
+      'manage:budget', 'read:purchase_orders', 'read:deliveries', 'read:suppliers',
+      'read:documents', 'read:ai',
     ],
     SITE_ENG: [
-      'read:projects',
-      'read:users',
+      'read:projects', 'read:users',
       'read:tasks', 'update:tasks',
       'create:reports', 'read:reports', 'update:reports',
       'create:issues', 'read:issues', 'update:issues',
       'read:phases', 'read:milestones',
-      'read:documents', 'upload:documents',
-      'read:ai',
+      'read:documents', 'upload:documents', 'read:ai',
     ],
-    CLIENT: [
-      'read:projects',
-      'read:milestones',
-      'read:issues',
-      'read:reports',
-      'read:documents',
-    ],
+    CLIENT: ['read:projects', 'read:milestones', 'read:issues', 'read:reports', 'read:documents'],
   };
 
   const roleDefs = [
@@ -223,14 +225,14 @@ async function main() {
   const roles: Record<string, { _id: string; name: string }> = {};
   for (const def of roleDefs) {
     const role = await Role.findOneAndUpdate(
-      { organizationId: org._id, name: def.name },
+      { organizationId: orgA._id, name: def.name },
       {
         $set: {
           description: def.description,
           isSystem: true,
           permissionKeys: rolePermissionMap[def.name] ?? [],
         },
-        $setOnInsert: { organizationId: org._id, name: def.name },
+        $setOnInsert: { organizationId: orgA._id, name: def.name },
       },
       { upsert: true, new: true },
     );
@@ -238,10 +240,7 @@ async function main() {
   }
   console.log(`Roles: ${Object.keys(roles).length} created/verified`);
 
-  // -- Demo Users -----------------------------------------------------------
-  const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL ?? 'admin@constructiq.com').toLowerCase();
-  const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@1234';
-
+  // ── Users ─────────────────────────────────────────────────────────────────
   async function findOrCreateUser(data: {
     email: string;
     organizationId: string;
@@ -249,73 +248,201 @@ async function main() {
     firstName: string;
     lastName: string;
     roleId: string;
+    phone?: string;
   }) {
     return User.findOneAndUpdate(
       { email: data.email.toLowerCase() },
       {
-        $set: {
-          status: UserStatus.ACTIVE,
-          roleIds: [data.roleId],
-        },
+        $set: { status: UserStatus.ACTIVE, roleIds: [data.roleId] },
         $setOnInsert: {
           email: data.email.toLowerCase(),
           organizationId: data.organizationId,
           passwordHash: data.passwordHash,
           firstName: data.firstName,
           lastName: data.lastName,
+          phone: data.phone ?? null,
         },
       },
       { upsert: true, new: true },
     );
   }
 
-  const superAdminHash = await bcrypt.hash(superAdminPassword, 12);
-  await findOrCreateUser({
-    organizationId: org._id,
-    email: superAdminEmail,
-    passwordHash: superAdminHash,
-    firstName: 'System',
-    lastName: 'Admin',
-    roleId: roles.SUPER_ADMIN._id,
-  });
-  console.log(`Admin user: ${superAdminEmail} -> SUPER_ADMIN`);
+  const adminHash = await bcrypt.hash(
+    process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@1234',
+    12,
+  );
+  const demoHash = await bcrypt.hash('Demo@1234', 12);
 
-  const demoPasswordHash = await bcrypt.hash('Demo@1234', 12);
-  const demoUsers = [
-    { email: 'support@constructiq.com', firstName: 'Support', lastName: 'Agent', role: 'SUPPORT_AGENT' },
-    { email: 'orgadmin@constructiq.com', firstName: 'Org', lastName: 'Admin', role: 'ORG_ADMIN' },
-    { email: 'pm@constructiq.com', firstName: 'Project', lastName: 'Manager', role: 'PM' },
-    { email: 'procurement@constructiq.com', firstName: 'Procurement', lastName: 'Officer', role: 'PROCUREMENT' },
-    { email: 'qs@constructiq.com', firstName: 'Quantity', lastName: 'Surveyor', role: 'SURVEYOR' },
-    { email: 'engineer@constructiq.com', firstName: 'Site', lastName: 'Engineer', role: 'SITE_ENG' },
-    { email: 'client@constructiq.com', firstName: 'Client', lastName: 'Viewer', role: 'CLIENT' },
+  // 8 core demo users — emails match the login page DEMO_ACCOUNTS exactly
+  const coreUsers = [
+    { email: 'admin@constructiq.com',       firstName: 'Anjana',    lastName: 'Patel',    role: 'SUPER_ADMIN',   phone: '+1-555-1001', orgId: orgA._id, hash: adminHash },
+    { email: 'support@constructiq.com',     firstName: 'Sam',       lastName: 'Chen',     role: 'SUPPORT_AGENT', phone: '+1-555-1002', orgId: orgA._id, hash: demoHash },
+    { email: 'orgadmin@constructiq.com',    firstName: 'Olivia',    lastName: 'Romero',   role: 'ORG_ADMIN',     phone: '+1-555-2001', orgId: orgA._id, hash: demoHash },
+    { email: 'pm@constructiq.com',          firstName: 'Pete',      lastName: 'Williams', role: 'PM',            phone: '+1-555-2002', orgId: orgA._id, hash: demoHash },
+    { email: 'procurement@constructiq.com', firstName: 'Priya',     lastName: 'Singh',    role: 'PROCUREMENT',   phone: '+1-555-2003', orgId: orgA._id, hash: demoHash },
+    { email: 'qs@constructiq.com',          firstName: 'Sara',      lastName: 'Khalil',   role: 'SURVEYOR',      phone: '+1-555-2004', orgId: orgA._id, hash: demoHash },
+    { email: 'engineer@constructiq.com',    firstName: 'Sebastian', lastName: 'Diaz',     role: 'SITE_ENG',      phone: '+1-555-2005', orgId: orgA._id, hash: demoHash },
+    { email: 'client@constructiq.com',      firstName: 'Carlos',    lastName: 'Rivera',   role: 'CLIENT',        phone: '+1-555-3001', orgId: orgA._id, hash: demoHash },
   ];
 
-  for (const u of demoUsers) {
-    const role = roles[u.role];
-    if (!role) continue;
-    await findOrCreateUser({
-      organizationId: org._id,
+  const userMap: Record<string, any> = {};
+  for (const u of coreUsers) {
+    const created = await findOrCreateUser({
       email: u.email,
-      passwordHash: demoPasswordHash,
+      organizationId: u.orgId,
+      passwordHash: u.hash,
       firstName: u.firstName,
       lastName: u.lastName,
-      roleId: role._id,
+      roleId: roles[u.role]._id,
+      phone: u.phone,
+    });
+    userMap[u.role] = created;
+    console.log(`  ${u.email} -> ${u.role}`);
+  }
+
+  // Extra users for Company B
+  const extraUsersB = [
+    { email: 'pm@companyb.com',     firstName: 'James',  lastName: 'Lee',    role: 'PM',       orgId: orgB._id },
+    { email: 'eng@companyb.com',    firstName: 'Mia',    lastName: 'Torres', role: 'SITE_ENG', orgId: orgB._id },
+    { email: 'client@companyb.com', firstName: 'David',  lastName: 'Kim',    role: 'CLIENT',   orgId: orgB._id },
+  ];
+  for (const u of extraUsersB) {
+    await findOrCreateUser({
+      email: u.email,
+      organizationId: u.orgId,
+      passwordHash: demoHash,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      roleId: roles[u.role]._id,
     });
   }
-  console.log(`Demo users: ${demoUsers.length} created/verified`);
+
+  // Extra user for Company C
+  await findOrCreateUser({
+    email: 'admin@companyc.com',
+    organizationId: orgC._id,
+    passwordHash: demoHash,
+    firstName: 'Nina',
+    lastName: 'Grant',
+    roleId: roles['ORG_ADMIN']._id,
+  });
+
+  console.log(`Users: ${coreUsers.length + extraUsersB.length + 1} created/verified`);
+
+  // ── Projects ──────────────────────────────────────────────────────────────
+  const pmUser = userMap['PM'];
+
+  const projectDefs = [
+    // Company A — 3 projects
+    {
+      organizationId: orgA._id,
+      name: 'Tower Heights',
+      code: 'TH-001',
+      location: 'Downtown Springfield',
+      status: ProjectStatus.ACTIVE,
+      startDate: new Date('2025-03-01'),
+      endDate: new Date('2026-12-31'),
+      totalBudget: 15_000_000,
+      currency: 'USD',
+      createdById: pmUser?._id ?? null,
+    },
+    {
+      organizationId: orgA._id,
+      name: 'Green Valley Residences',
+      code: 'GVR-002',
+      location: 'Green Valley District',
+      status: ProjectStatus.PLANNING,
+      startDate: new Date('2026-01-15'),
+      endDate: new Date('2027-06-30'),
+      totalBudget: 8_500_000,
+      currency: 'USD',
+      createdById: pmUser?._id ?? null,
+    },
+    {
+      organizationId: orgA._id,
+      name: 'Metro Office Complex',
+      code: 'MOC-003',
+      location: 'Metro Business Park',
+      status: ProjectStatus.ON_HOLD,
+      startDate: new Date('2025-06-01'),
+      endDate: new Date('2027-03-31'),
+      totalBudget: 22_000_000,
+      currency: 'USD',
+      createdById: pmUser?._id ?? null,
+    },
+    // Company B — 2 projects
+    {
+      organizationId: orgB._id,
+      name: 'Riverside Apartments',
+      code: 'RA-001',
+      location: 'Riverside',
+      status: ProjectStatus.ACTIVE,
+      startDate: new Date('2025-04-01'),
+      endDate: new Date('2026-10-31'),
+      totalBudget: 6_000_000,
+      currency: 'USD',
+      createdById: null,
+    },
+    {
+      organizationId: orgB._id,
+      name: 'Harbor Bridge Renovation',
+      code: 'HBR-002',
+      location: 'Harbor District',
+      status: ProjectStatus.PLANNING,
+      startDate: new Date('2026-02-01'),
+      endDate: new Date('2027-01-31'),
+      totalBudget: 3_200_000,
+      currency: 'USD',
+      createdById: null,
+    },
+    // Company C — 1 project
+    {
+      organizationId: orgC._id,
+      name: 'Lakewood Industrial Park',
+      code: 'LIP-001',
+      location: 'Lakewood',
+      status: ProjectStatus.COMPLETED,
+      startDate: new Date('2024-01-01'),
+      endDate: new Date('2025-06-30'),
+      totalBudget: 11_000_000,
+      currency: 'USD',
+      createdById: null,
+    },
+  ];
+
+  for (const def of projectDefs) {
+    const project = await Project.findOneAndUpdate(
+      { organizationId: def.organizationId, name: def.name },
+      {
+        $setOnInsert: {
+          ...def,
+          members: def.createdById
+            ? [{ userId: def.createdById.toString(), role: 'Project Manager', joinedAt: new Date() }]
+            : [],
+        },
+      },
+      { upsert: true, new: true },
+    );
+    console.log(`  Project: ${project.name} (${project.status})`);
+  }
+  console.log(`Projects: ${projectDefs.length} created/verified`);
 
   console.log('\nSeed complete.\n');
   console.log('  Login URL  : http://localhost:3000/login');
-  console.log('  Credentials:');
-  console.log('    admin@constructiq.com       / Admin@1234   (SUPER_ADMIN)');
-  console.log('    support@constructiq.com     / Demo@1234    (SUPPORT_AGENT)');
-  console.log('    orgadmin@constructiq.com    / Demo@1234    (ORG_ADMIN)');
-  console.log('    pm@constructiq.com          / Demo@1234    (PM)');
-  console.log('    procurement@constructiq.com / Demo@1234    (PROCUREMENT)');
-  console.log('    qs@constructiq.com          / Demo@1234    (SURVEYOR)');
-  console.log('    engineer@constructiq.com    / Demo@1234    (SITE_ENG)');
-  console.log('    client@constructiq.com      / Demo@1234    (CLIENT)');
+  console.log('  ─────────────────────────────────────────────');
+  console.log('  admin@constructiq.com       / Admin@1234  (SUPER_ADMIN)');
+  console.log('  support@constructiq.com     / Demo@1234   (SUPPORT_AGENT)');
+  console.log('  orgadmin@constructiq.com    / Demo@1234   (ORG_ADMIN)');
+  console.log('  pm@constructiq.com          / Demo@1234   (PM)');
+  console.log('  procurement@constructiq.com / Demo@1234   (PROCUREMENT)');
+  console.log('  qs@constructiq.com          / Demo@1234   (SURVEYOR)');
+  console.log('  engineer@constructiq.com    / Demo@1234   (SITE_ENG)');
+  console.log('  client@constructiq.com      / Demo@1234   (CLIENT)');
+  console.log('  ─────────────────────────────────────────────');
+  console.log('  pm@companyb.com            / Demo@1234   (PM — Company B)');
+  console.log('  eng@companyb.com           / Demo@1234   (SITE_ENG — Company B)');
+  console.log('  client@companyb.com        / Demo@1234   (CLIENT — Company B)');
+  console.log('  admin@companyc.com         / Demo@1234   (ORG_ADMIN — Company C)');
   console.log();
 }
 

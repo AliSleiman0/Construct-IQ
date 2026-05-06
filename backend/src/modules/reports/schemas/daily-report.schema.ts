@@ -3,7 +3,7 @@ import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
 
 export type DailyReportDocument = CuidHydratedDocument<DailyReport>;
 
-// Embedded — DailyReportManpowerEntry has no independent lifecycle.
+// Embedded — no independent lifecycle.
 @Schema({ _id: false, timestamps: false })
 export class DailyReportManpowerEntry {
   @Prop({ type: String, required: true })
@@ -23,14 +23,12 @@ export const DailyReportManpowerEntrySchema = SchemaFactory.createForClass(
   DailyReportManpowerEntry,
 );
 
-// Embedded — DailyReportMaterialEntry has no independent lifecycle.
+// Embedded — no independent lifecycle.
 @Schema({ _id: false, timestamps: false })
 export class DailyReportMaterialEntry {
   @Prop({ type: String, required: true })
   material: string;
 
-  // Was Decimal(10,2) under Postgres; double precision is enough for site
-  // material qty. Migrate to Decimal128 if cost accounting precision is needed.
   @Prop({ type: Number, required: true, min: 0 })
   quantity: number;
 
@@ -43,6 +41,23 @@ export class DailyReportMaterialEntry {
 
 export const DailyReportMaterialEntrySchema = SchemaFactory.createForClass(
   DailyReportMaterialEntry,
+);
+
+// Embedded — no independent lifecycle.
+@Schema({ _id: false, timestamps: false })
+export class DailyReportEquipmentEntry {
+  @Prop({ type: String, required: true })
+  name: string;
+
+  @Prop({ type: Number, required: true, min: 0 })
+  hours: number;
+
+  @Prop({ type: String, default: null })
+  notes: string | null;
+}
+
+export const DailyReportEquipmentEntrySchema = SchemaFactory.createForClass(
+  DailyReportEquipmentEntry,
 );
 
 @Schema({ collection: 'daily_reports', timestamps: true })
@@ -61,11 +76,15 @@ export class DailyReport {
   @Prop({ type: String, default: null })
   weather: string | null;
 
-  @Prop({ type: String, default: null })
-  temperature: string | null;
+  // Celsius — two separate fields so charts can plot the range.
+  @Prop({ type: Number, default: null })
+  highTempC: number | null;
+
+  @Prop({ type: Number, default: null })
+  lowTempC: number | null;
 
   @Prop({ type: String, default: null })
-  achievements: string | null;
+  workCompleted: string | null;
 
   @Prop({ type: String, default: null })
   blockers: string | null;
@@ -87,6 +106,9 @@ export class DailyReport {
 
   @Prop({ type: [DailyReportMaterialEntrySchema], default: [] })
   materialEntries: DailyReportMaterialEntry[];
+
+  @Prop({ type: [DailyReportEquipmentEntrySchema], default: [] })
+  equipmentEntries: DailyReportEquipmentEntry[];
 
   createdAt: Date;
   updatedAt: Date;

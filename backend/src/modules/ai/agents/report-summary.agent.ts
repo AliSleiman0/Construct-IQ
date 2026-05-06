@@ -43,9 +43,9 @@ export class ReportSummaryAgent {
     const prompt = [
       `Daily Report for ${report.reportDate.toISOString().split('T')[0]}`,
       report.weather
-        ? `Weather: ${report.weather}${report.temperature ? `, ${report.temperature}` : ''}`
+        ? `Weather: ${report.weather}${report.highTempC != null ? `, High ${report.highTempC}°C` : ''}${report.lowTempC != null ? ` / Low ${report.lowTempC}°C` : ''}`
         : '',
-      report.achievements ? `Achievements: ${report.achievements}` : '',
+      report.workCompleted ? `Work completed: ${report.workCompleted}` : '',
       report.blockers ? `Blockers: ${report.blockers}` : '',
       report.notes ? `Notes: ${report.notes}` : '',
       manpowerText ? `Manpower: ${manpowerText}` : '',
