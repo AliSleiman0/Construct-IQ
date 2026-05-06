@@ -273,16 +273,16 @@ async function main() {
   );
   const demoHash = await bcrypt.hash('Demo@1234', 12);
 
-  // 8 core demo users — names/emails match frontend mocks/users.mock.ts exactly
+  // 8 core demo users — emails match the login page DEMO_ACCOUNTS exactly
   const coreUsers = [
-    { email: 'anjana@constructiq.com', firstName: 'Anjana', lastName: 'Patel',    role: 'SUPER_ADMIN',   phone: '+1-555-1001', orgId: orgA._id, hash: adminHash },
-    { email: 'sam@constructiq.com',    firstName: 'Sam',    lastName: 'Chen',     role: 'SUPPORT_AGENT', phone: '+1-555-1002', orgId: orgA._id, hash: demoHash },
-    { email: 'olivia@companya.com',    firstName: 'Olivia', lastName: 'Romero',   role: 'ORG_ADMIN',     phone: '+1-555-2001', orgId: orgA._id, hash: demoHash },
-    { email: 'pete@companya.com',      firstName: 'Pete',   lastName: 'Williams', role: 'PM',            phone: '+1-555-2002', orgId: orgA._id, hash: demoHash },
-    { email: 'priya@companya.com',     firstName: 'Priya',  lastName: 'Singh',    role: 'PROCUREMENT',   phone: '+1-555-2003', orgId: orgA._id, hash: demoHash },
-    { email: 'sara@companya.com',      firstName: 'Sara',   lastName: 'Khalil',   role: 'SURVEYOR',      phone: '+1-555-2004', orgId: orgA._id, hash: demoHash },
-    { email: 'sebastian@companya.com', firstName: 'Sebastian', lastName: 'Diaz', role: 'SITE_ENG',      phone: '+1-555-2005', orgId: orgA._id, hash: demoHash },
-    { email: 'carlos@gmail.com',       firstName: 'Carlos', lastName: 'Rivera',   role: 'CLIENT',        phone: '+1-555-3001', orgId: orgA._id, hash: demoHash },
+    { email: 'admin@constructiq.com',       firstName: 'Anjana',    lastName: 'Patel',    role: 'SUPER_ADMIN',   phone: '+1-555-1001', orgId: orgA._id, hash: adminHash },
+    { email: 'support@constructiq.com',     firstName: 'Sam',       lastName: 'Chen',     role: 'SUPPORT_AGENT', phone: '+1-555-1002', orgId: orgA._id, hash: demoHash },
+    { email: 'orgadmin@constructiq.com',    firstName: 'Olivia',    lastName: 'Romero',   role: 'ORG_ADMIN',     phone: '+1-555-2001', orgId: orgA._id, hash: demoHash },
+    { email: 'pm@constructiq.com',          firstName: 'Pete',      lastName: 'Williams', role: 'PM',            phone: '+1-555-2002', orgId: orgA._id, hash: demoHash },
+    { email: 'procurement@constructiq.com', firstName: 'Priya',     lastName: 'Singh',    role: 'PROCUREMENT',   phone: '+1-555-2003', orgId: orgA._id, hash: demoHash },
+    { email: 'qs@constructiq.com',          firstName: 'Sara',      lastName: 'Khalil',   role: 'SURVEYOR',      phone: '+1-555-2004', orgId: orgA._id, hash: demoHash },
+    { email: 'engineer@constructiq.com',    firstName: 'Sebastian', lastName: 'Diaz',     role: 'SITE_ENG',      phone: '+1-555-2005', orgId: orgA._id, hash: demoHash },
+    { email: 'client@constructiq.com',      firstName: 'Carlos',    lastName: 'Rivera',   role: 'CLIENT',        phone: '+1-555-3001', orgId: orgA._id, hash: demoHash },
   ];
 
   const userMap: Record<string, any> = {};
@@ -430,14 +430,14 @@ async function main() {
   console.log('\nSeed complete.\n');
   console.log('  Login URL  : http://localhost:3000/login');
   console.log('  ─────────────────────────────────────────────');
-  console.log('  anjana@constructiq.com     / Admin@1234  (SUPER_ADMIN)');
-  console.log('  sam@constructiq.com        / Demo@1234   (SUPPORT_AGENT)');
-  console.log('  olivia@companya.com        / Demo@1234   (ORG_ADMIN)');
-  console.log('  pete@companya.com          / Demo@1234   (PM)');
-  console.log('  priya@companya.com         / Demo@1234   (PROCUREMENT)');
-  console.log('  sara@companya.com          / Demo@1234   (SURVEYOR)');
-  console.log('  sebastian@companya.com     / Demo@1234   (SITE_ENG)');
-  console.log('  carlos@gmail.com           / Demo@1234   (CLIENT)');
+  console.log('  admin@constructiq.com       / Admin@1234  (SUPER_ADMIN)');
+  console.log('  support@constructiq.com     / Demo@1234   (SUPPORT_AGENT)');
+  console.log('  orgadmin@constructiq.com    / Demo@1234   (ORG_ADMIN)');
+  console.log('  pm@constructiq.com          / Demo@1234   (PM)');
+  console.log('  procurement@constructiq.com / Demo@1234   (PROCUREMENT)');
+  console.log('  qs@constructiq.com          / Demo@1234   (SURVEYOR)');
+  console.log('  engineer@constructiq.com    / Demo@1234   (SITE_ENG)');
+  console.log('  client@constructiq.com      / Demo@1234   (CLIENT)');
   console.log('  ─────────────────────────────────────────────');
   console.log('  pm@companyb.com            / Demo@1234   (PM — Company B)');
   console.log('  eng@companyb.com           / Demo@1234   (SITE_ENG — Company B)');

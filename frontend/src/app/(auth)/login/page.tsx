@@ -35,14 +35,14 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 const DEMO_ACCOUNTS: { email: string; role: string; password: string }[] = [
-  { email: 'admin@constructiq.com', role: 'SUPER_ADMIN', password: 'Admin@1234' },
-  { email: 'support@constructiq.com', role: 'SUPPORT_AGENT', password: 'Demo@1234' },
-  { email: 'orgadmin@constructiq.com', role: 'ORG_ADMIN', password: 'Demo@1234' },
-  { email: 'pm@constructiq.com', role: 'PM', password: 'Demo@1234' },
-  { email: 'procurement@constructiq.com', role: 'PROCUREMENT', password: 'Demo@1234' },
-  { email: 'qs@constructiq.com', role: 'SURVEYOR', password: 'Demo@1234' },
-  { email: 'engineer@constructiq.com', role: 'SITE_ENG', password: 'Demo@1234' },
-  { email: 'client@constructiq.com', role: 'CLIENT', password: 'Demo@1234' },
+  { email: 'admin@constructiq.com',       role: 'SUPER_ADMIN',   password: 'Admin@1234' },
+  { email: 'support@constructiq.com',     role: 'SUPPORT_AGENT', password: 'Demo@1234' },
+  { email: 'orgadmin@constructiq.com',    role: 'ORG_ADMIN',     password: 'Demo@1234' },
+  { email: 'pm@constructiq.com',          role: 'PM',            password: 'Demo@1234' },
+  { email: 'procurement@constructiq.com', role: 'PROCUREMENT',   password: 'Demo@1234' },
+  { email: 'qs@constructiq.com',          role: 'SURVEYOR',      password: 'Demo@1234' },
+  { email: 'engineer@constructiq.com',    role: 'SITE_ENG',      password: 'Demo@1234' },
+  { email: 'client@constructiq.com',      role: 'CLIENT',        password: 'Demo@1234' },
 ];
 
 const hasPathPrefix = (path: string, prefix: string): boolean =>
