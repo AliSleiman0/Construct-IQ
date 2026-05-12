@@ -1,83 +1,73 @@
 'use client';
 
-import { Box, Paper, Typography, Stack, Chip, Divider } from '@mui/material';
+import {
+  Box, Card, CardContent, Typography, List, ListItem,
+  ListItemIcon, ListItemText, Chip, CircularProgress,
+} from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { mockPlans } from '@/mocks/plans.mock';
+import { usePlans } from '@/features/plans/hooks/usePlans';
 
 export default function PlansPage() {
+  const { data: plans = [], isLoading } = usePlans();
+
+  if (isLoading) {
+    return <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>;
+  }
+
   return (
     <Box>
       <PageHeader
-        title="Plans"
-        subtitle="Subscription tiers and the features tied to each."
+        title="Subscription Plans"
+        subtitle="Define pricing tiers and feature sets available to tenants."
       />
 
-      <Box
-        sx={{
-          display: 'grid',
-          gap: 2.5,
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-        }}
-      >
-        {mockPlans.map((p) => (
-          <Paper
-            key={p.id}
-            elevation={0}
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: p.isPopular ? 'primary.light' : 'divider',
-              bgcolor: p.isPopular ? 'rgba(25,118,210,0.04)' : 'background.paper',
-              position: 'relative',
-            }}
-          >
-            {p.isPopular && (
-              <Chip
-                label="Most popular"
-                color="primary"
-                size="small"
-                sx={{
-                  position: 'absolute',
-                  top: 16,
-                  right: 16,
-                  fontWeight: 600,
-                }}
-              />
-            )}
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
-              {p.name}
-            </Typography>
-            <Box display="flex" alignItems="baseline" gap={0.5} mb={1}>
-              <Typography variant="h3" fontWeight={700}>
-                ${p.pricePerMonth.toLocaleString()}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                /month
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              {p.description}
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Stack gap={1}>
-              {p.features.map((f) => (
-                <Box key={f} display="flex" alignItems="center" gap={1}>
-                  <CheckIcon sx={{ fontSize: 16, color: 'success.main' }} />
-                  <Typography variant="body2">{f}</Typography>
-                </Box>
-              ))}
-            </Stack>
-            <Box mt={3}>
-              <Typography variant="caption" color="text.secondary">
-                {p.maxUsers >= 9999 ? 'Unlimited users' : `Up to ${p.maxUsers} users`} ·{' '}
-                {p.maxProjects >= 9999 ? 'Unlimited projects' : `Up to ${p.maxProjects} projects`}
-              </Typography>
-            </Box>
-          </Paper>
-        ))}
-      </Box>
+      {(plans as any[]).length === 0 ? (
+        <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
+          No plans found. Create plans via the API or seed data.
+        </Typography>
+      ) : (
+        <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(3,1fr)' } }}>
+          {(plans as any[]).map((plan: any) => (
+            <Card key={plan._id} elevation={0}
+              sx={{ border: '1px solid', borderColor: plan.isPopular ? 'primary.main' : 'divider', borderRadius: 2, position: 'relative' }}>
+              {plan.isPopular && (
+                <Chip label="Most popular" color="primary" size="small"
+                  sx={{ position: 'absolute', top: 16, right: 16, fontWeight: 700, fontSize: '0.7rem' }} />
+              )}
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="overline" color="text.secondary" fontWeight={700}>
+                  {plan.tier ?? plan.name}
+                </Typography>
+                <Typography variant="h5" fontWeight={800} sx={{ mt: 0.5, mb: 0.5 }}>
+                  ${plan.pricePerMonth}
+                  <Typography component="span" variant="body2" color="text.secondary" ml={0.5}>/mo</Typography>
+                </Typography>
+                {plan.description && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {plan.description}
+                  </Typography>
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  Up to {plan.maxUsers} users · {plan.maxProjects} projects
+                </Typography>
+                {(plan.features ?? []).length > 0 && (
+                  <List dense disablePadding sx={{ mt: 2 }}>
+                    {(plan.features as string[]).map((f, i) => (
+                      <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
+                        <ListItemIcon sx={{ minWidth: 28 }}>
+                          <CheckIcon fontSize="small" color="success" />
+                        </ListItemIcon>
+                        <ListItemText primary={f} primaryTypographyProps={{ variant: 'body2' }} />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
