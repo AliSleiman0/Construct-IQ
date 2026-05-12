@@ -127,6 +127,26 @@ export const PERMISSIONS = {
   AUDIT_LOGS: {
     READ: 'read:audit_logs',
   },
+
+  // ── Support Tickets ─────────────────────────────────────
+  SUPPORT_TICKETS: {
+    READ: 'read:support_tickets',
+    CREATE: 'create:support_tickets',
+    UPDATE: 'update:support_tickets',
+    MANAGE: 'manage:support_tickets',
+  },
+
+  // ── Org Settings ────────────────────────────────────────
+  SETTINGS: {
+    READ: 'read:settings',
+    UPDATE: 'update:settings',
+    MANAGE: 'manage:settings',
+  },
+
+  // ── Dashboard ───────────────────────────────────────────
+  DASHBOARD: {
+    READ: 'read:dashboard',
+  },
 } as const;
 
 /** Flat union type of all permission strings */

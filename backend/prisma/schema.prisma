@@ -1,14 +1,14 @@
 // ConstructIQ — Complete Prisma Schema
-// Version: 1.0 — Phase 1 Foundation
-// All MVP models defined upfront for migration stability
+// Version: 2.0 — MongoDB
+// All MVP models defined upfront
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "mongodb"
+  url      = env("MONGO_URL")
 }
 
 // ─────────────────────────────────────────
@@ -109,12 +109,34 @@ enum AIInsightSeverity {
   CRITICAL
 }
 
+enum TicketCategory {
+  GENERAL
+  BILLING
+  TECHNICAL
+  FEATURE_REQUEST
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
 // ─────────────────────────────────────────
 // IDENTITY & ACCESS
 // ─────────────────────────────────────────
 
 model Organization {
-  id        String   @id @default(cuid())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   name      String
   slug      String   @unique
   logoUrl   String?
@@ -122,34 +144,34 @@ model Organization {
   phone     String?
   email     String?
   website   String?
-  maxUsers  Int?     // null = unlimited
+  maxUsers  Int?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users          User[]
-  projects       Project[]
-  roles          Role[]
-  suppliers      Supplier[]
-  aiInsights     AIInsight[]
-  chatSessions   ChatSession[]
-  notifications  Notification[]
-  auditLogs      AuditLog[]
-
-  @@map("organizations")
+  users            User[]
+  projects         Project[]
+  roles            Role[]
+  suppliers        Supplier[]
+  aiInsights       AIInsight[]
+  chatSessions     ChatSession[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  supportTickets   SupportTicket[]
+  orgSettings      OrgSettings?
 }
 
 model User {
-  id             String     @id @default(cuid())
-  organizationId String?    // nullable — external users (Supplier/Subcontractor) have no org
-  email          String     // no @unique here — enforced by partial DB index (WHERE deleted_at IS NULL)
+  id             String     @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String?    @db.ObjectId
+  email          String
   passwordHash   String
   firstName      String
   lastName       String
   phone          String?
   avatarUrl      String?
-  isExternal     Boolean    @default(false)  // true for Supplier/Subcontractor users
-  supplierId     String?    // FK to suppliers.id — set only when isExternal = true
+  isExternal     Boolean    @default(false)
+  supplierId     String?    @db.ObjectId
   status         UserStatus @default(ACTIVE)
   lastLoginAt    DateTime?
   refreshToken   String?
@@ -167,20 +189,22 @@ model User {
   assignedIssues Issue[] @relation("IssueAssignee")
   createdIssues  Issue[] @relation("IssueCreator")
 
-  dailyReports DailyReport[]
-  chatSessions ChatSession[]
-  chatMessages ChatMessage[]
-  notifications Notification[] @relation("NotificationUser")
-  auditLogs    AuditLog[]
+  dailyReports    DailyReport[]
+  chatSessions    ChatSession[]
+  chatMessages    ChatMessage[]
+  notifications   Notification[]  @relation("NotificationUser")
+  auditLogs       AuditLog[]
+  createdTickets  SupportTicket[] @relation("TicketCreator")
+  assignedTickets SupportTicket[] @relation("TicketAssignee")
+  ticketComments  TicketComment[]
 
   @@index([organizationId])
   @@index([email])
-  @@map("users")
 }
 
 model Role {
-  id             String   @id @default(cuid())
-  organizationId String
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
   name           String
   description    String?
   isSystem       Boolean  @default(false)
@@ -192,11 +216,10 @@ model Role {
   rolePermissions RolePermission[]
 
   @@unique([organizationId, name])
-  @@map("roles")
 }
 
 model Permission {
-  id          String   @id @default(cuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String   @unique
   description String?
   resource    String
@@ -204,34 +227,30 @@ model Permission {
   createdAt   DateTime @default(now())
 
   rolePermissions RolePermission[]
-
-  @@map("permissions")
 }
 
 model UserRole {
-  id        String   @id @default(cuid())
-  userId    String
-  roleId    String
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  roleId    String   @db.ObjectId
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
 
   @@unique([userId, roleId])
-  @@map("user_roles")
 }
 
 model RolePermission {
-  id           String   @id @default(cuid())
-  roleId       String
-  permissionId String
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  roleId       String   @db.ObjectId
+  permissionId String   @db.ObjectId
   createdAt    DateTime @default(now())
 
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   @@unique([roleId, permissionId])
-  @@map("role_permissions")
 }
 
 // ─────────────────────────────────────────
@@ -239,8 +258,8 @@ model RolePermission {
 // ─────────────────────────────────────────
 
 model Project {
-  id             String        @id @default(cuid())
-  organizationId String
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String        @db.ObjectId
   name           String
   description    String?
   code           String?
@@ -248,9 +267,9 @@ model Project {
   status         ProjectStatus @default(PLANNING)
   startDate      DateTime?
   endDate        DateTime?
-  totalBudget    Decimal?      @db.Decimal(15, 2)
+  totalBudget    Float?
   currency       String        @default("USD")
-  createdById    String?
+  createdById    String?       @db.ObjectId
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -272,27 +291,25 @@ model Project {
   @@index([organizationId])
   @@index([status])
   @@index([organizationId, status])
-  @@map("projects")
 }
 
 model ProjectMember {
-  id        String   @id @default(cuid())
-  projectId String
-  userId    String
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  projectId String   @db.ObjectId
+  userId    String   @db.ObjectId
   role      String?
   joinedAt  DateTime @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([projectId, userId])
-  @@map("project_members")
 }
 
 model Phase {
-  id             String        @id @default(cuid())
-  organizationId String
-  projectId      String
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String        @db.ObjectId
+  projectId      String        @db.ObjectId
   name           String
   description    String?
   order          Int           @default(0)
@@ -302,20 +319,19 @@ model Phase {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project     @relation(fields: [projectId], references: [id])
   milestones Milestone[]
   tasks      Task[]
 
   @@index([projectId])
   @@index([organizationId])
-  @@map("phases")
 }
 
 model Milestone {
-  id             String        @id @default(cuid())
-  organizationId String
-  projectId      String
-  phaseId        String?
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String        @db.ObjectId
+  projectId      String        @db.ObjectId
+  phaseId        String?       @db.ObjectId
   name           String
   description    String?
   targetDate     DateTime?
@@ -324,12 +340,11 @@ model Milestone {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id])
   phase   Phase?  @relation(fields: [phaseId], references: [id])
 
   @@index([projectId])
   @@index([organizationId])
-  @@map("milestones")
 }
 
 // ─────────────────────────────────────────
@@ -337,27 +352,27 @@ model Milestone {
 // ─────────────────────────────────────────
 
 model Task {
-  id             String       @id @default(cuid())
-  organizationId String
-  projectId      String
-  phaseId        String?
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String       @db.ObjectId
+  projectId      String       @db.ObjectId
+  phaseId        String?      @db.ObjectId
   title          String
   description    String?
   status         TaskStatus   @default(TODO)
   priority       TaskPriority @default(MEDIUM)
-  assignedToId   String?
-  createdById    String?
+  assignedToId   String?      @db.ObjectId
+  createdById    String?      @db.ObjectId
   startDate      DateTime?
   dueDate        DateTime?
   completedAt    DateTime?
   progress       Int          @default(0)
-  estimatedHours Decimal?     @db.Decimal(8, 2)
-  actualHours    Decimal?     @db.Decimal(8, 2)
+  estimatedHours Float?
+  actualHours    Float?
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project @relation(fields: [projectId], references: [id])
   phase      Phase?  @relation(fields: [phaseId], references: [id])
   assignedTo User?   @relation("TaskAssignee", fields: [assignedToId], references: [id])
   createdBy  User?   @relation("TaskCreator", fields: [createdById], references: [id])
@@ -372,20 +387,18 @@ model Task {
   @@index([dueDate])
   @@index([projectId, status])
   @@index([organizationId, projectId])
-  @@map("tasks")
 }
 
 model TaskDependency {
-  id          String   @id @default(cuid())
-  taskId      String
-  dependsOnId String
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  taskId      String   @db.ObjectId
+  dependsOnId String   @db.ObjectId
   createdAt   DateTime @default(now())
 
-  task      Task @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
-  dependsOn Task @relation("DependencyTask", fields: [dependsOnId], references: [id], onDelete: Cascade)
+  task      Task @relation("DependentTask", fields: [taskId], references: [id])
+  dependsOn Task @relation("DependencyTask", fields: [dependsOnId], references: [id])
 
   @@unique([taskId, dependsOnId])
-  @@map("task_dependencies")
 }
 
 // ─────────────────────────────────────────
@@ -393,10 +406,10 @@ model TaskDependency {
 // ─────────────────────────────────────────
 
 model DailyReport {
-  id             String    @id @default(cuid())
-  organizationId String
-  projectId      String
-  reportDate     DateTime  @db.Date
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String    @db.ObjectId
+  projectId      String    @db.ObjectId
+  reportDate     DateTime
   weather        String?
   temperature    String?
   achievements   String?
@@ -404,11 +417,11 @@ model DailyReport {
   notes          String?
   aiSummary      String?
   aiSummaryAt    DateTime?
-  createdById    String
+  createdById    String    @db.ObjectId
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  project         Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project                    @relation(fields: [projectId], references: [id])
   createdBy       User                       @relation(fields: [createdById], references: [id])
   manpowerEntries DailyReportManpowerEntry[]
   materialEntries DailyReportMaterialEntry[]
@@ -417,38 +430,34 @@ model DailyReport {
   @@unique([projectId, reportDate])
   @@index([projectId])
   @@index([organizationId])
-  @@index([projectId, reportDate(sort: Desc)])
-  @@map("daily_reports")
 }
 
 model DailyReportManpowerEntry {
-  id            String   @id @default(cuid())
-  dailyReportId String
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  dailyReportId String   @db.ObjectId
   trade         String
   count         Int
   contractor    String?
   notes         String?
   createdAt     DateTime @default(now())
 
-  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id])
 
   @@index([dailyReportId])
-  @@map("daily_report_manpower_entries")
 }
 
 model DailyReportMaterialEntry {
-  id            String   @id @default(cuid())
-  dailyReportId String
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  dailyReportId String   @db.ObjectId
   material      String
-  quantity      Decimal  @db.Decimal(10, 2)
+  quantity      Float
   unit          String
   notes         String?
   createdAt     DateTime @default(now())
 
-  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id], onDelete: Cascade)
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id])
 
   @@index([dailyReportId])
-  @@map("daily_report_material_entries")
 }
 
 // ─────────────────────────────────────────
@@ -456,23 +465,23 @@ model DailyReportMaterialEntry {
 // ─────────────────────────────────────────
 
 model Issue {
-  id             String        @id @default(cuid())
-  organizationId String
-  projectId      String
+  id             String        @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String        @db.ObjectId
+  projectId      String        @db.ObjectId
   title          String
   description    String?
   type           IssueType     @default(GENERAL)
   severity       IssueSeverity @default(MEDIUM)
   status         IssueStatus   @default(OPEN)
-  assignedToId   String?
-  createdById    String?
+  assignedToId   String?       @db.ObjectId
+  createdById    String?       @db.ObjectId
   resolvedAt     DateTime?
   closedAt       DateTime?
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [projectId], references: [id])
   assignedTo User?    @relation("IssueAssignee", fields: [assignedToId], references: [id])
   createdBy  User?    @relation("IssueCreator", fields: [createdById], references: [id])
   documents  Document[]
@@ -482,7 +491,6 @@ model Issue {
   @@index([status])
   @@index([severity])
   @@index([assignedToId])
-  @@map("issues")
 }
 
 // ─────────────────────────────────────────
@@ -490,50 +498,48 @@ model Issue {
 // ─────────────────────────────────────────
 
 model Budget {
-  id             String   @id @default(cuid())
-  organizationId String
-  projectId      String   @unique
-  totalAmount    Decimal  @db.Decimal(15, 2)
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  projectId      String   @unique @db.ObjectId
+  totalAmount    Float
   currency       String   @default("USD")
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id])
   budgetLines BudgetLine[]
   expenses    Expense[]
 
   @@index([organizationId])
-  @@map("budgets")
 }
 
 model BudgetLine {
-  id            String   @id @default(cuid())
-  budgetId      String
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  budgetId      String   @db.ObjectId
   category      String
   description   String?
-  plannedAmount Decimal  @db.Decimal(15, 2)
+  plannedAmount Float
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  budget         Budget          @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budget         Budget          @relation(fields: [budgetId], references: [id])
   expenses       Expense[]
-  purchaseOrders PurchaseOrder[] // committed costs auto-linked when PO is approved
+  purchaseOrders PurchaseOrder[]
 
   @@index([budgetId])
-  @@map("budget_lines")
 }
 
 model Expense {
-  id             String   @id @default(cuid())
-  organizationId String
-  budgetId       String?
-  budgetLineId   String?
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  budgetId       String?  @db.ObjectId
+  budgetLineId   String?  @db.ObjectId
   description    String
-  amount         Decimal  @db.Decimal(15, 2)
+  amount         Float
   currency       String   @default("USD")
-  date           DateTime @db.Date
+  date           DateTime
   reference      String?
   notes          String?
   createdAt      DateTime @default(now())
@@ -544,7 +550,6 @@ model Expense {
 
   @@index([organizationId])
   @@index([budgetId])
-  @@map("expenses")
 }
 
 // ─────────────────────────────────────────
@@ -552,8 +557,8 @@ model Expense {
 // ─────────────────────────────────────────
 
 model Supplier {
-  id             String    @id @default(cuid())
-  organizationId String
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String    @db.ObjectId
   name           String
   contactName    String?
   email          String?
@@ -569,26 +574,25 @@ model Supplier {
 
   organization   Organization    @relation(fields: [organizationId], references: [id])
   purchaseOrders PurchaseOrder[]
-  externalUsers  User[]          // Supplier Users linked to this supplier
+  externalUsers  User[]
 
   @@index([organizationId])
-  @@map("suppliers")
 }
 
 model PurchaseOrder {
-  id                   String              @id @default(cuid())
-  organizationId       String
-  projectId            String
-  supplierId           String
-  budgetLineId         String?             // links committed costs to a budget category
+  id                   String              @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId       String              @db.ObjectId
+  projectId            String              @db.ObjectId
+  supplierId           String              @db.ObjectId
+  budgetLineId         String?             @db.ObjectId
   poNumber             String
   status               PurchaseOrderStatus @default(DRAFT)
-  totalAmount          Decimal?            @db.Decimal(15, 2)
+  totalAmount          Float?
   currency             String              @default("USD")
-  orderDate            DateTime            @db.Date
-  expectedDeliveryDate DateTime?           @db.Date
+  orderDate            DateTime
+  expectedDeliveryDate DateTime?
   notes                String?
-  approvedById         String?
+  approvedById         String?             @db.ObjectId
   approvedAt           DateTime?
   deletedAt            DateTime?
   createdAt            DateTime            @default(now())
@@ -605,34 +609,32 @@ model PurchaseOrder {
   @@index([supplierId])
   @@index([status])
   @@index([expectedDeliveryDate])
-  @@map("purchase_orders")
 }
 
 model PurchaseOrderItem {
-  id              String   @id @default(cuid())
-  purchaseOrderId String
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  purchaseOrderId String   @db.ObjectId
   description     String
-  quantity        Decimal  @db.Decimal(10, 2)
+  quantity        Float
   unit            String?
-  unitPrice       Decimal  @db.Decimal(15, 2)
-  totalPrice      Decimal  @db.Decimal(15, 2)
+  unitPrice       Float
+  totalPrice      Float
   notes           String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
 
   @@index([purchaseOrderId])
-  @@map("purchase_order_items")
 }
 
 model Delivery {
-  id              String         @id @default(cuid())
-  organizationId  String
-  purchaseOrderId String
-  deliveryDate    DateTime?      @db.Date
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId  String         @db.ObjectId
+  purchaseOrderId String         @db.ObjectId
+  deliveryDate    DateTime?
   status          DeliveryStatus @default(PENDING)
-  receivedById    String?
+  receivedById    String?        @db.ObjectId
   notes           String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -642,7 +644,6 @@ model Delivery {
   @@index([purchaseOrderId])
   @@index([organizationId])
   @@index([status])
-  @@map("deliveries")
 }
 
 // ─────────────────────────────────────────
@@ -650,11 +651,11 @@ model Delivery {
 // ─────────────────────────────────────────
 
 model Document {
-  id             String       @id @default(cuid())
-  organizationId String
-  projectId      String?
-  dailyReportId  String?
-  issueId        String?
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String       @db.ObjectId
+  projectId      String?      @db.ObjectId
+  dailyReportId  String?      @db.ObjectId
+  issueId        String?      @db.ObjectId
   type           DocumentType @default(OTHER)
   name           String
   description    String?
@@ -662,7 +663,7 @@ model Document {
   fileUrl        String?
   mimeType       String?
   sizeBytes      Int?
-  uploadedById   String?
+  uploadedById   String?      @db.ObjectId
   metadata       Json?
   deletedAt      DateTime?
   createdAt      DateTime     @default(now())
@@ -674,7 +675,6 @@ model Document {
 
   @@index([organizationId])
   @@index([projectId])
-  @@map("documents")
 }
 
 // ─────────────────────────────────────────
@@ -682,9 +682,9 @@ model Document {
 // ─────────────────────────────────────────
 
 model AIInsight {
-  id             String            @id @default(cuid())
-  organizationId String
-  projectId      String
+  id             String            @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String            @db.ObjectId
+  projectId      String            @db.ObjectId
   type           AIInsightType     @default(GENERAL)
   severity       AIInsightSeverity @default(MEDIUM)
   title          String
@@ -704,43 +704,40 @@ model AIInsight {
   @@index([severity])
   @@index([type])
   @@index([createdAt])
-  @@map("ai_insights")
 }
 
 model ChatSession {
-  id             String   @id @default(cuid())
-  organizationId String
-  projectId      String?
-  userId         String
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  projectId      String?  @db.ObjectId
+  userId         String   @db.ObjectId
   title          String?
   metadata       Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   organization Organization  @relation(fields: [organizationId], references: [id])
-  project      Project?       @relation(fields: [projectId], references: [id])
-  user         User           @relation(fields: [userId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
   messages     ChatMessage[]
 
   @@index([userId])
   @@index([projectId])
-  @@map("chat_sessions")
 }
 
 model ChatMessage {
-  id            String   @id @default(cuid())
-  chatSessionId String
-  userId        String?
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  chatSessionId String   @db.ObjectId
+  userId        String?  @db.ObjectId
   role          String
   content       String
   metadata      Json?
   createdAt     DateTime @default(now())
 
-  chatSession ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  chatSession ChatSession @relation(fields: [chatSessionId], references: [id])
   user        User?       @relation(fields: [userId], references: [id])
 
   @@index([chatSessionId])
-  @@map("chat_messages")
 }
 
 // ─────────────────────────────────────────
@@ -748,9 +745,9 @@ model ChatMessage {
 // ─────────────────────────────────────────
 
 model Notification {
-  id             String   @id @default(cuid())
-  organizationId String
-  userId         String
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  userId         String   @db.ObjectId
   title          String
   message        String
   type           String
@@ -765,14 +762,13 @@ model Notification {
 
   @@index([userId])
   @@index([organizationId])
-  @@map("notifications")
 }
 
 model AuditLog {
-  id             String   @id @default(cuid())
-  organizationId String
-  projectId      String?
-  actorUserId    String?
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String   @db.ObjectId
+  projectId      String?  @db.ObjectId
+  actorUserId    String?  @db.ObjectId
   action         String
   entityType     String
   entityId       String?
@@ -782,11 +778,78 @@ model AuditLog {
   createdAt      DateTime @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id])
-  project      Project?      @relation(fields: [projectId], references: [id])
-  actor        User?         @relation(fields: [actorUserId], references: [id])
+  project      Project?     @relation(fields: [projectId], references: [id])
+  actor        User?        @relation(fields: [actorUserId], references: [id])
 
   @@index([organizationId])
   @@index([actorUserId])
   @@index([entityType, entityId])
-  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────
+// SUPPORT TICKETS
+// ─────────────────────────────────────────
+
+model SupportTicket {
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId String         @db.ObjectId
+  subject        String
+  description    String
+  category       TicketCategory @default(GENERAL)
+  priority       TicketPriority @default(MEDIUM)
+  status         TicketStatus   @default(OPEN)
+  createdById    String         @db.ObjectId
+  assignedToId   String?        @db.ObjectId
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  createdBy    User            @relation("TicketCreator", fields: [createdById], references: [id])
+  assignedTo   User?           @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  comments     TicketComment[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdById])
+}
+
+model TicketComment {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId   String   @db.ObjectId
+  userId     String   @db.ObjectId
+  content    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+}
+
+// ─────────────────────────────────────────
+// ORG SETTINGS
+// ─────────────────────────────────────────
+
+model OrgSettings {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  organizationId    String   @unique @db.ObjectId
+  brandColor        String   @default("#1976d2")
+  theme             String   @default("light")
+  timezone          String   @default("America/New_York")
+  currency          String   @default("USD")
+  dateFormat        String   @default("MM/DD/YYYY")
+  weekStart         String   @default("monday")
+  measurement       String   @default("imperial")
+  notifications     Json     @default("{}")
+  twoFactorRequired Boolean  @default(false)
+  passwordPolicy    String   @default("standard")
+  sessionTimeoutMin Int      @default(480)
+  ssoEnabled        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
 }

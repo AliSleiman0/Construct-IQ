@@ -13,6 +13,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { SupportTicketsModule } from './modules/support-tickets/support-tickets.module';
+import { OrgSettingsModule } from './modules/org-settings/org-settings.module';
 
 @Module({
   imports: [
@@ -38,6 +41,9 @@ import { ProjectsModule } from './modules/projects/projects.module';
     UsersModule,
     OrganizationsModule,
     ProjectsModule,
+    DashboardModule,
+    SupportTicketsModule,
+    OrgSettingsModule,
   ],
   providers: [
     {

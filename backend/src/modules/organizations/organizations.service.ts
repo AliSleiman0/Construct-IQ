@@ -204,72 +204,67 @@ export class OrganizationsService {
     });
     const permMap = new Map(allPermissions.map((p) => [p.name, p.id]));
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Create the organization
-      const org = await tx.organization.create({
-        data: {
-          name: dto.name,
-          slug: dto.slug,
-          email: dto.email,
-          address: dto.address,
-          phone: dto.phone,
-          website: dto.website,
-          maxUsers: dto.maxUsers ?? null,
-          isActive: true,
-        },
-        select: this.ORG_SELECT,
-      });
+    // 1. Create the organization
+    const org = await this.prisma.organization.create({
+      data: {
+        name: dto.name,
+        slug: dto.slug,
+        email: dto.email,
+        address: dto.address,
+        phone: dto.phone,
+        website: dto.website,
+        maxUsers: dto.maxUsers ?? null,
+        isActive: true,
+      },
+      select: this.ORG_SELECT,
+    });
 
-      // 2. Provision all standard roles for this new organization
-      //    Each role is created with its full permission set so the org is
-      //    immediately usable without needing a separate seed run.
-      let adminRoleId: string | null = null;
-      for (const roleDef of STANDARD_ROLES) {
-        const role = await tx.role.create({
-          data: {
-            organizationId: org.id,
-            name: roleDef.name,
-            description: roleDef.description,
-            isSystem: true,
-          },
-        });
-
-        if (roleDef.name === 'Admin') {
-          adminRoleId = role.id;
-        }
-
-        // Attach permissions (skip any that don't exist in the global table)
-        const permissionData = roleDef.permissions
-          .map((name) => permMap.get(name))
-          .filter((id): id is string => id !== undefined)
-          .map((permissionId) => ({ roleId: role.id, permissionId }));
-
-        if (permissionData.length > 0) {
-          await tx.rolePermission.createMany({ data: permissionData });
-        }
-      }
-
-      // 3. Create the admin user
-      const adminUser = await tx.user.create({
+    // 2. Provision all standard roles for this new organization
+    let adminRoleId: string | null = null;
+    for (const roleDef of STANDARD_ROLES) {
+      const role = await this.prisma.role.create({
         data: {
           organizationId: org.id,
-          email: dto.adminEmail,
-          passwordHash,
-          firstName: dto.adminFirstName,
-          lastName: dto.adminLastName,
-          status: 'ACTIVE',
+          name: roleDef.name,
+          description: roleDef.description,
+          isSystem: true,
         },
       });
 
-      // 4. Assign the Admin role (created above for this org)
-      if (adminRoleId) {
-        await tx.userRole.create({
-          data: { userId: adminUser.id, roleId: adminRoleId },
-        });
+      if (roleDef.name === 'Admin') {
+        adminRoleId = role.id;
       }
 
-      return { org, adminUser: { id: adminUser.id, email: adminUser.email } };
+      const permissionData = roleDef.permissions
+        .map((name) => permMap.get(name))
+        .filter((id): id is string => id !== undefined)
+        .map((permissionId) => ({ roleId: role.id, permissionId }));
+
+      if (permissionData.length > 0) {
+        await this.prisma.rolePermission.createMany({ data: permissionData });
+      }
+    }
+
+    // 3. Create the admin user
+    const adminUser = await this.prisma.user.create({
+      data: {
+        organizationId: org.id,
+        email: dto.adminEmail,
+        passwordHash,
+        firstName: dto.adminFirstName,
+        lastName: dto.adminLastName,
+        status: 'ACTIVE',
+      },
     });
+
+    // 4. Assign the Admin role
+    if (adminRoleId) {
+      await this.prisma.userRole.create({
+        data: { userId: adminUser.id, roleId: adminRoleId },
+      });
+    }
+
+    return { org, adminUser: { id: adminUser.id, email: adminUser.email } };
   }
 
   /** Super Admin only — suspend or reactivate a tenant */
