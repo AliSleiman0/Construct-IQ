@@ -151,3 +151,10 @@ export enum InvoiceStatus {
   OVERDUE = 'OVERDUE',
   VOID = 'VOID',
 }
+
+export enum TicketCategory {
+  GENERAL = 'GENERAL',
+  BILLING = 'BILLING',
+  TECHNICAL = 'TECHNICAL',
+  FEATURE_REQUEST = 'FEATURE_REQUEST',
+}

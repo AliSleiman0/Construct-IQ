@@ -1,154 +1,143 @@
 'use client';
 
 import {
-  Box,
-  Paper,
-  Stack,
-  Typography,
-  TextField,
-  MenuItem,
-  Chip,
-  InputAdornment,
+  Box, Paper, Typography, Stack, Chip, TextField,
+  MenuItem, CircularProgress, Pagination,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import dayjs from 'dayjs';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { mockAuditLog, type AuditAction } from '@/mocks/audit-log.mock';
+import { useAuditLogs } from '@/features/audit/hooks/useAuditLogs';
 
-const ACTION_COLOR: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info'> = {
-  login: 'info',
-  logout: 'default',
-  'user.create': 'success',
-  'user.deactivate': 'warning',
-  'role.assign': 'primary',
-  'role.remove': 'warning',
-  'project.create': 'success',
-  'project.archive': 'default',
-  'org.create': 'success',
-  'org.suspend': 'error',
-  'plan.upgrade': 'success',
-  'plan.downgrade': 'warning',
-  'invoice.paid': 'success',
-  'ticket.create': 'info',
-  'ticket.resolve': 'success',
-  'report.file': 'info',
-  'issue.resolve': 'success',
+const ACTION_COLORS: Record<string, 'default' | 'info' | 'success' | 'warning' | 'error'> = {
+  'user.login': 'info', 'user.logout': 'default',
+  'user.create': 'success', 'user.update': 'info', 'user.delete': 'error',
+  'org.create': 'success', 'org.update': 'info', 'org.suspend': 'warning', 'org.activate': 'success',
+  'project.create': 'success', 'project.update': 'info', 'project.delete': 'error',
+  'issue.create': 'warning', 'issue.resolve': 'success',
+  'report.create': 'info', 'ticket.create': 'warning', 'ticket.resolve': 'success',
 };
 
-const ACTION_OPTIONS: ('ALL' | AuditAction)[] = [
-  'ALL',
-  'login',
-  'logout',
-  'user.create',
-  'user.deactivate',
-  'role.assign',
-  'role.remove',
-  'project.create',
-  'project.archive',
-  'org.create',
-  'org.suspend',
-  'plan.upgrade',
-  'plan.downgrade',
-  'invoice.paid',
-  'ticket.create',
-  'ticket.resolve',
-  'report.file',
-  'issue.resolve',
-];
+const ENTITY_TYPES = ['ALL', 'User', 'Organization', 'Project', 'Issue', 'DailyReport', 'Ticket', 'Task'];
+const PAGE_SIZE = 20;
 
 export default function AuditLogPage() {
   const [search, setSearch] = useState('');
-  const [action, setAction] = useState<'ALL' | AuditAction>('ALL');
+  const [entityType, setEntityType] = useState('ALL');
+  const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return mockAuditLog.filter((e) => {
-      if (action !== 'ALL' && e.action !== action) return false;
-      if (!q) return true;
-      return (
-        e.actorName.toLowerCase().includes(q) ||
-        e.orgName.toLowerCase().includes(q) ||
-        e.description.toLowerCase().includes(q)
-      );
-    });
-  }, [search, action]);
+  const { data, isLoading } = useAuditLogs({
+    entityType: entityType !== 'ALL' ? entityType : undefined,
+    limit: PAGE_SIZE,
+    skip: (page - 1) * PAGE_SIZE,
+  });
+
+  const items: any[] = data?.items ?? [];
+  const total: number = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Client-side search on the current page
+  const filtered = search.trim()
+    ? items.filter((e: any) => {
+        const q = search.toLowerCase();
+        return (
+          (e.action ?? '').toLowerCase().includes(q) ||
+          (e.entityType ?? '').toLowerCase().includes(q) ||
+          (e.entityId ?? '').toLowerCase().includes(q) ||
+          (e.actorUserId ?? '').toLowerCase().includes(q) ||
+          (e.ipAddress ?? '').toLowerCase().includes(q)
+        );
+      })
+    : items;
 
   return (
     <Box>
-      <PageHeader title="Audit Log" subtitle="System-wide activity feed." />
+      <PageHeader
+        title="Audit Log"
+        subtitle="System-wide activity feed. All writes and login events."
+      />
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} mb={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2} mb={2.5}>
         <TextField
-          size="small"
-          placeholder="Search actor, org, description…"
+          label="Search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ flex: 1, maxWidth: 360 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" color="action" />
-              </InputAdornment>
-            ),
-          }}
+          size="small"
+          placeholder="action, entity, actor, IP…"
+          sx={{ flex: 1 }}
         />
         <TextField
-          size="small"
           select
-          label="Action"
-          value={action}
-          onChange={(e) => setAction(e.target.value as 'ALL' | AuditAction)}
-          sx={{ minWidth: 200 }}
+          label="Entity type"
+          value={entityType}
+          onChange={(e) => { setEntityType(e.target.value); setPage(1); }}
+          size="small"
+          sx={{ minWidth: 180 }}
         >
-          {ACTION_OPTIONS.map((a) => (
-            <MenuItem key={a} value={a}>
-              {a === 'ALL' ? 'All actions' : a}
-            </MenuItem>
+          {ENTITY_TYPES.map((t) => (
+            <MenuItem key={t} value={t}>{t}</MenuItem>
           ))}
         </TextField>
       </Stack>
 
-      <Stack gap={1}>
-        {filtered.length === 0 && (
-          <Box textAlign="center" py={5}>
-            <Typography variant="body2" color="text.secondary">
-              No audit entries match.
-            </Typography>
-          </Box>
-        )}
-        {filtered.map((e) => (
-          <Paper
-            key={e.id}
-            elevation={0}
-            sx={{
-              p: 2,
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 2,
-            }}
-          >
-            <Chip
-              label={e.action}
-              size="small"
-              color={ACTION_COLOR[e.action] ?? 'default'}
-              sx={{ fontFamily: 'monospace', fontWeight: 600, minWidth: 110 }}
-            />
-            <Box flex={1} minWidth={0}>
-              <Typography variant="body2">{e.description}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {e.actorName} · {e.orgName} · {e.ipAddress}
+      {isLoading ? (
+        <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>
+      ) : (
+        <>
+          <Stack gap={1.5}>
+            {filtered.length === 0 ? (
+              <Typography color="text.secondary" textAlign="center" py={4}>
+                No audit entries found.
               </Typography>
+            ) : (
+              filtered.map((entry: any) => (
+                <Paper key={entry._id} elevation={0}
+                  sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
+                  <Box display="flex" alignItems="flex-start" gap={1.5} flexWrap="wrap">
+                    <Chip
+                      label={entry.action ?? 'unknown'}
+                      color={ACTION_COLORS[entry.action ?? ''] ?? 'default'}
+                      size="small"
+                      sx={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.7rem' }}
+                    />
+                    <Box flex={1} minWidth={0}>
+                      <Typography variant="body2" fontWeight={500}>
+                        {entry.entityType} {entry.entityId ? `· ${entry.entityId}` : ''}
+                      </Typography>
+                      <Stack direction="row" gap={2} flexWrap="wrap" mt={0.5}>
+                        {entry.actorUserId && (
+                          <Typography variant="caption" color="text.secondary">
+                            Actor: {entry.actorUserId}
+                          </Typography>
+                        )}
+                        {entry.ipAddress && (
+                          <Typography variant="caption" color="text.secondary">
+                            IP: {entry.ipAddress}
+                          </Typography>
+                        )}
+                      </Stack>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" whiteSpace="nowrap">
+                      {dayjs(entry.createdAt).format('DD MMM YYYY HH:mm')}
+                    </Typography>
+                  </Box>
+                </Paper>
+              ))
+            )}
+          </Stack>
+
+          {pageCount > 1 && (
+            <Box display="flex" justifyContent="center" mt={3}>
+              <Pagination
+                count={pageCount}
+                page={page}
+                onChange={(_, v) => setPage(v)}
+                color="primary"
+              />
             </Box>
-            <Typography variant="caption" color="text.secondary" whiteSpace="nowrap">
-              {dayjs(e.createdAt).format('MMM D, HH:mm')}
-            </Typography>
-          </Paper>
-        ))}
-      </Stack>
+          )}
+        </>
+      )}
     </Box>
   );
 }

@@ -32,6 +32,10 @@ export class Organization {
   @Prop({ type: Number, default: null, min: 1 })
   maxUsers: number | null;
 
+  /** The subscription plan this org is currently on. Null = no plan / free. */
+  @Prop({ type: String, ref: 'Plan', default: null, index: true })
+  planId: string | null;
+
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 

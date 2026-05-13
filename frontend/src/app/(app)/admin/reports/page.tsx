@@ -1,57 +1,154 @@
 'use client';
 
-import { Box, Stack } from '@mui/material';
+import { useMemo } from 'react';
+import { Box, Button, Skeleton } from '@mui/material';
+import Link from 'next/link';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import ArticleIcon from '@mui/icons-material/Article';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import DescriptionIcon from '@mui/icons-material/Description';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import DownloadIcon from '@mui/icons-material/Download';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { StatCard, StatGrid } from '@/components/shared/StatCard';
 import { DashboardPanel } from '@/components/shared/DashboardPanel';
 import { MiniBarChart } from '@/components/shared/MiniBarChart';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
-import { projectsForOrg } from '@/mocks/projects.mock';
-import { useAuthStore } from '@/store/auth.store';
+import { useOrgDashboard } from '@/features/dashboard/hooks/useOrgDashboard';
+import { useProjects } from '@/features/projects/hooks/useProjects';
+import type { MockProject } from '@/mocks/projects.mock';
+
+function formatMillions(n: number): string {
+  if (n === 0) return '$0';
+  return `$${(n / 1_000_000).toFixed(1)}M`;
+}
 
 export default function AdminReportsPage() {
-  const user = useAuthStore((s) => s.user);
-  const projects = user ? projectsForOrg(user.organization.id) : [];
+  const { data: dashboard, isLoading: dashLoading } = useOrgDashboard();
+  const { data: rawProjects = [], isLoading: projLoading } = useProjects();
 
-  const totalBudget = projects.reduce((s, p) => s + p.budgetUsd, 0);
-  const totalSpent = projects.reduce((s, p) => s + p.spentUsd, 0);
-  const burnPct = totalBudget === 0 ? 0 : Math.round((totalSpent / totalBudget) * 100);
+  const isLoading = dashLoading || projLoading;
+
+  // Map API Project shape to MockProject shape for ProjectsTable
+  const projects: MockProject[] = useMemo(
+    () =>
+      rawProjects.map((p: any) => ({
+        id: p._id ?? p.id,
+        name: p.name,
+        code: p.code ?? '',
+        orgId: p.organizationId ?? '',
+        orgName: '',
+        managerName: '',
+        status: p.status === 'ACTIVE' ? 'IN_PROGRESS' : p.status,
+        budgetUsd: p.totalBudget ?? 0,
+        spentUsd: 0,
+        startDate: p.startDate ?? '',
+        targetEndDate: p.endDate ?? '',
+        progressPct: 0,
+      })),
+    [rawProjects],
+  );
 
   return (
     <Box>
-      <PageHeader title="Reports" subtitle="Cross-project roll-up across your portfolio." />
+      <PageHeader
+        title="Reports"
+        subtitle="Cross-project analytics roll-up for your organization."
+        actions={
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="outlined" color="inherit" startIcon={<DateRangeIcon />}>
+              Last 30 days
+            </Button>
+            <Button variant="outlined" color="inherit" startIcon={<DownloadIcon />}>
+              Export
+            </Button>
+          </Box>
+        }
+      />
 
-      <StatGrid>
-        <StatCard label="Active projects" value={String(projects.length)} icon={FolderOpenIcon} tone="primary" />
-        <StatCard
-          label="Budget burn"
-          value={`${burnPct}%`}
-          hint={`$${(totalSpent / 1_000_000).toFixed(1)}M of $${(totalBudget / 1_000_000).toFixed(1)}M`}
-          icon={AccountBalanceWalletIcon}
-          tone={burnPct > 90 ? 'warning' : 'success'}
-        />
-        <StatCard label="Reports filed (30d)" value="78" icon={ArticleIcon} tone="info" />
-        <StatCard label="Issues open" value="11" hint="2 high severity" icon={ReportProblemIcon} tone="warning" />
-      </StatGrid>
+      {isLoading ? (
+        <StatGrid>
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} variant="rounded" height={100} />
+          ))}
+        </StatGrid>
+      ) : dashboard ? (
+        <>
+          <StatGrid>
+            <StatCard
+              label="Active Projects"
+              value={String(dashboard.activeProjectCount)}
+              hint={`${dashboard.totalProjectCount} total \u00B7 ${dashboard.projectStatusDistribution.planning} in planning`}
+              icon={FolderOpenIcon}
+              tone="primary"
+            />
+            <StatCard
+              label="Total Budget Burn"
+              value={`${formatMillions(dashboard.budgetSpent)} / ${formatMillions(dashboard.budgetTotal)}`}
+              hint={`${dashboard.budgetBurnPct}% of allocated budget`}
+              icon={PaymentsIcon}
+              tone="warning"
+            />
+            <StatCard
+              label="Reports Filed (30d)"
+              value={String(dashboard.reportsFiledLast30d)}
+              hint={`Across ${dashboard.activeProjectCount} active projects`}
+              icon={DescriptionIcon}
+              tone="info"
+            />
+            <StatCard
+              label="Open Issues"
+              value={String(dashboard.openIssueCount)}
+              hint={`${dashboard.openIssuesByPriority.high} high \u00B7 ${dashboard.openIssuesByPriority.medium} medium`}
+              icon={ReportProblemIcon}
+              tone="error"
+            />
+          </StatGrid>
 
-      <Stack gap={2.5}>
-        <DashboardPanel title="Project status breakdown">
-          <MiniBarChart
-            data={[
-              { label: 'Planning', value: projects.filter((p) => p.status === 'PLANNING').length },
-              { label: 'Active', value: projects.filter((p) => p.status === 'IN_PROGRESS').length },
-              { label: 'Closeout', value: projects.filter((p) => p.status === 'CLOSEOUT').length },
-              { label: 'Done', value: projects.filter((p) => p.status === 'COMPLETED').length },
-              { label: 'Hold', value: projects.filter((p) => p.status === 'ON_HOLD').length },
-            ]}
-          />
-        </DashboardPanel>
+          <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, mb: 2.5 }}>
+            <DashboardPanel title="Project Status Breakdown" subtitle="Across the organization">
+              <MiniBarChart
+                data={[
+                  { label: 'Planning', value: dashboard.projectStatusDistribution.planning },
+                  { label: 'Active', value: dashboard.projectStatusDistribution.active },
+                  { label: 'On Hold', value: dashboard.projectStatusDistribution.onHold },
+                  { label: 'Completed', value: dashboard.projectStatusDistribution.completed },
+                  { label: 'Cancelled', value: dashboard.projectStatusDistribution.cancelled },
+                ]}
+              />
+            </DashboardPanel>
+            <DashboardPanel title="Issues by Severity" subtitle="Open issues, last 30 days">
+              <MiniBarChart
+                data={[
+                  { label: 'Critical', value: dashboard.openIssuesByPriority.critical },
+                  { label: 'High', value: dashboard.openIssuesByPriority.high },
+                  { label: 'Medium', value: dashboard.openIssuesByPriority.medium },
+                  { label: 'Low', value: dashboard.openIssuesByPriority.low },
+                ]}
+              />
+            </DashboardPanel>
+          </Box>
+        </>
+      ) : null}
+
+      <DashboardPanel
+        title="Projects Overview"
+        subtitle="All projects \u2014 org-scoped view"
+        action={
+          <Button
+            component={Link}
+            href="/admin/projects"
+            variant="text"
+            size="small"
+            endIcon={<OpenInNewIcon />}
+          >
+            Go to Projects
+          </Button>
+        }
+      >
         <ProjectsTable projects={projects} detailBasePath="/admin/projects" hideOrgColumn />
-      </Stack>
+      </DashboardPanel>
     </Box>
   );
 }

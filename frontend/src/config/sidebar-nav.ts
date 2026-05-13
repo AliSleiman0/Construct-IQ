@@ -3,6 +3,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import BusinessIcon from '@mui/icons-material/Business';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
+import ExtensionIcon from '@mui/icons-material/Extension';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import HistoryIcon from '@mui/icons-material/History';
 import ConfirmationNumberIcon from '@mui/icons-material/ConfirmationNumber';
@@ -46,6 +47,7 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Organizations', href: '/super-admin/organizations', icon: BusinessIcon },
     { label: 'Org Admins', href: '/super-admin/org-admins', icon: AdminPanelSettingsIcon },
     { label: 'Plans', href: '/super-admin/plans', icon: WorkspacePremiumIcon },
+    { label: 'Features', href: '/super-admin/features', icon: ExtensionIcon },
     { label: 'Billing', href: '/super-admin/billing', icon: ReceiptLongIcon },
     { label: 'Audit Log', href: '/super-admin/audit-log', icon: HistoryIcon },
     { label: 'Tickets', href: '/super-admin/tickets', icon: ConfirmationNumberIcon },
