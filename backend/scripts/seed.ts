@@ -11,7 +11,9 @@ import { UserSchema } from '../src/modules/users/schemas/user.schema';
 import { RoleSchema } from '../src/modules/users/schemas/role.schema';
 import { PermissionSchema } from '../src/modules/users/schemas/permission.schema';
 import { ProjectSchema } from '../src/modules/projects/schemas/project.schema';
-import { UserStatus, ProjectStatus } from '../src/common/enums';
+import { OrgSettingsSchema } from '../src/modules/org-settings/schemas/org-settings.schema';
+import { TicketSchema } from '../src/modules/tickets/schemas/ticket.schema';
+import { UserStatus, ProjectStatus, TicketStatus, TicketPriority, TicketCategory } from '../src/common/enums';
 
 function loadDotenv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
@@ -159,6 +161,10 @@ async function main() {
     { name: 'read:tickets', resource: 'tickets', action: 'read', description: 'View support tickets' },
     { name: 'manage:tickets', resource: 'tickets', action: 'manage', description: 'Triage and resolve support tickets' },
     { name: 'read:audit_logs', resource: 'audit_logs', action: 'read', description: 'View audit logs' },
+    { name: 'read:settings', resource: 'settings', action: 'read', description: 'View organization settings' },
+    { name: 'update:settings', resource: 'settings', action: 'update', description: 'Update organization settings' },
+    { name: 'manage:settings', resource: 'settings', action: 'manage', description: 'Full settings management' },
+    { name: 'read:dashboard', resource: 'dashboard', action: 'read', description: 'View organization dashboard' },
   ];
 
   for (const def of permissionDefs) {
@@ -426,6 +432,91 @@ async function main() {
     console.log(`  Project: ${project.name} (${project.status})`);
   }
   console.log(`Projects: ${projectDefs.length} created/verified`);
+
+  // ── Org Settings ────────────────────────────────────────────────────────
+  const OrgSettingsModel = mongoose.model('OrgSettings', OrgSettingsSchema);
+
+  for (const org of [orgA, orgB, orgC]) {
+    await OrgSettingsModel.findOneAndUpdate(
+      { organizationId: org._id },
+      {
+        $setOnInsert: {
+          organizationId: org._id,
+          brandColor: '#1976d2',
+          theme: 'auto',
+          timezone: 'America/Los_Angeles',
+          currency: 'USD',
+          dateFormat: 'MMM D, YYYY',
+          weekStart: 'monday',
+          measurement: 'imperial',
+          notifications: {
+            projectStatusChange: true,
+            budgetAlert: true,
+            deliveryUpdate: false,
+            newIssue: true,
+            emailDigest: 'weekly',
+            newMember: false,
+            poApproval: true,
+          },
+          twoFactorRequired: false,
+          passwordPolicy: 'standard',
+          sessionTimeoutMin: 120,
+          ssoEnabled: false,
+        },
+      },
+      { upsert: true, new: true },
+    );
+  }
+  console.log('OrgSettings: 3 created/verified');
+
+  // ── Support Tickets ─────────────────────────────────────────────────────
+  const TicketModel = mongoose.model('Ticket', TicketSchema);
+
+  const orgAdminUser = userMap['ORG_ADMIN'];
+  const supportUser = userMap['SUPPORT_AGENT'];
+
+  const ticketDefs = [
+    {
+      organizationId: orgA._id,
+      title: 'Cannot upload documents larger than 10 MB',
+      body: 'When I try to upload a PDF that is 12 MB, the upload fails with a generic error. The limit should be at least 25 MB per our plan.',
+      status: TicketStatus.OPEN,
+      priority: TicketPriority.HIGH,
+      category: TicketCategory.TECHNICAL,
+      reporterId: orgAdminUser?._id,
+      assigneeId: supportUser?._id ?? null,
+    },
+    {
+      organizationId: orgA._id,
+      title: 'Invoice #INV-2026-003 charged twice',
+      body: 'Our March invoice was charged to our card twice. Please refund the duplicate charge.',
+      status: TicketStatus.IN_PROGRESS,
+      priority: TicketPriority.URGENT,
+      category: TicketCategory.BILLING,
+      reporterId: orgAdminUser?._id,
+      assigneeId: supportUser?._id ?? null,
+    },
+    {
+      organizationId: orgA._id,
+      title: 'Request: Gantt chart export to PDF',
+      body: 'It would be very helpful if we could export the Gantt chart view to PDF for client presentations.',
+      status: TicketStatus.OPEN,
+      priority: TicketPriority.LOW,
+      category: TicketCategory.FEATURE_REQUEST,
+      reporterId: orgAdminUser?._id,
+      assigneeId: null,
+    },
+  ];
+
+  for (const def of ticketDefs) {
+    if (!def.reporterId) continue;
+    await TicketModel.findOneAndUpdate(
+      { organizationId: def.organizationId, title: def.title },
+      { $setOnInsert: { ...def, comments: [] } },
+      { upsert: true, new: true },
+    );
+  }
+  console.log(`Tickets: ${ticketDefs.length} sample tickets created/verified`);
 
   console.log('\nSeed complete.\n');
   console.log('  Login URL  : http://localhost:3000/login');

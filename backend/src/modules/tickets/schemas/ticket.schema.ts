@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
 import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
-import { TicketStatus, TicketPriority } from '../../../common/enums';
+import { TicketStatus, TicketPriority, TicketCategory } from '../../../common/enums';
 
 export type TicketDocument = CuidHydratedDocument<Ticket>;
 
@@ -57,6 +57,13 @@ export class Ticket {
 
   @Prop({ type: String, ref: 'User', required: true, index: true })
   reporterId: string;
+
+  @Prop({
+    type: String,
+    enum: Object.values(TicketCategory),
+    default: TicketCategory.GENERAL,
+  })
+  category: TicketCategory;
 
   @Prop({ type: String, ref: 'User', default: null, index: true })
   assigneeId: string | null;
