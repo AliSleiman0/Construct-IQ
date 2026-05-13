@@ -1,21 +1,10 @@
+/**
+ * Cross-cutting routes only. Role-specific routes live under their role prefix
+ * (e.g., `/super-admin/...`, `/admin/...`) and are defined in `config/sidebar-nav.ts`.
+ */
 export const ROUTES = {
+  LANDING: '/',
   LOGIN: '/login',
-  HOME: '/dashboard',
-  DASHBOARD: '/dashboard',
-  COMPANY_SELECT: '/company-select',
-  PROJECTS: '/projects',
-  PROJECT_DETAIL: (id: string) => `/projects/${id}`,
-  TASKS: '/tasks',
-  DAILY_REPORTS: '/daily-reports',
-  ISSUES: '/issues',
-  BUDGET: '/budget',
-  SUPPLIERS: '/procurement/suppliers',
-  PURCHASE_ORDERS: '/procurement/orders',
-  DELIVERIES: '/procurement/deliveries',
-  DOCUMENTS: '/documents',
-  AI_INSIGHTS: '/ai/insights',
-  AI_ASSISTANT: '/ai/assistant',
-  USERS: '/users',
-  SETTINGS: '/settings',
   PROFILE: '/profile',
+  SETTINGS: '/settings',
 } as const;

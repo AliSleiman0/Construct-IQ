@@ -1,14 +1,24 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
-import { PrismaService } from '../../database/prisma/prisma.service';
+import {
+  User,
+  UserDocument,
+} from '../../modules/users/schemas/user.schema';
+import {
+  Role,
+  RoleDocument,
+} from '../../modules/users/schemas/role.schema';
 import { RequestWithUser } from '../interfaces/request-with-user.interface';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
-    private prisma: PrismaService,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -28,22 +38,19 @@ export class PermissionsGuard implements CanActivate {
       return false;
     }
 
-    const userPermissions = await this.prisma.permission.findMany({
-      where: {
-        rolePermissions: {
-          some: {
-            role: {
-              userRoles: {
-                some: { userId: user.sub },
-              },
-            },
-          },
-        },
-      },
-      select: { name: true },
-    });
+    // Look up the user's role IDs, then aggregate the embedded permissionKeys.
+    // One indexed query per request — substantially cheaper than the old
+    // 4-table relational join.
+    const userDoc = await this.userModel
+      .findOne({ _id: user.sub }, { roleIds: 1 })
+      .lean();
+    if (!userDoc || userDoc.roleIds.length === 0) return false;
 
-    const permissionNames = userPermissions.map((p: { name: any; }) => p.name);
+    const roles = await this.roleModel
+      .find({ _id: { $in: userDoc.roleIds } }, { permissionKeys: 1 })
+      .lean();
+
+    const permissionNames = roles.flatMap((r) => r.permissionKeys ?? []);
 
     // Super Admin with manage:all bypasses every permission check
     if (permissionNames.includes('manage:all')) {
@@ -59,7 +66,9 @@ export class PermissionsGuard implements CanActivate {
     // Hierarchical check: manage:<resource> satisfies read/create/update/delete:<resource>
     const satisfies = (required: string): boolean => {
       if (permissionNames.includes(required)) return true;
-      const match = required.match(/^(?:read|create|update|delete|assign|approve|upload|use):(.+)$/);
+      const match = required.match(
+        /^(?:read|create|update|delete|assign|approve|upload|use):(.+)$/,
+      );
       if (match) return permissionNames.includes(`manage:${match[1]}`);
       return false;
     };

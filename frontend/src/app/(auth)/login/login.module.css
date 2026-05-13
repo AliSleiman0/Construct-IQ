@@ -1,0 +1,170 @@
+/* ConstructIQ login — responsive split layout
+   Desktop (>=900px): 60% photo / 40% form
+   Mobile  (<900px): 253px photo banner / form fills below */
+
+.shell {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  background: #0E1726;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #F5F7FA;
+}
+
+.photoPane {
+  flex: 0 0 60%;
+  position: relative;
+  border-right: 1px solid #1A2435;
+  overflow: hidden;
+}
+
+.formPane {
+  flex: 0 0 40%;
+  position: relative;
+  background: #0E1726;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 40px;
+  overflow: hidden;
+}
+
+.formPaneInner {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+}
+
+.formBgGrid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image:
+    linear-gradient(#3FA7D6 1px, transparent 1px),
+    linear-gradient(90deg, #3FA7D6 1px, transparent 1px),
+    linear-gradient(#3FA7D6 1px, transparent 1px),
+    linear-gradient(90deg, #3FA7D6 1px, transparent 1px);
+  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
+}
+
+.regMark {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #5C6A80;
+  letter-spacing: 0.12em;
+}
+
+.photoBanner {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    #000 0%,
+    #000 60%,
+    rgba(0, 0, 0, 0.55) 80%,
+    rgba(0, 0, 0, 0.15) 94%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    180deg,
+    #000 0%,
+    #000 60%,
+    rgba(0, 0, 0, 0.55) 80%,
+    rgba(0, 0, 0, 0.15) 94%,
+    transparent 100%
+  );
+}
+
+.photoBannerImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 35%;
+  display: block;
+}
+
+.photoBannerNavy {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(14, 23, 38, 0.3) 0%,
+    rgba(14, 23, 38, 0.2) 50%,
+    rgba(14, 23, 38, 0.65) 100%
+  );
+  mix-blend-mode: multiply;
+}
+
+.photoBannerCyan {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(63, 167, 214, 0.18) 0%, transparent 60%);
+  mix-blend-mode: overlay;
+}
+
+.spinner {
+  animation: ciq-spin 0.7s linear infinite;
+}
+
+.cursor {
+  animation: ciq-blink 1s step-end infinite;
+}
+
+@keyframes ciq-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ciq-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  50.01%, 100% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 899px) {
+  .shell {
+    flex-direction: column;
+  }
+  .photoPane {
+    flex: 0 0 253px;
+    border-right: none;
+    border-bottom: 1px solid #1A2435;
+  }
+  .formPane {
+    flex: 1 1 auto;
+    padding: 32px 24px 32px;
+  }
+  .regMark {
+    display: none;
+  }
+  .photoBanner {
+    -webkit-mask-image: linear-gradient(
+      180deg,
+      #000 0%,
+      #000 55%,
+      rgba(0, 0, 0, 0.6) 75%,
+      rgba(0, 0, 0, 0.15) 92%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      180deg,
+      #000 0%,
+      #000 55%,
+      rgba(0, 0, 0, 0.6) 75%,
+      rgba(0, 0, 0, 0.15) 92%,
+      transparent 100%
+    );
+  }
+}

@@ -112,10 +112,19 @@ export class AuthController {
   ) {
     await this.authService.logout(userId);
 
-    res.clearCookie('access_token');
-    res.clearCookie('refresh_token');
-    res.clearCookie('logged_in');
-    res.clearCookie('is_super_admin');
+    // Options must match those used in res.cookie() for browsers to clear them
+    res.clearCookie('access_token', COOKIE_OPTIONS(this.isProd));
+    res.clearCookie('refresh_token', COOKIE_OPTIONS(this.isProd));
+    res.clearCookie('logged_in', {
+      secure: this.isProd,
+      sameSite: this.isProd ? 'none' : 'lax',
+      path: '/',
+    });
+    res.clearCookie('is_super_admin', {
+      secure: this.isProd,
+      sameSite: this.isProd ? 'none' : 'lax',
+      path: '/',
+    });
 
     return { message: 'Logged out successfully' };
   }

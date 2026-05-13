@@ -123,6 +123,12 @@ export const PERMISSIONS = {
     USE: 'use:ai',
   },
 
+  // ── Support Tickets ───────────────────────────────────────
+  TICKETS: {
+    READ: 'read:tickets',
+    MANAGE: 'manage:tickets',
+  },
+
   // ── Audit Logs ────────────────────────────────────────────
   AUDIT_LOGS: {
     READ: 'read:audit_logs',

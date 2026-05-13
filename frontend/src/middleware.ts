@@ -1,52 +1,55 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login'];
-const COMPANY_SELECT = '/company-select';
+/**
+ * Single-responsibility auth gate. NOT a security boundary — that's the
+ * NestJS JwtAuthGuard. This is just a fast Edge-runtime redirect for
+ * unauthenticated visitors so they don't see a flash of protected chrome.
+ *
+ * Responsibilities:
+ *   1. Forward the current pathname as `x-pathname` so the (app)/layout.tsx
+ *      Server Component can do role-prefix gating.
+ *   2. If not on a public path and `logged_in` cookie is missing, redirect
+ *      to /login?from=<pathname>.
+ *   3. Anything else (role checks, SA org-select, permission checks) is
+ *      handled downstream — middleware does NOT decode JWTs.
+ */
+
+const PUBLIC_PATHS = new Set(['/', '/login', '/post-login']);
+
+const isPublicPath = (pathname: string): boolean => PUBLIC_PATHS.has(pathname);
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', pathname);
+
   const loggedIn = request.cookies.get('logged_in')?.value === 'true';
-  const isSuperAdmin = request.cookies.get('is_super_admin')?.value === 'true';
-  const selectedCompany = request.cookies.get('selected_company')?.value;
 
-  const isPublicPath = PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(path + '/'),
-  );
-
-  const isCompanySelectPath = pathname === COMPANY_SELECT;
-
-  // Unauthenticated user → login
-  if (!loggedIn && !isPublicPath) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('from', pathname);
-    return NextResponse.redirect(loginUrl);
+  // Already authenticated visitor on /login: bounce to /post-login, which
+  // resolves the user's role server-side and redirects to the right home.
+  if (pathname === '/login' && loggedIn) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/post-login';
+    url.search = '';
+    return NextResponse.redirect(url);
   }
 
-  // Authenticated user on public page → redirect appropriately
-  if (loggedIn && isPublicPath) {
-    if (isSuperAdmin) {
-      return NextResponse.redirect(new URL(COMPANY_SELECT, request.url));
-    }
-    return NextResponse.redirect(new URL('/', request.url));
+  if (isPublicPath(pathname)) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  // Super Admin without a selected company → must pick one first
-  if (loggedIn && isSuperAdmin && !selectedCompany && !isCompanySelectPath) {
-    return NextResponse.redirect(new URL(COMPANY_SELECT, request.url));
+  if (!loggedIn) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('from', pathname);
+    return NextResponse.redirect(url);
   }
 
-  // Super Admin already has a company selected → don't show the picker again
-  if (loggedIn && isSuperAdmin && selectedCompany && isCompanySelectPath) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icons|images|api/).*)',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icons|images|api/).*)'],
 };

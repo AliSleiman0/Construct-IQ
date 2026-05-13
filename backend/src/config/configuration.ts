@@ -11,7 +11,7 @@ export default () => ({
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   database: {
-    url: process.env.DATABASE_URL,
+    uri: process.env.MONGO_URL,
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
@@ -21,5 +21,9 @@ export default () => ({
   superAdmin: {
     email: process.env.SUPER_ADMIN_EMAIL || 'admin@constructiq.com',
     password: process.env.SUPER_ADMIN_PASSWORD || 'Admin@1234',
+  },
+  ai: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    model: process.env.AI_MODEL || 'gpt-4o-mini',
   },
 });

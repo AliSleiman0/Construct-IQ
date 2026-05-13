@@ -23,7 +23,7 @@ class EnvironmentVariables {
   PORT: number = 4000;
 
   @IsString()
-  DATABASE_URL!: string;
+  MONGO_URL!: string;
 
   @IsString()
   JWT_ACCESS_SECRET!: string;
@@ -62,6 +62,14 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   SUPER_ADMIN_PASSWORD: string = 'Admin@1234';
+
+  @IsString()
+  @IsOptional()
+  OPENAI_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  AI_MODEL: string = 'gpt-4o-mini';
 }
 
 export function validate(config: Record<string, unknown>) {

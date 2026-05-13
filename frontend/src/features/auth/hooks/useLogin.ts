@@ -1,36 +1,26 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useSnackbar } from 'notistack';
-import { authApi } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/store/auth.store';
 import type { LoginCredentials } from '@/types/auth.types';
-import { ROUTES } from '@/constants/routes';
 
+/**
+ * Email + password login mutation. On success the auth store is populated
+ * and the post-login route is returned (the user's role home).
+ *
+ * The cookies (access_token, refresh_token, logged_in, is_super_admin)
+ * are set server-side by the NestJS /auth/login endpoint.
+ */
 export function useLogin() {
   const queryClient = useQueryClient();
-  const router = useRouter();
-  const { enqueueSnackbar } = useSnackbar();
-  const setUser = useAuthStore((s) => s.setUser);
+  const loginWithEmail = useAuthStore((s) => s.loginWithEmail);
 
   const mutation = useMutation({
-    mutationFn: (credentials: LoginCredentials) => authApi.login(credentials),
-    onSuccess: (data) => {
-      setUser(data.user);
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
-      // Super Admin goes to company picker; everyone else goes to dashboard
-      if (data.user.isSuperAdmin) {
-        router.push(ROUTES.COMPANY_SELECT);
-      } else {
-        router.push(ROUTES.DASHBOARD);
-      }
-    },
-    onError: (error: any) => {
-      const message =
-        error?.response?.data?.error?.message ??
-        'Login failed. Please check your credentials.';
-      enqueueSnackbar(message, { variant: 'error' });
+    mutationFn: async (credentials: LoginCredentials): Promise<string> => {
+      const home = await loginWithEmail(credentials);
+      // New session: drop any cached query data from the previous user.
+      queryClient.clear();
+      return home;
     },
   });
 
@@ -38,5 +28,6 @@ export function useLogin() {
     login: mutation.mutateAsync,
     isLoading: mutation.isPending,
     error: mutation.error,
+    reset: mutation.reset,
   };
 }

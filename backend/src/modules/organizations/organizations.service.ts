@@ -4,14 +4,34 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../database/prisma/prisma.service';
-import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import {
+  Organization,
+  OrganizationDocument,
+} from './schemas/organization.schema';
+import { User, UserDocument } from '../users/schemas/user.schema';
+import { Role, RoleDocument } from '../users/schemas/role.schema';
+import {
+  Permission,
+  PermissionDocument,
+} from '../users/schemas/permission.schema';
+import {
+  Project,
+  ProjectDocument,
+} from '../projects/schemas/project.schema';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { ProjectStatus, UserStatus } from '../../common/enums';
 
 // All roles provisioned for every new organization, with their permission sets.
 // Permissions are global (no org scope) so we look them up by name at creation time.
-const STANDARD_ROLES: Array<{ name: string; description: string; permissions: string[] }> = [
+const STANDARD_ROLES: Array<{
+  name: string;
+  description: string;
+  permissions: string[];
+}> = [
   {
     name: 'Admin',
     description: 'Full control within own organization',
@@ -22,31 +42,47 @@ const STANDARD_ROLES: Array<{ name: string; description: string; permissions: st
     description: 'Manages assigned projects, team, tasks, and approves POs',
     permissions: [
       'read:organizations',
-      'read:users', 'read:roles',
-      'manage:projects', 'assign:project_members',
-      'manage:phases', 'manage:milestones',
-      'manage:tasks', 'assign:tasks',
+      'read:users',
+      'read:roles',
+      'manage:projects',
+      'assign:project_members',
+      'manage:phases',
+      'manage:milestones',
+      'manage:tasks',
+      'assign:tasks',
       'manage:reports',
-      'manage:issues', 'assign:issues',
-      'read:budget', 'update:projects',
+      'manage:issues',
+      'assign:issues',
+      'read:budget',
+      'update:projects',
       'read:suppliers',
-      'read:purchase_orders', 'approve:purchase_orders',
+      'read:purchase_orders',
+      'approve:purchase_orders',
       'read:deliveries',
       'manage:documents',
-      'read:ai', 'use:ai',
+      'read:ai',
+      'use:ai',
     ],
   },
   {
     name: 'Site Engineer',
-    description: 'Submits daily reports, creates issues, updates assigned tasks',
+    description:
+      'Submits daily reports, creates issues, updates assigned tasks',
     permissions: [
       'read:projects',
       'read:users',
-      'read:tasks', 'update:tasks',
-      'create:reports', 'read:reports', 'update:reports',
-      'create:issues', 'read:issues', 'update:issues',
-      'read:phases', 'read:milestones',
-      'read:documents', 'upload:documents',
+      'read:tasks',
+      'update:tasks',
+      'create:reports',
+      'read:reports',
+      'update:reports',
+      'create:issues',
+      'read:issues',
+      'update:issues',
+      'read:phases',
+      'read:milestones',
+      'read:documents',
+      'upload:documents',
       'read:ai',
     ],
   },
@@ -56,8 +92,10 @@ const STANDARD_ROLES: Array<{ name: string; description: string; permissions: st
     permissions: [
       'read:projects',
       'read:users',
-      'manage:phases', 'manage:milestones',
-      'manage:tasks', 'assign:tasks',
+      'manage:phases',
+      'manage:milestones',
+      'manage:tasks',
+      'assign:tasks',
       'read:reports',
       'read:issues',
       'read:budget',
@@ -72,7 +110,8 @@ const STANDARD_ROLES: Array<{ name: string; description: string; permissions: st
       'read:projects',
       'read:users',
       'read:tasks',
-      'read:phases', 'read:milestones',
+      'read:phases',
+      'read:milestones',
       'read:reports',
       'read:issues',
       'manage:budget',
@@ -93,18 +132,22 @@ const STANDARD_ROLES: Array<{ name: string; description: string; permissions: st
       'read:budget',
       'manage:suppliers',
       'manage:purchase_orders',
-      'manage:deliveries', 'update:deliveries',
-      'read:documents', 'upload:documents',
+      'manage:deliveries',
+      'update:deliveries',
+      'read:documents',
+      'upload:documents',
       'read:ai',
     ],
   },
   {
     name: 'Finance / Management Viewer',
-    description: 'Read-only visibility across projects, budget, and procurement',
+    description:
+      'Read-only visibility across projects, budget, and procurement',
     permissions: [
       'read:projects',
       'read:tasks',
-      'read:phases', 'read:milestones',
+      'read:phases',
+      'read:milestones',
       'read:reports',
       'read:issues',
       'read:budget',
@@ -117,7 +160,8 @@ const STANDARD_ROLES: Array<{ name: string; description: string; permissions: st
   },
   {
     name: 'Client Viewer',
-    description: 'External client — limited read access to assigned project overview',
+    description:
+      'External client — limited read access to assigned project overview',
     permissions: [
       'read:projects',
       'read:milestones',
@@ -129,68 +173,99 @@ const STANDARD_ROLES: Array<{ name: string; description: string; permissions: st
   {
     name: 'Supplier User',
     description: 'External supplier — view own POs and update delivery status',
-    permissions: [
-      'read:purchase_orders',
-      'update:deliveries',
-    ],
+    permissions: ['read:purchase_orders', 'update:deliveries'],
   },
 ];
 
+export interface OrgResponse {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  maxUsers: number | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  _count: { users: number; projects: number };
+}
+
 @Injectable()
 export class OrganizationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    @InjectModel(Organization.name)
+    private organizationModel: Model<OrganizationDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @InjectModel(Permission.name)
+    private permissionModel: Model<PermissionDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectConnection() private connection: Connection,
+  ) {}
 
-  private readonly ORG_SELECT = {
-    id: true,
-    name: true,
-    slug: true,
-    logoUrl: true,
-    address: true,
-    phone: true,
-    email: true,
-    website: true,
-    maxUsers: true,
-    isActive: true,
-    createdAt: true,
-    updatedAt: true,
-    _count: { select: { users: true, projects: true } },
-  } as const;
-
-  /** Super Admin only — list every organization on the platform */
-  async findAll() {
-    return this.prisma.organization.findMany({
-      select: this.ORG_SELECT,
-      orderBy: { createdAt: 'desc' },
-    });
+  private async withCounts(
+    org: OrganizationDocument | (Organization & { _id: string }),
+  ): Promise<OrgResponse> {
+    const [userCount, projectCount] = await Promise.all([
+      this.userModel.countDocuments({ organizationId: org._id }),
+      this.projectModel.countDocuments({ organizationId: org._id }),
+    ]);
+    return {
+      id: org._id,
+      name: org.name,
+      slug: org.slug,
+      logoUrl: org.logoUrl,
+      address: org.address,
+      phone: org.phone,
+      email: org.email,
+      website: org.website,
+      maxUsers: org.maxUsers,
+      isActive: org.isActive,
+      createdAt: org.createdAt,
+      updatedAt: org.updatedAt,
+      _count: { users: userCount, projects: projectCount },
+    };
   }
 
-  /** Return a single org — non-Super-Admins can only see their own. */
-  async findById(id: string, requestingOrgId: string, isSuperAdmin = false) {
+  /** Super Admin only — list every organization on the platform */
+  async findAll(): Promise<OrgResponse[]> {
+    const orgs = await this.organizationModel
+      .find()
+      .sort({ createdAt: -1 })
+      .lean();
+    return Promise.all(orgs.map((o) => this.withCounts(o as any)));
+  }
+
+  async findById(
+    id: string,
+    requestingOrgId: string,
+    isSuperAdmin = false,
+  ): Promise<OrgResponse> {
     if (!isSuperAdmin && id !== requestingOrgId) {
       throw new ForbiddenException('Access denied');
     }
 
-    const org = await this.prisma.organization.findUnique({
-      where: { id },
-      select: this.ORG_SELECT,
-    });
-
-    if (!org) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    return org;
+    const org = await this.organizationModel.findOne({ _id: id }).lean();
+    if (!org) throw new NotFoundException('Organization not found');
+    return this.withCounts(org as any);
   }
 
-  /** Super Admin only — provision a new tenant org + its admin user */
+  /** Super Admin only — provision a new tenant org + its admin user atomically */
   async create(dto: CreateOrganizationDto) {
-    const existingSlug = await this.prisma.organization.findUnique({ where: { slug: dto.slug } });
+    const existingSlug = await this.organizationModel.findOne({
+      slug: dto.slug,
+    });
     if (existingSlug) {
-      throw new ConflictException('An organization with this slug already exists');
+      throw new ConflictException(
+        'An organization with this slug already exists',
+      );
     }
 
-    const existingEmail = await this.prisma.user.findFirst({
-      where: { email: dto.adminEmail, deletedAt: null },
+    const existingEmail = await this.userModel.findOne({
+      email: dto.adminEmail.toLowerCase().trim(),
     });
     if (existingEmail) {
       throw new ConflictException('A user with this email already exists');
@@ -198,119 +273,136 @@ export class OrganizationsService {
 
     const passwordHash = await bcrypt.hash(dto.adminPassword, 12);
 
-    // Fetch all global permissions once (outside the transaction for efficiency)
-    const allPermissions = await this.prisma.permission.findMany({
-      select: { id: true, name: true },
-    });
-    const permMap = new Map(allPermissions.map((p) => [p.name, p.id]));
+    // Cache the (immutable) global permission name → exists check upfront
+    const allPermissions = await this.permissionModel
+      .find({}, { name: 1 })
+      .lean();
+    const knownPermissionNames = new Set(allPermissions.map((p) => p.name));
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Create the organization
-      const org = await tx.organization.create({
-        data: {
-          name: dto.name,
-          slug: dto.slug,
-          email: dto.email,
-          address: dto.address,
-          phone: dto.phone,
-          website: dto.website,
-          maxUsers: dto.maxUsers ?? null,
-          isActive: true,
-        },
-        select: this.ORG_SELECT,
-      });
+    const session = await this.connection.startSession();
+    try {
+      let result: { org: OrgResponse; adminUser: { id: string; email: string } } | null = null;
 
-      // 2. Provision all standard roles for this new organization
-      //    Each role is created with its full permission set so the org is
-      //    immediately usable without needing a separate seed run.
-      let adminRoleId: string | null = null;
-      for (const roleDef of STANDARD_ROLES) {
-        const role = await tx.role.create({
-          data: {
-            organizationId: org.id,
-            name: roleDef.name,
-            description: roleDef.description,
-            isSystem: true,
+      await session.withTransaction(async () => {
+        // 1. Create the organization
+        const [org] = await this.organizationModel.create(
+          [
+            {
+              name: dto.name,
+              slug: dto.slug,
+              email: dto.email ?? null,
+              address: dto.address ?? null,
+              phone: dto.phone ?? null,
+              website: dto.website ?? null,
+              maxUsers: dto.maxUsers ?? null,
+              isActive: true,
+            },
+          ],
+          { session },
+        );
+
+        // 2. Provision all standard roles. Each role embeds its permission
+        //    keys directly (replacing the old RolePermission join), with
+        //    unknown permissions filtered out for safety.
+        const roleDocs = STANDARD_ROLES.map((roleDef) => ({
+          organizationId: org._id,
+          name: roleDef.name,
+          description: roleDef.description,
+          isSystem: true,
+          permissionKeys: roleDef.permissions.filter((p) =>
+            knownPermissionNames.has(p),
+          ),
+        }));
+
+        const createdRoles = await this.roleModel.insertMany(roleDocs, {
+          session,
+        });
+        const adminRole = createdRoles.find((r) => r.name === 'Admin');
+
+        // 3. Create the admin user with the Admin role attached
+        const [adminUser] = await this.userModel.create(
+          [
+            {
+              organizationId: org._id,
+              email: dto.adminEmail,
+              passwordHash,
+              firstName: dto.adminFirstName,
+              lastName: dto.adminLastName,
+              status: UserStatus.ACTIVE,
+              roleIds: adminRole ? [adminRole._id] : [],
+            },
+          ],
+          { session },
+        );
+
+        result = {
+          org: {
+            id: org._id,
+            name: org.name,
+            slug: org.slug,
+            logoUrl: org.logoUrl,
+            address: org.address,
+            phone: org.phone,
+            email: org.email,
+            website: org.website,
+            maxUsers: org.maxUsers,
+            isActive: org.isActive,
+            createdAt: org.createdAt,
+            updatedAt: org.updatedAt,
+            _count: { users: 1, projects: 0 },
           },
-        });
-
-        if (roleDef.name === 'Admin') {
-          adminRoleId = role.id;
-        }
-
-        // Attach permissions (skip any that don't exist in the global table)
-        const permissionData = roleDef.permissions
-          .map((name) => permMap.get(name))
-          .filter((id): id is string => id !== undefined)
-          .map((permissionId) => ({ roleId: role.id, permissionId }));
-
-        if (permissionData.length > 0) {
-          await tx.rolePermission.createMany({ data: permissionData });
-        }
-      }
-
-      // 3. Create the admin user
-      const adminUser = await tx.user.create({
-        data: {
-          organizationId: org.id,
-          email: dto.adminEmail,
-          passwordHash,
-          firstName: dto.adminFirstName,
-          lastName: dto.adminLastName,
-          status: 'ACTIVE',
-        },
+          adminUser: { id: adminUser._id, email: adminUser.email },
+        };
       });
 
-      // 4. Assign the Admin role (created above for this org)
-      if (adminRoleId) {
-        await tx.userRole.create({
-          data: { userId: adminUser.id, roleId: adminRoleId },
-        });
+      if (!result) {
+        throw new Error('Failed to create organization');
       }
-
-      return { org, adminUser: { id: adminUser.id, email: adminUser.email } };
-    });
+      return result;
+    } finally {
+      await session.endSession();
+    }
   }
 
   /** Super Admin only — suspend or reactivate a tenant */
   async setActive(id: string, isActive: boolean) {
-    const org = await this.prisma.organization.findUnique({ where: { id } });
+    const org = await this.organizationModel.findOne({ _id: id });
     if (!org) throw new NotFoundException('Organization not found');
 
-    return this.prisma.organization.update({
-      where: { id },
-      data: { isActive },
-      select: { id: true, name: true, isActive: true },
-    });
+    org.isActive = isActive;
+    await org.save();
+
+    return { id: org._id, name: org.name, isActive: org.isActive };
   }
 
-  async update(id: string, requestingOrgId: string, dto: UpdateOrganizationDto, isSuperAdmin = false) {
-    // Super Admin can update any org; regular users only their own
+  async update(
+    id: string,
+    requestingOrgId: string,
+    dto: UpdateOrganizationDto,
+    isSuperAdmin = false,
+  ) {
     if (!isSuperAdmin && id !== requestingOrgId) {
       throw new ForbiddenException('You can only update your own organization');
     }
 
-    const org = await this.prisma.organization.findUnique({ where: { id } });
-    if (!org) {
-      throw new NotFoundException('Organization not found');
-    }
+    const org = await this.organizationModel.findOne({ _id: id });
+    if (!org) throw new NotFoundException('Organization not found');
 
-    return this.prisma.organization.update({
-      where: { id },
-      data: dto,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        logoUrl: true,
-        address: true,
-        phone: true,
-        email: true,
-        website: true,
-        isActive: true,
-        updatedAt: true,
-      },
-    });
+    Object.assign(org, dto);
+    await org.save();
+
+    return {
+      id: org._id,
+      name: org.name,
+      slug: org.slug,
+      logoUrl: org.logoUrl,
+      address: org.address,
+      phone: org.phone,
+      email: org.email,
+      website: org.website,
+      isActive: org.isActive,
+      updatedAt: org.updatedAt,
+    };
   }
 
   async getStats(id: string, requestingOrgId: string, isSuperAdmin = false) {
@@ -319,9 +411,12 @@ export class OrganizationsService {
     }
 
     const [userCount, projectCount, activeProjectCount] = await Promise.all([
-      this.prisma.user.count({ where: { organizationId: id, deletedAt: null } }),
-      this.prisma.project.count({ where: { organizationId: id } }),
-      this.prisma.project.count({ where: { organizationId: id, status: 'ACTIVE' } }),
+      this.userModel.countDocuments({ organizationId: id }),
+      this.projectModel.countDocuments({ organizationId: id }),
+      this.projectModel.countDocuments({
+        organizationId: id,
+        status: ProjectStatus.ACTIVE,
+      }),
     ]);
 
     return {

@@ -3,9 +3,5 @@ export default function AuthLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      {children}
-    </main>
-  );
+  return <main style={{ minHeight: '100vh', backgroundColor: '#0E1726' }}>{children}</main>;
 }

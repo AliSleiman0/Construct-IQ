@@ -6,53 +6,70 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '../../database/prisma/prisma.service';
-import { UsersService } from '../users/users.service';
+import { User, UserDocument } from '../users/schemas/user.schema';
+import { Role, RoleDocument } from '../users/schemas/role.schema';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../organizations/schemas/organization.schema';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { UserStatus } from '../../common/enums';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private prisma: PrismaService,
-    private usersService: UsersService,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @InjectModel(Organization.name)
+    private organizationModel: Model<OrganizationDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
   ) {}
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { email: dto.email, deletedAt: null },
-      include: {
-        organization: { select: { id: true, name: true, slug: true, isActive: true } },
-        userRoles: {
-          include: {
-            role: {
-              include: {
-                rolePermissions: {
-                  include: { permission: { select: { name: true } } },
-                },
-              },
-            },
-          },
-        },
-      },
+    // Soft-delete filter applied automatically by softDeletePlugin.
+    // Email is lowercased on write by the schema, so we must match that on read.
+    const user = await this.userModel.findOne({
+      email: dto.email.toLowerCase().trim(),
     });
-
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    if (user.status !== 'ACTIVE') {
+    if (user.status !== UserStatus.ACTIVE) {
       throw new ForbiddenException('Your account has been suspended');
     }
 
-    // Super Admin has no org; regular users must belong to an active org
-    if (user.organization && !user.organization.isActive) {
-      throw new ForbiddenException('Your organization subscription has been suspended. Please contact support.');
+    // Two parallel reads replace Prisma's 5-level nested include. Roles carry
+    // their own permissionKeys[] (denormalized from the old role_permissions
+    // join), so a single Role.find() yields everything needed for the JWT.
+    const [organization, roles] = await Promise.all([
+      user.organizationId
+        ? this.organizationModel
+            .findOne(
+              { _id: user.organizationId },
+              { _id: 1, name: 1, slug: 1, isActive: 1 },
+            )
+            .lean()
+        : Promise.resolve(null),
+      this.roleModel
+        .find(
+          { _id: { $in: user.roleIds } },
+          { _id: 1, name: 1, permissionKeys: 1 },
+        )
+        .lean(),
+    ]);
+
+    if (organization && !organization.isActive) {
+      throw new ForbiddenException(
+        'Your organization subscription has been suspended. Please contact support.',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -63,40 +80,57 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const permissions = user.userRoles.flatMap(
-      (ur: { role: { rolePermissions: { permission: { name: string } }[] } }) =>
-        ur.role.rolePermissions.map((rp: { permission: { name: string } }) => rp.permission.name),
+    const permissions = roles.flatMap((r) => r.permissionKeys ?? []);
+    const roleNames = roles.map((r) => r.name);
+    const isSuperAdmin = permissions.includes('manage:all');
+
+    const tokens = await this.generateTokens(
+      user._id,
+      user.email,
+      user.organizationId ?? '',
+      isSuperAdmin,
     );
 
-    const isSuperAdmin = permissions.includes('manage:all');
-    const tokens = await this.generateTokens(user.id, user.email, user.organizationId ?? '', isSuperAdmin);
-
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await this.userModel.updateOne(
+      { _id: user._id },
+      {
         refreshToken: await bcrypt.hash(tokens.refreshToken, 10),
         lastLoginAt: new Date(),
       },
-    });
-
-    const { passwordHash, refreshToken, ...safeUser } = user;
-
-    const roles = user.userRoles.map(
-      (ur: { role: { name: string } }) => ur.role.name,
     );
 
     return {
-      user: { ...safeUser, permissions, roles, isSuperAdmin },
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+        status: user.status,
+        organizationId: user.organizationId,
+        organization: organization
+          ? {
+              id: organization._id,
+              name: organization.name,
+              slug: organization.slug,
+              isActive: organization.isActive,
+            }
+          : null,
+        lastLoginAt: user.lastLoginAt,
+        createdAt: user.createdAt,
+        userRoles: roles.map((r) => ({ role: { id: r._id, name: r.name } })),
+        permissions,
+        roles: roleNames,
+        isSuperAdmin,
+      },
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     };
   }
 
   async refresh(userId: string, rawRefreshToken: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
+    const user = await this.userModel.findOne({ _id: userId });
     if (!user || !user.refreshToken) {
       throw new UnauthorizedException('Access denied');
     }
@@ -110,74 +144,75 @@ export class AuthService {
     }
 
     const tokens = await this.generateTokens(
-      user.id,
+      user._id,
       user.email,
       user.organizationId ?? '',
-      await this.userHasSuperAdminPermission(user.id),
+      await this.userHasSuperAdminPermission(user.roleIds ?? []),
     );
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: await bcrypt.hash(tokens.refreshToken, 10) },
-    });
+    await this.userModel.updateOne(
+      { _id: user._id },
+      { refreshToken: await bcrypt.hash(tokens.refreshToken, 10) },
+    );
 
     return tokens;
   }
 
   async logout(userId: string) {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { refreshToken: null },
-    });
+    await this.userModel.updateOne({ _id: userId }, { refreshToken: null });
   }
 
   async getMe(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        avatarUrl: true,
-        status: true,
-        lastLoginAt: true,
-        createdAt: true,
-        organization: {
-          select: { id: true, name: true, slug: true, logoUrl: true, maxUsers: true },
-        },
-        userRoles: {
-          include: {
-            role: {
-              select: {
-                id: true,
-                name: true,
-                rolePermissions: {
-                  include: { permission: { select: { name: true } } },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
+    const user = await this.userModel.findOne({ _id: userId });
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
-    const permissions = user.userRoles.flatMap(
-      (ur: { role: { rolePermissions: { permission: { name: string } }[] } }) =>
-        ur.role.rolePermissions.map((rp: { permission: { name: string } }) => rp.permission.name),
-    );
+    const [organization, roles] = await Promise.all([
+      user.organizationId
+        ? this.organizationModel
+            .findOne(
+              { _id: user.organizationId },
+              { _id: 1, name: 1, slug: 1, logoUrl: 1, maxUsers: 1 },
+            )
+            .lean()
+        : Promise.resolve(null),
+      this.roleModel
+        .find(
+          { _id: { $in: user.roleIds } },
+          { _id: 1, name: 1, permissionKeys: 1 },
+        )
+        .lean(),
+    ]);
 
-    const roles = user.userRoles.map(
-      (ur: { role: { name: string } }) => ur.role.name,
-    );
-
+    const permissions = roles.flatMap((r) => r.permissionKeys ?? []);
+    const roleNames = roles.map((r) => r.name);
     const isSuperAdmin = permissions.includes('manage:all');
-    return { ...user, permissions, roles, isSuperAdmin };
+
+    return {
+      id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      avatarUrl: user.avatarUrl,
+      status: user.status,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      organization: organization
+        ? {
+            id: organization._id,
+            name: organization.name,
+            slug: organization.slug,
+            logoUrl: organization.logoUrl,
+            maxUsers: organization.maxUsers,
+          }
+        : null,
+      userRoles: roles.map((r) => ({ role: { id: r._id, name: r.name } })),
+      permissions,
+      roles: roleNames,
+      isSuperAdmin,
+    };
   }
 
   private async generateTokens(
@@ -186,7 +221,12 @@ export class AuthService {
     organizationId: string | null,
     isSuperAdmin = false,
   ) {
-    const payload: JwtPayload = { sub: userId, email, organizationId: organizationId ?? '', isSuperAdmin };
+    const payload: JwtPayload = {
+      sub: userId,
+      email,
+      organizationId: organizationId ?? '',
+      isSuperAdmin,
+    };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
@@ -202,15 +242,14 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
 
-  private async userHasSuperAdminPermission(userId: string): Promise<boolean> {
-    const p = await this.prisma.permission.findFirst({
-      where: {
-        name: 'manage:all',
-        rolePermissions: {
-          some: { role: { userRoles: { some: { userId } } } },
-        },
-      },
-    });
-    return !!p;
+  private async userHasSuperAdminPermission(
+    roleIds: string[],
+  ): Promise<boolean> {
+    if (roleIds.length === 0) return false;
+    const role = await this.roleModel.findOne(
+      { _id: { $in: roleIds }, permissionKeys: 'manage:all' },
+      { _id: 1 },
+    );
+    return !!role;
   }
 }
