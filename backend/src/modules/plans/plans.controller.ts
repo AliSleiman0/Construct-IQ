@@ -21,6 +21,12 @@ export class PlansController {
     return this.plansService.findAll(includeInactive === 'true');
   }
 
+  @Get(':id')
+  @Public()
+  findOne(@Param('id') id: string): Promise<any> {
+    return this.plansService.findOne(id);
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.ALL)

@@ -13,7 +13,9 @@ import { PermissionSchema } from '../src/modules/users/schemas/permission.schema
 import { ProjectSchema } from '../src/modules/projects/schemas/project.schema';
 import { OrgSettingsSchema } from '../src/modules/org-settings/schemas/org-settings.schema';
 import { TicketSchema } from '../src/modules/tickets/schemas/ticket.schema';
-import { UserStatus, ProjectStatus, TicketStatus, TicketPriority, TicketCategory } from '../src/common/enums';
+import { PlanSchema } from '../src/modules/plans/schemas/plan.schema';
+import { InvoiceSchema } from '../src/modules/billing/schemas/invoice.schema';
+import { UserStatus, ProjectStatus, TicketStatus, TicketPriority, TicketCategory, PlanTier, InvoiceStatus } from '../src/common/enums';
 
 function loadDotenv(): void {
   const envPath = path.resolve(__dirname, '..', '.env');
@@ -417,21 +419,34 @@ async function main() {
   ];
 
   for (const def of projectDefs) {
+    const memberList: { userId: string; role: string; joinedAt: Date }[] = [];
+    if (def.createdById) {
+      memberList.push({ userId: def.createdById.toString(), role: 'Project Manager', joinedAt: new Date() });
+    }
+    // Ensure org admin is always a member so they can see org projects
+    if (userMap['ORG_ADMIN'] && def.organizationId.toString() === orgA._id.toString()) {
+      const orgAdminId = userMap['ORG_ADMIN']._id.toString();
+      if (!memberList.some((m) => m.userId === orgAdminId)) {
+        memberList.push({ userId: orgAdminId, role: 'Admin', joinedAt: new Date() });
+      }
+    }
     const project = await Project.findOneAndUpdate(
       { organizationId: def.organizationId, name: def.name },
-      {
-        $setOnInsert: {
-          ...def,
-          members: def.createdById
-            ? [{ userId: def.createdById.toString(), role: 'Project Manager', joinedAt: new Date() }]
-            : [],
-        },
-      },
+      { $setOnInsert: { ...def, members: memberList } },
       { upsert: true, new: true },
     );
     console.log(`  Project: ${project.name} (${project.status})`);
   }
   console.log(`Projects: ${projectDefs.length} created/verified`);
+
+  // Ensure org admin is a member of all Company A projects (needed for member-scoped queries)
+  if (userMap['ORG_ADMIN']) {
+    const orgAdminId = userMap['ORG_ADMIN']._id.toString();
+    await Project.updateMany(
+      { organizationId: orgA._id, 'members.userId': { $ne: orgAdminId } },
+      { $addToSet: { members: { userId: orgAdminId, role: 'Admin', joinedAt: new Date() } } },
+    );
+  }
 
   // ── Org Settings ────────────────────────────────────────────────────────
   const OrgSettingsModel = mongoose.model('OrgSettings', OrgSettingsSchema);
@@ -470,6 +485,91 @@ async function main() {
   console.log('OrgSettings: 3 created/verified');
 
   // ── Support Tickets ─────────────────────────────────────────────────────
+  // ── Plans ───────────────────────────────────────────────────────────────
+  const PlanModel = mongoose.model('Plan', PlanSchema);
+
+  const planDefs = [
+    {
+      tier: PlanTier.STARTER,
+      name: 'Starter',
+      pricePerMonth: 29,
+      maxUsers: 5,
+      maxProjects: 3,
+      description: 'For small teams getting started',
+      features: ['Up to 5 users', '3 active projects', 'Basic reporting', 'Email support'],
+      isPopular: false,
+      isActive: true,
+    },
+    {
+      tier: PlanTier.PRO,
+      name: 'Pro',
+      pricePerMonth: 99,
+      maxUsers: 25,
+      maxProjects: 20,
+      description: 'For growing construction teams',
+      features: ['Up to 25 users', '20 active projects', 'Advanced reporting', 'Budget tracking', 'Priority support'],
+      isPopular: true,
+      isActive: true,
+    },
+  ];
+
+  const seededPlans: Record<string, any> = {};
+  for (const def of planDefs) {
+    const plan = await PlanModel.findOneAndUpdate(
+      { tier: def.tier },
+      { $setOnInsert: def },
+      { upsert: true, new: true },
+    );
+    seededPlans[def.tier] = plan;
+  }
+  console.log(`Plans: ${planDefs.length} created/verified`);
+
+  // ── Invoices ─────────────────────────────────────────────────────────────
+  const InvoiceModel = mongoose.model('Invoice', InvoiceSchema);
+
+  const proPlan = seededPlans[PlanTier.PRO];
+  const invoiceDefs = [
+    {
+      organizationId: orgA._id,
+      planId: proPlan._id,
+      number: 'INV-2026-0001',
+      amountUsd: 99,
+      status: InvoiceStatus.PAID,
+      issuedAt: new Date('2026-01-01'),
+      dueAt: new Date('2026-01-15'),
+      paidAt: new Date('2026-01-10'),
+    },
+    {
+      organizationId: orgA._id,
+      planId: proPlan._id,
+      number: 'INV-2026-0002',
+      amountUsd: 99,
+      status: InvoiceStatus.PAID,
+      issuedAt: new Date('2026-02-01'),
+      dueAt: new Date('2026-02-15'),
+      paidAt: new Date('2026-02-12'),
+    },
+    {
+      organizationId: orgA._id,
+      planId: proPlan._id,
+      number: 'INV-2026-0003',
+      amountUsd: 99,
+      status: InvoiceStatus.ISSUED,
+      issuedAt: new Date('2026-03-01'),
+      dueAt: new Date('2026-03-15'),
+      paidAt: null,
+    },
+  ];
+
+  for (const def of invoiceDefs) {
+    await InvoiceModel.findOneAndUpdate(
+      { number: def.number },
+      { $setOnInsert: def },
+      { upsert: true, new: true },
+    );
+  }
+  console.log(`Invoices: ${invoiceDefs.length} created/verified`);
+
   const TicketModel = mongoose.model('Ticket', TicketSchema);
 
   const orgAdminUser = userMap['ORG_ADMIN'];
@@ -517,6 +617,7 @@ async function main() {
     );
   }
   console.log(`Tickets: ${ticketDefs.length} sample tickets created/verified`);
+  console.log('Plans: 2 seeded (Starter, Pro)');
 
   console.log('\nSeed complete.\n');
   console.log('  Login URL  : http://localhost:3000/login');

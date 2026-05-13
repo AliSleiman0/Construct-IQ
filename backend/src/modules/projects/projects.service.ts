@@ -82,7 +82,7 @@ export class ProjectsService {
       endDate: dto.endDate ? new Date(dto.endDate) : null,
       totalBudget: dto.totalBudget ?? null,
       currency: dto.currency ?? 'USD',
-      members: [],
+      members: [{ userId: createdById, role: 'Admin', joinedAt: new Date() }],
     });
 
     return this.toProjectListItem(project.toObject(), {

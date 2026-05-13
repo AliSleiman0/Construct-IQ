@@ -19,4 +19,5 @@ export class CreatePlanDto {
   @IsNumber() @Min(1) maxProjects!: number;
   @IsOptional() @IsArray() @IsString({ each: true }) features?: string[];
   @IsOptional() @IsBoolean() isPopular?: boolean;
+  @IsOptional() @IsBoolean() isActive?: boolean;
 }
