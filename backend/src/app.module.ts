@@ -27,6 +27,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { UnitsModule } from './modules/units/units.module';
 import { SurveyorModule } from './modules/surveyor/surveyor.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { FeaturesModule } from './modules/features/features.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
     UnitsModule,
     SurveyorModule,
     DocumentsModule,
+    FeaturesModule,
   ],
   providers: [
     {

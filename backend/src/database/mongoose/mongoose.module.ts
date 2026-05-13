@@ -114,6 +114,10 @@ import {
   Valuation,
   ValuationSchema,
 } from '../../modules/surveyor/schemas/valuation.schema';
+import {
+  Feature,
+  FeatureSchema,
+} from '../../modules/features/schemas/feature.schema';
 
 const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: User.name, schema: UserSchema },
@@ -146,6 +150,7 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: BoqItem.name, schema: BoqItemSchema },
   { name: Variation.name, schema: VariationSchema },
   { name: Valuation.name, schema: ValuationSchema },
+  { name: Feature.name, schema: FeatureSchema },
 ]);
 
 /**

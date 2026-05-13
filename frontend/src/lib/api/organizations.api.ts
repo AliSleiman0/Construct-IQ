@@ -10,6 +10,7 @@ export interface OrgListItem {
   phone?: string | null;
   website?: string | null;
   maxUsers?: number | null;
+  planId?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -68,6 +69,11 @@ export const organizationsApi = {
 
   getById: async (id: string): Promise<OrgListItem> => {
     const res = await apiClient.get<OrgListItem>(`/organizations/${id}`);
+    return res.data;
+  },
+
+  setPlan: async (id: string, planId: string | null): Promise<{ id: string; name: string; planId: string | null }> => {
+    const res = await apiClient.patch(`/organizations/${id}/plan`, { planId });
     return res.data;
   },
 };

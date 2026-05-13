@@ -5,18 +5,17 @@ import {
   ListItemText, Chip, CircularProgress, IconButton, Tooltip, Stack,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   Button, MenuItem, Switch, FormControlLabel, Divider, InputAdornment,
+  Checkbox, FormGroup, FormControlLabel as FcLabel,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import CloseIcon from '@mui/icons-material/Close';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
-import {
-  usePlans, useCreatePlan, useUpdatePlan, useDeletePlan,
-} from '@/features/plans/hooks/usePlans';
-import { useState, KeyboardEvent } from 'react';
+import { usePlans, useCreatePlan, useUpdatePlan, useDeletePlan } from '@/features/plans/hooks/usePlans';
+import { usePlatformFeatures } from '@/features/platform-features/hooks/usePlatformFeatures';
+import { useState } from 'react';
 
 const TIERS = ['STARTER', 'PRO', 'ENTERPRISE'];
 
@@ -28,84 +27,83 @@ interface PlanForm {
   maxProjects: string;
   description: string;
   isPopular: boolean;
-  features: string[];
+  featureKeys: string[];   // list of Feature.key values
 }
 
 const EMPTY_FORM: PlanForm = {
   name: '', tier: 'STARTER', pricePerMonth: '', maxUsers: '',
-  maxProjects: '', description: '', isPopular: false, features: [],
+  maxProjects: '', description: '', isPopular: false, featureKeys: [],
 };
 
-// ── Feature list editor ───────────────────────────────────────────────────────
-function FeatureEditor({
-  features, onChange,
-}: { features: string[]; onChange: (f: string[]) => void }) {
-  const [input, setInput] = useState('');
+// ── Feature checkbox picker ───────────────────────────────────────────────────
+function FeaturePicker({
+  allFeatures,
+  selected,
+  onChange,
+}: {
+  allFeatures: any[];
+  selected: string[];
+  onChange: (keys: string[]) => void;
+}) {
+  const toggle = (key: string) =>
+    onChange(
+      selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key],
+    );
 
-  const add = () => {
-    const trimmed = input.trim();
-    if (!trimmed || features.includes(trimmed)) return;
-    onChange([...features, trimmed]);
-    setInput('');
-  };
-
-  const remove = (i: number) => onChange(features.filter((_, idx) => idx !== i));
-
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') { e.preventDefault(); add(); }
-  };
+  if (allFeatures.length === 0) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        No features in catalog yet. Go to Features to create some.
+      </Typography>
+    );
+  }
 
   return (
     <Box>
       <Typography variant="caption" color="text.secondary" fontWeight={600}
         sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Features
+        Included features
       </Typography>
-      <Stack gap={0.75} mt={0.75} mb={1.5}>
-        {features.length === 0 ? (
-          <Typography variant="caption" color="text.disabled">No features added yet.</Typography>
-        ) : (
-          features.map((f, i) => (
-            <Box key={i} display="flex" alignItems="center" gap={1}
-              sx={{ px: 1.5, py: 0.5, borderRadius: 1, bgcolor: 'action.hover' }}>
-              <CheckIcon sx={{ fontSize: 14, color: 'success.main', flexShrink: 0 }} />
-              <Typography variant="body2" flex={1}>{f}</Typography>
-              <IconButton size="small" onClick={() => remove(i)} sx={{ p: 0.25 }}>
-                <CloseIcon sx={{ fontSize: 14 }} />
-              </IconButton>
-            </Box>
-          ))
-        )}
-      </Stack>
-      <Stack direction="row" gap={1}>
-        <TextField
-          size="small" fullWidth
-          placeholder="e.g. Unlimited storage"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKey}
-        />
-        <Button variant="outlined" size="small" onClick={add}
-          disabled={!input.trim()} sx={{ whiteSpace: 'nowrap' }}>
-          Add
-        </Button>
-      </Stack>
+      <FormGroup sx={{ mt: 0.75 }}>
+        {allFeatures.map((f: any) => (
+          <FcLabel
+            key={f._id}
+            control={
+              <Checkbox
+                size="small"
+                checked={selected.includes(f.key)}
+                onChange={() => toggle(f.key)}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight={500}>{f.name}</Typography>
+                {f.description && (
+                  <Typography variant="caption" color="text.secondary">{f.description}</Typography>
+                )}
+              </Box>
+            }
+            sx={{ alignItems: 'flex-start', mb: 0.5 }}
+          />
+        ))}
+      </FormGroup>
     </Box>
   );
 }
 
 // ── Shared create/edit dialog ─────────────────────────────────────────────────
 function PlanDialog({
-  open, title, form, tierLocked, saving,
-  onChange, onFeatures, onClose, onSubmit,
+  open, title, form, tierLocked, saving, allFeatures,
+  onChange, onFeatureKeys, onClose, onSubmit,
 }: {
   open: boolean;
   title: string;
   form: PlanForm;
   tierLocked: boolean;
   saving: boolean;
+  allFeatures: any[];
   onChange: (k: keyof PlanForm, v: any) => void;
-  onFeatures: (f: string[]) => void;
+  onFeatureKeys: (keys: string[]) => void;
   onClose: () => void;
   onSubmit: () => void;
 }) {
@@ -170,7 +168,11 @@ function PlanDialog({
           />
 
           <Divider />
-          <FeatureEditor features={form.features} onChange={onFeatures} />
+          <FeaturePicker
+            allFeatures={allFeatures}
+            selected={form.featureKeys}
+            onChange={onFeatureKeys}
+          />
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -186,6 +188,7 @@ function PlanDialog({
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function PlansPage() {
   const { data: plans = [], isLoading } = usePlans(true);
+  const { data: allFeatures = [] } = usePlatformFeatures(false); // active features only for picker
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
   const deletePlan = useDeletePlan();
@@ -204,7 +207,6 @@ export default function PlansPage() {
   const setEdit = (k: keyof PlanForm, v: any) => setEditForm((f) => ({ ...f, [k]: v }));
 
   const handleCreateClose = () => { setCreateOpen(false); setCreateForm(EMPTY_FORM); };
-
   const handleCreate = async () => {
     await createPlan.mutateAsync({
       name: createForm.name.trim(),
@@ -214,7 +216,7 @@ export default function PlansPage() {
       maxProjects: Number(createForm.maxProjects),
       description: createForm.description.trim() || undefined,
       isPopular: createForm.isPopular,
-      features: createForm.features,
+      features: createForm.featureKeys,
     });
     handleCreateClose();
   };
@@ -229,13 +231,11 @@ export default function PlansPage() {
       maxProjects: String(plan.maxProjects ?? ''),
       description: plan.description ?? '',
       isPopular: plan.isPopular ?? false,
-      features: Array.isArray(plan.features) ? [...plan.features] : [],
+      featureKeys: Array.isArray(plan.features) ? [...plan.features] : [],
     });
     setEditOpen(true);
   };
-
   const handleEditClose = () => { setEditOpen(false); setEditId(''); setEditForm(EMPTY_FORM); };
-
   const handleUpdate = async () => {
     await updatePlan.mutateAsync({
       id: editId,
@@ -246,7 +246,7 @@ export default function PlansPage() {
         maxProjects: Number(editForm.maxProjects),
         description: editForm.description.trim() || undefined,
         isPopular: editForm.isPopular,
-        features: editForm.features,
+        features: editForm.featureKeys,
       },
     });
     handleEditClose();
@@ -257,6 +257,11 @@ export default function PlansPage() {
     setDeleteId('');
     setDeleteName('');
   };
+
+  // Resolve feature keys → display names for the plan card
+  const featureMap = Object.fromEntries((allFeatures as any[]).map((f: any) => [f.key, f]));
+  const resolveFeatures = (keys: string[]) =>
+    keys.map((k) => featureMap[k] ?? { key: k, name: k, description: null });
 
   if (isLoading) {
     return <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>;
@@ -283,73 +288,77 @@ export default function PlansPage() {
           display: 'grid', gap: 2.5,
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', md: 'repeat(3,1fr)' },
         }}>
-          {(plans as any[]).map((plan: any) => (
-            <Card key={plan._id} elevation={0} sx={{
-              border: '1px solid',
-              borderColor: plan.isPopular && plan.isActive !== false ? 'primary.main' : 'divider',
-              borderRadius: 2,
-              position: 'relative',
-              opacity: plan.isActive === false ? 0.5 : 1,
-            }}>
-              {/* top-right badges */}
-              <Box position="absolute" top={12} right={12} display="flex" gap={0.75}>
-                {plan.isActive === false && (
-                  <Chip label="Inactive" size="small" color="default" sx={{ fontSize: '0.65rem' }} />
-                )}
-                {plan.isPopular && plan.isActive !== false && (
-                  <Chip label="Most popular" color="primary" size="small"
-                    sx={{ fontWeight: 700, fontSize: '0.7rem' }} />
-                )}
-              </Box>
+          {(plans as any[]).map((plan: any) => {
+            const resolvedFeatures = resolveFeatures(plan.features ?? []);
+            return (
+              <Card key={plan._id} elevation={0} sx={{
+                border: '1px solid',
+                borderColor: plan.isPopular && plan.isActive !== false ? 'primary.main' : 'divider',
+                borderRadius: 2, position: 'relative',
+                opacity: plan.isActive === false ? 0.5 : 1,
+              }}>
+                <Box position="absolute" top={12} right={12} display="flex" gap={0.75}>
+                  {plan.isActive === false && (
+                    <Chip label="Inactive" size="small" color="default" sx={{ fontSize: '0.65rem' }} />
+                  )}
+                  {plan.isPopular && plan.isActive !== false && (
+                    <Chip label="Most popular" color="primary" size="small"
+                      sx={{ fontWeight: 700, fontSize: '0.7rem' }} />
+                  )}
+                </Box>
 
-              <CardContent sx={{ p: 3, pt: plan.isPopular || plan.isActive === false ? 5 : 3 }}>
-                <Typography variant="overline" color="text.secondary" fontWeight={700}>
-                  {plan.tier ?? plan.name}
-                </Typography>
-                <Typography variant="h5" fontWeight={800} sx={{ mt: 0.5, mb: 0.5 }}>
-                  ${plan.pricePerMonth}
-                  <Typography component="span" variant="body2" color="text.secondary" ml={0.5}>/mo</Typography>
-                </Typography>
-                {plan.description && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                    {plan.description}
+                <CardContent sx={{ p: 3, pt: plan.isPopular || plan.isActive === false ? 5 : 3 }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight={700}>
+                    {plan.tier ?? plan.name}
                   </Typography>
-                )}
-                <Typography variant="caption" color="text.secondary">
-                  Up to {plan.maxUsers} users · {plan.maxProjects} projects
-                </Typography>
+                  <Typography variant="h5" fontWeight={800} sx={{ mt: 0.5, mb: 0.5 }}>
+                    ${plan.pricePerMonth}
+                    <Typography component="span" variant="body2" color="text.secondary" ml={0.5}>/mo</Typography>
+                  </Typography>
+                  {plan.description && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      {plan.description}
+                    </Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    Up to {plan.maxUsers} users · {plan.maxProjects} projects
+                  </Typography>
 
-                {(plan.features ?? []).length > 0 && (
-                  <List dense disablePadding sx={{ mt: 2 }}>
-                    {(plan.features as string[]).map((f, i) => (
-                      <ListItem key={i} disableGutters sx={{ py: 0.25 }}>
-                        <ListItemIcon sx={{ minWidth: 28 }}>
-                          <CheckIcon fontSize="small" color="success" />
-                        </ListItemIcon>
-                        <ListItemText primary={f} primaryTypographyProps={{ variant: 'body2' }} />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
+                  {resolvedFeatures.length > 0 && (
+                    <List dense disablePadding sx={{ mt: 2 }}>
+                      {resolvedFeatures.map((f: any, i: number) => (
+                        <ListItem key={i} disableGutters sx={{ py: 0.25 }} alignItems="flex-start">
+                          <ListItemIcon sx={{ minWidth: 28, mt: 0.25 }}>
+                            <CheckIcon fontSize="small" color="success" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={f.name}
+                            secondary={f.description || undefined}
+                            primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                            secondaryTypographyProps={{ variant: 'caption' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
 
-                <Stack direction="row" justifyContent="flex-end" gap={0.5} mt={2}>
-                  <Tooltip title="Edit plan">
-                    <IconButton size="small" onClick={() => handleEditOpen(plan)}>
-                      <EditOutlinedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  {plan.isActive !== false && (
-                    <Tooltip title="Deactivate plan">
+                  <Stack direction="row" justifyContent="flex-end" gap={0.5} mt={2}>
+                    <Tooltip title="Edit plan">
+                      <IconButton size="small" onClick={() => handleEditOpen(plan)}>
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete plan">
                       <IconButton size="small" color="error"
                         onClick={() => { setDeleteId(plan._id); setDeleteName(plan.name); }}>
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                  )}
-                </Stack>
-              </CardContent>
-            </Card>
-          ))}
+                  </Stack>
+                </CardContent>
+              </Card>
+            );
+          })}
         </Box>
       )}
 
@@ -357,8 +366,9 @@ export default function PlansPage() {
       <PlanDialog
         open={createOpen} title="New plan"
         form={createForm} tierLocked={false} saving={createPlan.isPending}
+        allFeatures={allFeatures as any[]}
         onChange={setCreate}
-        onFeatures={(f) => setCreateForm((prev) => ({ ...prev, features: f }))}
+        onFeatureKeys={(keys) => setCreateForm((prev) => ({ ...prev, featureKeys: keys }))}
         onClose={handleCreateClose} onSubmit={handleCreate}
       />
 
@@ -366,25 +376,26 @@ export default function PlansPage() {
       <PlanDialog
         open={editOpen} title="Edit plan"
         form={editForm} tierLocked saving={updatePlan.isPending}
+        allFeatures={allFeatures as any[]}
         onChange={setEdit}
-        onFeatures={(f) => setEditForm((prev) => ({ ...prev, features: f }))}
+        onFeatureKeys={(keys) => setEditForm((prev) => ({ ...prev, featureKeys: keys }))}
         onClose={handleEditClose} onSubmit={handleUpdate}
       />
 
-      {/* ── Deactivate confirm ── */}
+      {/* ── Delete confirm ── */}
       <Dialog open={!!deleteId} onClose={() => setDeleteId('')} maxWidth="xs" fullWidth>
-        <DialogTitle>Deactivate plan</DialogTitle>
+        <DialogTitle>Delete plan</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to deactivate <strong>{deleteName}</strong>?
-            Existing subscribers keep their access but no new orgs can subscribe to this plan.
+            Are you sure you want to permanently delete <strong>{deleteName}</strong>?
+            This cannot be undone.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setDeleteId('')}>Cancel</Button>
           <Button variant="contained" color="error"
             onClick={handleDeleteConfirm} disabled={deletePlan.isPending}>
-            {deletePlan.isPending ? 'Deactivating…' : 'Deactivate'}
+            {deletePlan.isPending ? 'Deleting…' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

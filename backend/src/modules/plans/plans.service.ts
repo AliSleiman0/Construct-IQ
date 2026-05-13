@@ -43,12 +43,9 @@ export class PlansService {
     return plan.toObject();
   }
 
-  /** Soft-delete by marking isActive = false so billing history refs are preserved */
   async remove(id: string): Promise<any> {
-    const plan = await this.planModel.findById(id);
+    const plan = await this.planModel.findByIdAndDelete(id).lean();
     if (!plan) throw new NotFoundException('Plan not found');
-    plan.isActive = false;
-    await plan.save();
-    return { message: 'Plan deactivated' };
+    return { message: 'Plan deleted' };
   }
 }

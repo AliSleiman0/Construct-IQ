@@ -405,6 +405,15 @@ export class OrganizationsService {
     };
   }
 
+  /** Super Admin only — assign or remove a subscription plan from an org */
+  async setPlan(id: string, planId: string | null): Promise<any> {
+    const org = await this.organizationModel.findById(id);
+    if (!org) throw new NotFoundException('Organization not found');
+    org.planId = planId;
+    await org.save();
+    return { id: org._id, name: org.name, planId: org.planId };
+  }
+
   async getStats(id: string, requestingOrgId: string, isSuperAdmin = false) {
     if (!isSuperAdmin && id !== requestingOrgId) {
       throw new ForbiddenException('Access denied');

@@ -51,10 +51,10 @@ export function useDeletePlan() {
     mutationFn: (id: string) => plansApi.remove(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
-      enqueueSnackbar('Plan deactivated.', { variant: 'warning' });
+      enqueueSnackbar('Plan deleted.', { variant: 'success' });
     },
     onError: () => {
-      enqueueSnackbar('Failed to deactivate plan.', { variant: 'error' });
+      enqueueSnackbar('Failed to delete plan.', { variant: 'error' });
     },
   });
 }

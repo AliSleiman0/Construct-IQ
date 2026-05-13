@@ -10,11 +10,17 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { PERMISSIONS } from '../../common/constants/permissions';
-import { IsBoolean } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 class SetActiveDto {
   @IsBoolean()
   isActive!: boolean;
+}
+
+class SetPlanDto {
+  @IsOptional()
+  @IsString()
+  planId!: string | null;
 }
 
 @Controller('organizations')
@@ -63,6 +69,16 @@ export class OrganizationsController {
       throw new ForbiddenException('Only Super Admins can change organization status');
     }
     return this.organizationsService.setActive(id, dto.isActive);
+  }
+
+  /** Super Admin only — assign a subscription plan to an org */
+  @Patch(':id/plan')
+  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.MANAGE)
+  setPlan(@Param('id') id: string, @Body() dto: SetPlanDto, @CurrentUser() user: JwtPayload) {
+    if (!user.isSuperAdmin) {
+      throw new ForbiddenException('Only Super Admins can set organization plans');
+    }
+    return this.organizationsService.setPlan(id, dto.planId ?? null);
   }
 
   @Get(':id/stats')
