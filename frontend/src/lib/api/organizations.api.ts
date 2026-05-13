@@ -30,6 +30,16 @@ export interface CreateOrgPayload {
   adminPassword: string;
 }
 
+export interface UpdateOrgPayload {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
+  logoUrl?: string;
+  maxUsers?: number | null;
+}
+
 export const organizationsApi = {
   list: async (): Promise<OrgListItem[]> => {
     const res = await apiClient.get<OrgListItem[]>('/organizations');
@@ -38,6 +48,11 @@ export const organizationsApi = {
 
   create: async (payload: CreateOrgPayload): Promise<{ org: OrgListItem; adminUser: { id: string; email: string } }> => {
     const res = await apiClient.post('/organizations', payload);
+    return res.data;
+  },
+
+  update: async (id: string, payload: UpdateOrgPayload): Promise<OrgListItem> => {
+    const res = await apiClient.patch<OrgListItem>(`/organizations/${id}`, payload);
     return res.data;
   },
 

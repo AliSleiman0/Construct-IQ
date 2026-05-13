@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { organizationsApi, type CreateOrgPayload } from '@/lib/api/organizations.api';
+import { organizationsApi, type CreateOrgPayload, type UpdateOrgPayload } from '@/lib/api/organizations.api';
 import { useSnackbar } from 'notistack';
 
 export function useOrganizations() {
@@ -21,6 +21,23 @@ export function useCreateOrganization() {
     },
     onError: () => {
       enqueueSnackbar('Failed to create organization.', { variant: 'error' });
+    },
+  });
+}
+
+export function useUpdateOrganization() {
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateOrgPayload }) =>
+      organizationsApi.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      enqueueSnackbar('Organization updated.', { variant: 'success' });
+    },
+    onError: () => {
+      enqueueSnackbar('Failed to update organization.', { variant: 'error' });
     },
   });
 }

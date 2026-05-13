@@ -13,8 +13,9 @@ export class PlansService {
     @InjectModel(Plan.name) private planModel: Model<PlanDocument>,
   ) {}
 
-  async findAll(): Promise<any[]> {
-    return this.planModel.find({ isActive: true }).sort({ pricePerMonth: 1 }).lean();
+  async findAll(includeInactive = false): Promise<any[]> {
+    const filter = includeInactive ? {} : { isActive: true };
+    return this.planModel.find(filter).sort({ pricePerMonth: 1 }).lean();
   }
 
   async create(dto: CreatePlanDto): Promise<any> {
@@ -40,5 +41,14 @@ export class PlansService {
     Object.assign(plan, dto);
     await plan.save();
     return plan.toObject();
+  }
+
+  /** Soft-delete by marking isActive = false so billing history refs are preserved */
+  async remove(id: string): Promise<any> {
+    const plan = await this.planModel.findById(id);
+    if (!plan) throw new NotFoundException('Plan not found');
+    plan.isActive = false;
+    await plan.save();
+    return { message: 'Plan deactivated' };
   }
 }

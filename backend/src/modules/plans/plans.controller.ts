@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -14,10 +14,11 @@ class UpdatePlanDto extends PartialType(CreatePlanDto) {}
 export class PlansController {
   constructor(private readonly plansService: PlansService) {}
 
+  /** Public for org-facing plan picker; pass includeInactive=true for super admin */
   @Get()
   @Public()
-  findAll(): Promise<any> {
-    return this.plansService.findAll();
+  findAll(@Query('includeInactive') includeInactive?: string): Promise<any> {
+    return this.plansService.findAll(includeInactive === 'true');
   }
 
   @Post()
@@ -32,5 +33,12 @@ export class PlansController {
   @RequirePermissions(PERMISSIONS.ALL)
   update(@Param('id') id: string, @Body() dto: UpdatePlanDto): Promise<any> {
     return this.plansService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.ALL)
+  remove(@Param('id') id: string): Promise<any> {
+    return this.plansService.remove(id);
   }
 }
