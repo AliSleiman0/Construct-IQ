@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiCookieAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -19,6 +20,7 @@ import { PERMISSIONS } from '../../common/constants/permissions';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { CreateOrgAdminDto } from './dto/create-org-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
 
@@ -36,6 +38,20 @@ export class UsersController {
   @ApiOperation({ summary: 'List roles available in the current organization' })
   listRoles(@CurrentUser() user: JwtPayload) {
     return this.usersService.findAllRoles(user.organizationId, user.isSuperAdmin);
+  }
+
+  // ── Cross-org Org Admin list (SA only) ─────────────────────────────────
+
+  @Get('org-admins')
+  @RequirePermissions(PERMISSIONS.ALL)
+  @ApiOperation({ summary: 'Super Admin: list all Org Admins across every organization' })
+  listOrgAdmins(@CurrentUser() user: JwtPayload) {
+    if (!user.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Only Super Admins can list Org Admins across organizations',
+      );
+    }
+    return this.usersService.findAllOrgAdmins();
   }
 
   // ── Own profile ────────────────────────────────────────────────────────
@@ -77,6 +93,25 @@ export class UsersController {
   @ApiOperation({ summary: 'Create a new user and assign their role' })
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateUserDto) {
     return this.usersService.create(user.organizationId, dto);
+  }
+
+  @Post('org-admins')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(PERMISSIONS.ALL)
+  @ApiOperation({ summary: 'Super Admin: create an Org Admin in any organization' })
+  createOrgAdmin(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateOrgAdminDto,
+  ) {
+    // PermissionsGuard treats `manage:company` as a bypass too, so we need
+    // an explicit SA check to prevent an Org Admin from provisioning admins
+    // in other tenants.
+    if (!user.isSuperAdmin) {
+      throw new ForbiddenException(
+        'Only Super Admins can create Org Admins across organizations',
+      );
+    }
+    return this.usersService.createOrgAdmin(dto);
   }
 
   @Patch(':id')

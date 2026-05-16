@@ -41,3 +41,12 @@ export interface UpdateUserPayload {
   phone?: string;
   status?: UserStatus;
 }
+
+export interface CreateOrgAdminPayload {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  organizationId: string;
+}

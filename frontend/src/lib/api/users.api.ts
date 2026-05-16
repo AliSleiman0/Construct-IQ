@@ -1,5 +1,11 @@
 import apiClient from './client';
-import type { User, Role, CreateUserPayload, UpdateUserPayload } from '@/types/user.types';
+import type {
+  User,
+  Role,
+  CreateUserPayload,
+  UpdateUserPayload,
+  CreateOrgAdminPayload,
+} from '@/types/user.types';
 
 export const usersApi = {
   list: async (): Promise<User[]> => {
@@ -19,6 +25,16 @@ export const usersApi = {
 
   create: async (payload: CreateUserPayload): Promise<User> => {
     const res = await apiClient.post<User>('/users', payload);
+    return res.data;
+  },
+
+  createOrgAdmin: async (payload: CreateOrgAdminPayload): Promise<User> => {
+    const res = await apiClient.post<User>('/users/org-admins', payload);
+    return res.data;
+  },
+
+  listOrgAdmins: async (): Promise<User[]> => {
+    const res = await apiClient.get<User[]>('/users/org-admins');
     return res.data;
   },
 

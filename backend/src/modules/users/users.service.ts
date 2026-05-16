@@ -14,6 +14,7 @@ import {
   OrganizationDocument,
 } from '../organizations/schemas/organization.schema';
 import { CreateUserDto } from './dto/create-user.dto';
+import { CreateOrgAdminDto } from './dto/create-org-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserStatus } from '../../common/enums';
 
@@ -203,6 +204,80 @@ export class UsersService {
     } finally {
       await session.endSession();
     }
+  }
+
+  /** Super Admin: list every user whose role grants `manage:company` —
+   *  i.e. every Org Admin across every tenant. Used by the SA's Org Admins
+   *  page so it isn't scoped to the SA's home org. */
+  async findAllOrgAdmins(): Promise<UserResponse[]> {
+    const adminRoleIds = await this.roleModel
+      .find({ permissionKeys: 'manage:company' }, { _id: 1 })
+      .lean();
+    if (adminRoleIds.length === 0) return [];
+
+    const idSet = adminRoleIds.map((r) => r._id);
+    const users = await this.userModel
+      .find({ roleIds: { $in: idSet } })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const allRoleIds = Array.from(new Set(users.flatMap((u) => u.roleIds ?? [])));
+    const roleDocs = await this.roleModel
+      .find({ _id: { $in: allRoleIds } }, { _id: 1, name: 1 })
+      .lean();
+    const roleById = new Map(roleDocs.map((r) => [r._id, r]));
+
+    return users.map((u) =>
+      this.toUserResponse(
+        u as any,
+        (u.roleIds ?? [])
+          .map((rid) => roleById.get(rid))
+          .filter((r): r is NonNullable<typeof r> => !!r),
+      ),
+    );
+  }
+
+  /** Super Admin: create an Org Admin user in any organization. Resolves
+   *  the target org's admin role server-side so the caller doesn't need
+   *  to know per-org role IDs.
+   *
+   *  We look up by the `manage:company` permission rather than by name:
+   *  legacy seeded orgs use `ORG_ADMIN`, orgs created via POST /organizations
+   *  use `Admin`. If neither exists (orgs inserted directly without their
+   *  STANDARD_ROLES — happens with the demo seed for Company B/C), provision
+   *  the `Admin` role on the fly. */
+  async createOrgAdmin(dto: CreateOrgAdminDto): Promise<UserResponse> {
+    const org = await this.organizationModel
+      .findOne({ _id: dto.organizationId }, { _id: 1 })
+      .lean();
+    if (!org) throw new NotFoundException('Organization not found');
+
+    let role = await this.roleModel
+      .findOne({
+        organizationId: dto.organizationId,
+        permissionKeys: 'manage:company',
+      })
+      .lean();
+
+    if (!role) {
+      const created = await this.roleModel.create({
+        organizationId: dto.organizationId,
+        name: 'Admin',
+        description: 'Full control within own organization',
+        isSystem: true,
+        permissionKeys: ['manage:company'],
+      });
+      role = created.toObject() as any;
+    }
+
+    return this.create(dto.organizationId, {
+      email: dto.email,
+      password: dto.password,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      phone: dto.phone,
+      roleId: role!._id,
+    } as CreateUserDto);
   }
 
   async update(
