@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Role, RoleDocument } from '../users/schemas/role.schema';
 import {
@@ -94,7 +95,7 @@ export class AuthService {
     await this.userModel.updateOne(
       { _id: user._id },
       {
-        refreshToken: await bcrypt.hash(tokens.refreshToken, 10),
+        refreshToken: this.hmacRefresh(tokens.refreshToken),
         lastLoginAt: new Date(),
       },
     );
@@ -135,11 +136,7 @@ export class AuthService {
       throw new UnauthorizedException('Access denied');
     }
 
-    const isRefreshTokenValid = await bcrypt.compare(
-      rawRefreshToken,
-      user.refreshToken,
-    );
-    if (!isRefreshTokenValid) {
+    if (!this.refreshTokenMatches(rawRefreshToken, user.refreshToken)) {
       throw new ForbiddenException('Access denied');
     }
 
@@ -152,10 +149,24 @@ export class AuthService {
 
     await this.userModel.updateOne(
       { _id: user._id },
-      { refreshToken: await bcrypt.hash(tokens.refreshToken, 10) },
+      { refreshToken: this.hmacRefresh(tokens.refreshToken) },
     );
 
     return tokens;
+  }
+
+  private hmacRefresh(raw: string): string {
+    const secret = this.configService.get<string>('jwt.refreshSecret');
+    if (!secret) {
+      throw new Error('jwt.refreshSecret is not configured');
+    }
+    return createHmac('sha256', secret).update(raw).digest('base64url');
+  }
+
+  private refreshTokenMatches(raw: string, stored: string): boolean {
+    const candidate = this.hmacRefresh(raw);
+    if (candidate.length !== stored.length) return false;
+    return timingSafeEqual(Buffer.from(candidate), Buffer.from(stored));
   }
 
   async logout(userId: string) {

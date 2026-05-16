@@ -4,6 +4,7 @@ import { fetchMeServer } from '@/features/auth/api/auth.server';
 import { ROLE_HOME, ROLE_PREFIX, roleFromUser } from '@/config/roles';
 import { AuthHydrator } from '@/features/auth/components/AuthHydrator';
 import { AppLayoutClient } from '@/components/shared/AppLayoutClient';
+import { AppProviders } from '@/providers';
 
 const SHARED_AUTHED_PATHS = ['/profile', '/settings'];
 
@@ -46,9 +47,11 @@ export default async function AppRouteLayout({
   }
 
   return (
-    <AuthHydrator user={user}>
-      <AppLayoutClient>{children}</AppLayoutClient>
-    </AuthHydrator>
+    <AppProviders>
+      <AuthHydrator user={user}>
+        <AppLayoutClient>{children}</AppLayoutClient>
+      </AuthHydrator>
+    </AppProviders>
   );
 }
 
