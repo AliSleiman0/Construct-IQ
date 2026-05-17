@@ -17,28 +17,37 @@ export class FeaturesService implements OnModuleInit {
   ) {}
 
   /**
-   * On every server startup, insert any feature definitions that exist in
-   * platform-features.ts but are not yet in the database.
-   * Existing DB records (including super-admin edits to name/description) are
-   * left untouched — only brand-new keys are inserted.
+   * On every server startup:
+   *   1. Insert any feature definitions present in platform-features.ts but
+   *      missing from the DB. Existing rows (including SA edits) are kept.
+   *   2. Delete any catalog row whose key starts with `ai_` — AI features
+   *      were moved to a separate product line (see ai-features.ts) and must
+   *      not appear in the core catalog. Idempotent; no-op once clean.
    */
   async onModuleInit(): Promise<void> {
+    // Step 1: insert missing core features
     const existingKeys = new Set(
       (await this.featureModel.find({}, { key: 1 }).lean()).map((f) => f.key),
     );
 
     const missing = ALL_FEATURE_DEFINITIONS.filter((d) => !existingKeys.has(d.key));
 
-    if (missing.length === 0) {
+    if (missing.length > 0) {
+      await this.featureModel.insertMany(
+        missing.map((d) => ({ key: d.key, name: d.name, description: d.description, isActive: true })),
+      );
+      this.logger.log(`Seeded ${missing.length} new feature(s): ${missing.map((d) => d.key).join(', ')}`);
+    } else {
       this.logger.log(`Feature catalog up to date (${existingKeys.size} features)`);
-      return;
     }
 
-    await this.featureModel.insertMany(
-      missing.map((d) => ({ key: d.key, name: d.name, description: d.description, isActive: true })),
-    );
-
-    this.logger.log(`Seeded ${missing.length} new feature(s): ${missing.map((d) => d.key).join(', ')}`);
+    // Step 2: sweep stray AI keys out of the core catalog
+    const aiDeleted = await this.featureModel.deleteMany({ key: { $regex: /^ai_/ } });
+    if (aiDeleted.deletedCount && aiDeleted.deletedCount > 0) {
+      this.logger.log(
+        `Removed ${aiDeleted.deletedCount} ai_* key(s) from core feature catalog (moved to ai_features collection)`,
+      );
+    }
   }
 
   async findAll(includeInactive = false): Promise<any[]> {

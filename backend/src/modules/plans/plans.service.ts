@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Plan, PlanDocument } from './schemas/plan.schema';
@@ -8,10 +8,30 @@ import { PartialType } from '@nestjs/mapped-types';
 class UpdatePlanDto extends PartialType(CreatePlanDto) {}
 
 @Injectable()
-export class PlansService {
+export class PlansService implements OnModuleInit {
+  private readonly logger = new Logger(PlansService.name);
+
   constructor(
     @InjectModel(Plan.name) private planModel: Model<PlanDocument>,
   ) {}
+
+  /**
+   * One-time sweep: AI feature keys (anything starting with `ai_`) used to live
+   * on `Plan.features[]`. They're now part of a separate AiPlan domain, so
+   * strip them from every existing Plan doc. `$pull` is atomic and idempotent —
+   * once clean, this is a cheap no-op every boot.
+   */
+  async onModuleInit(): Promise<void> {
+    const affected = await this.planModel.updateMany(
+      { features: { $regex: /^ai_/ } },
+      { $pull: { features: { $regex: /^ai_/ } } },
+    );
+    if (affected.modifiedCount && affected.modifiedCount > 0) {
+      this.logger.log(
+        `Stripped ai_* keys from ${affected.modifiedCount} plan(s) (moved to AiPlan.features)`,
+      );
+    }
+  }
 
   async findAll(includeInactive = false): Promise<any[]> {
     const filter = includeInactive ? {} : { isActive: true };

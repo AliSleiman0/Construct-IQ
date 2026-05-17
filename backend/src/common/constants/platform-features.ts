@@ -28,23 +28,11 @@ export const PLATFORM_FEATURES = {
     name: 'Daily Reports',
     description: 'Automated construction progress reports delivered every 24 hours.',
   },
-  AI_REPORT_SUMMARY: {
-    key: 'ai_report_summary',
-    name: 'AI Report Summary',
-    description: 'AI-generated summaries for daily site reports.',
-  },
 
-  // ── AI & Search ──────────────────────────────────────────────────────────
-  AI_SUPPLIER_SEARCH: {
-    key: 'ai_supplier_search',
-    name: 'AI Supplier Search',
-    description: 'Find nearby suppliers automatically using AI-powered geolocation search.',
-  },
-  AI_ASSISTANT: {
-    key: 'ai_assistant',
-    name: 'AI Assistant',
-    description: 'Natural-language chat assistant for navigation, summaries, and insights.',
-  },
+  // NOTE: AI features were moved to a separate product line. They now live in
+  // common/constants/ai-features.ts and are sold via AiPlan, not Plan. See
+  // ai-features.ts + the /super-admin/ai-features and /super-admin/ai-plans
+  // pages.
 
   // ── Project Management ───────────────────────────────────────────────────
   UNLIMITED_PROJECTS: {

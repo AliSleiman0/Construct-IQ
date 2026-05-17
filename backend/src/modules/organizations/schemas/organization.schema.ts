@@ -60,6 +60,11 @@ export class Organization {
   @Prop({ type: String, ref: 'Plan', default: null, index: true })
   planId: string | null;
 
+  /** Optional AI subscription, sold independently of the core plan.
+   *  Null = no AI. Requires a non-null planId to be set (enforced in service). */
+  @Prop({ type: String, ref: 'AiPlan', default: null, index: true })
+  aiPlanId: string | null;
+
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 

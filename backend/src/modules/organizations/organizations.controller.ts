@@ -30,6 +30,12 @@ class SetPlanDto {
   planId!: string | null;
 }
 
+class SetAiPlanDto {
+  @IsOptional()
+  @IsString()
+  aiPlanId!: string | null;
+}
+
 @Controller('organizations')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class OrganizationsController {
@@ -89,6 +95,21 @@ export class OrganizationsController {
       throw new ForbiddenException("You can only change your own organization's plan");
     }
     return this.organizationsService.setPlan(id, dto.planId ?? null);
+  }
+
+  /** Assign the AI subscription. Super Admin: any org. Org Admin: own org only.
+   *  Setting a non-null aiPlanId requires the org to already have a core plan. */
+  @Patch(':id/ai-plan')
+  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.UPDATE)
+  setAiPlan(
+    @Param('id') id: string,
+    @Body() dto: SetAiPlanDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    if (!user.isSuperAdmin && user.organizationId !== id) {
+      throw new ForbiddenException("You can only change your own organization's AI plan");
+    }
+    return this.organizationsService.setAiPlan(id, dto.aiPlanId ?? null);
   }
 
   /** Upload a logo image. Super Admin: any org. Org Admin: own org only. */

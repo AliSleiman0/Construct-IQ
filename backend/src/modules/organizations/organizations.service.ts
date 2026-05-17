@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
@@ -21,6 +22,7 @@ import {
   Project,
   ProjectDocument,
 } from '../projects/schemas/project.schema';
+import { AiPlan, AiPlanDocument } from '../ai-plans/schemas/ai-plan.schema';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { ProjectStatus, UserStatus } from '../../common/enums';
@@ -196,6 +198,7 @@ export interface OrgResponse {
   website: string | null;
   maxUsers: number | null;
   planId: string | null;
+  aiPlanId: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -212,6 +215,7 @@ export class OrganizationsService {
     @InjectModel(Permission.name)
     private permissionModel: Model<PermissionDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(AiPlan.name) private aiPlanModel: Model<AiPlanDocument>,
     @InjectConnection() private connection: Connection,
   ) {}
 
@@ -241,6 +245,7 @@ export class OrganizationsService {
       website: org.website,
       maxUsers: org.maxUsers,
       planId: org.planId,
+      aiPlanId: (org as any).aiPlanId ?? null,
       isActive: org.isActive,
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
@@ -372,6 +377,7 @@ export class OrganizationsService {
             website: org.website,
             maxUsers: org.maxUsers,
             planId: org.planId,
+            aiPlanId: (org as any).aiPlanId ?? null,
             isActive: org.isActive,
             createdAt: org.createdAt,
             updatedAt: org.updatedAt,
@@ -444,13 +450,49 @@ export class OrganizationsService {
     return this.withCounts(org);
   }
 
-  /** Assign or remove a subscription plan from an org */
+  /** Assign or remove a subscription plan. Clearing the core plan also clears
+   *  the AI plan — an org without a core plan cannot have AI on its own. */
   async setPlan(id: string, planId: string | null): Promise<any> {
     const org = await this.organizationModel.findById(id);
     if (!org) throw new NotFoundException('Organization not found');
     org.planId = planId;
+    if (planId === null) {
+      (org as any).aiPlanId = null;
+    }
     await org.save();
-    return { id: org._id, name: org.name, planId: org.planId };
+    return {
+      id: org._id,
+      name: org.name,
+      planId: org.planId,
+      aiPlanId: (org as any).aiPlanId ?? null,
+    };
+  }
+
+  /** Assign or remove the AI subscription. AI requires an active core plan —
+   *  setting a non-null aiPlanId on an org without a planId throws 400. */
+  async setAiPlan(id: string, aiPlanId: string | null): Promise<any> {
+    const org = await this.organizationModel.findById(id);
+    if (!org) throw new NotFoundException('Organization not found');
+
+    if (aiPlanId !== null) {
+      if (!org.planId) {
+        throw new BadRequestException('Choose a core plan before adding AI.');
+      }
+      const aiPlan = await this.aiPlanModel.findById(aiPlanId, { isActive: 1 }).lean();
+      if (!aiPlan) throw new NotFoundException('AI plan not found');
+      if (aiPlan.isActive === false) {
+        throw new BadRequestException('Selected AI plan is inactive.');
+      }
+    }
+
+    (org as any).aiPlanId = aiPlanId;
+    await org.save();
+    return {
+      id: org._id,
+      name: org.name,
+      planId: org.planId,
+      aiPlanId: (org as any).aiPlanId ?? null,
+    };
   }
 
   async getStats(id: string, requestingOrgId: string, isSuperAdmin = false) {
