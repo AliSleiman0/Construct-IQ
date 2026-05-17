@@ -29,10 +29,31 @@ export function useSetOrgPlan() {
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['organization', vars.orgId] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['org-for-ai-features', vars.orgId] });
       enqueueSnackbar('Plan updated.', { variant: 'success' });
     },
     onError: (err: any) => {
       const raw = err?.response?.data?.message ?? 'Failed to update plan.';
+      enqueueSnackbar(Array.isArray(raw) ? raw.join(', ') : String(raw), { variant: 'error' });
+    },
+  });
+}
+
+export function useSetOrgAiPlan() {
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  return useMutation({
+    mutationFn: ({ orgId, aiPlanId }: { orgId: string; aiPlanId: string | null }) =>
+      organizationsApi.setAiPlan(orgId, aiPlanId),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['organization', vars.orgId] });
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['org-for-ai-features', vars.orgId] });
+      enqueueSnackbar('AI subscription updated.', { variant: 'success' });
+    },
+    onError: (err: any) => {
+      const raw = err?.response?.data?.message ?? 'Failed to update AI subscription.';
       enqueueSnackbar(Array.isArray(raw) ? raw.join(', ') : String(raw), { variant: 'error' });
     },
   });

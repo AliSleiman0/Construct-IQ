@@ -19,6 +19,7 @@ export interface OrgListItem {
   website?: string | null;
   maxUsers?: number | null;
   planId?: string | null;
+  aiPlanId?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -88,8 +89,13 @@ export const organizationsApi = {
     return res.data;
   },
 
-  setPlan: async (id: string, planId: string | null): Promise<{ id: string; name: string; planId: string | null }> => {
+  setPlan: async (id: string, planId: string | null): Promise<{ id: string; name: string; planId: string | null; aiPlanId: string | null }> => {
     const res = await apiClient.patch(`/organizations/${id}/plan`, { planId });
+    return res.data;
+  },
+
+  setAiPlan: async (id: string, aiPlanId: string | null): Promise<{ id: string; name: string; planId: string | null; aiPlanId: string | null }> => {
+    const res = await apiClient.patch(`/organizations/${id}/ai-plan`, { aiPlanId });
     return res.data;
   },
 

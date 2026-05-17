@@ -13,11 +13,9 @@
 export const FEATURE_KEYS = {
   // Reporting
   DAILY_REPORTS: 'daily_reports',
-  AI_REPORT_SUMMARY: 'ai_report_summary',
 
-  // AI & Search
-  AI_SUPPLIER_SEARCH: 'ai_supplier_search',
-  AI_ASSISTANT: 'ai_assistant',
+  // NOTE: AI feature keys are no longer in this catalog — they live in
+  // ai-feature-keys.ts and are gated via useAiFeatures(), not useOrgFeatures().
 
   // Project Management
   UNLIMITED_PROJECTS: 'unlimited_projects',
