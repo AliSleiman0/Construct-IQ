@@ -8,7 +8,9 @@ import {
   ListItemText,
   Typography,
   Tooltip,
+  useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
@@ -24,6 +26,9 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const role = useAuthStore((s) => s.role);
+  const theme = useTheme();
+  const brand = theme.palette.primary.main;
+  const brandLight = theme.palette.primary.light;
 
   const items = role ? SIDEBAR_BY_ROLE[role] : [];
 
@@ -69,7 +74,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             width: 36,
             height: 36,
             borderRadius: 2,
-            background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+            background: `linear-gradient(135deg, ${brand} 0%, ${brandLight} 100%)`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -125,15 +130,15 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                     borderRadius: 1.5,
                     minHeight: 40,
                     color: active ? '#fff' : 'rgba(255,255,255,0.55)',
-                    backgroundColor: active ? 'rgba(25,118,210,0.25)' : 'transparent',
+                    backgroundColor: active ? alpha(brand, 0.25) : 'transparent',
                     '&:hover': {
                       backgroundColor: active
-                        ? 'rgba(25,118,210,0.3)'
+                        ? alpha(brand, 0.35)
                         : 'rgba(255,255,255,0.06)',
                       color: '#fff',
                     },
                     '&.Mui-selected': {
-                      backgroundColor: 'rgba(25,118,210,0.25)',
+                      backgroundColor: alpha(brand, 0.25),
                     },
                     transition: 'all 0.15s ease',
                   }}
@@ -141,7 +146,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                   <ListItemIcon
                     sx={{
                       minWidth: collapsed ? 'auto' : 36,
-                      color: active ? '#42a5f5' : 'rgba(255,255,255,0.4)',
+                      color: active ? brandLight : 'rgba(255,255,255,0.4)',
                     }}
                   >
                     <Icon sx={{ fontSize: 20 }} />

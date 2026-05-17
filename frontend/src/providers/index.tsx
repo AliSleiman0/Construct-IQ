@@ -6,8 +6,8 @@ import { QueryProvider } from './query-provider';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider>
-      <QueryProvider>
+    <QueryProvider>
+      <ThemeProvider>
         <SnackbarProvider
           maxSnack={4}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
@@ -15,7 +15,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         >
           {children}
         </SnackbarProvider>
-      </QueryProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </QueryProvider>
   );
 }
