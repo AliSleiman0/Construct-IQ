@@ -19,6 +19,10 @@ import {
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { UserStatus } from '../../common/enums';
+import { OrgSettingsService } from '../org-settings/org-settings.service';
+
+const DEFAULT_LOCKOUT_MAX_ATTEMPTS = 5;
+const DEFAULT_LOCKOUT_DURATION_MIN = 15;
 
 @Injectable()
 export class AuthService {
@@ -31,6 +35,7 @@ export class AuthService {
     private organizationModel: Model<OrganizationDocument>,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private orgSettingsService: OrgSettingsService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -73,11 +78,23 @@ export class AuthService {
       );
     }
 
+    // Lockout check: if locked and the window hasn't expired, refuse before
+    // even attempting the bcrypt compare. Message intentionally vague — we
+    // don't leak whether the supplied password was correct.
+    const now = new Date();
+    if (user.lockedUntil && user.lockedUntil > now) {
+      const unlockAt = user.lockedUntil.toISOString().slice(11, 19); // HH:MM:SS
+      throw new UnauthorizedException(
+        `Account temporarily locked. Try again at ${unlockAt} UTC.`,
+      );
+    }
+
     const isPasswordValid = await bcrypt.compare(
       dto.password,
       user.passwordHash,
     );
     if (!isPasswordValid) {
+      await this.recordFailedLogin(user._id, user.organizationId);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -85,18 +102,25 @@ export class AuthService {
     const roleNames = roles.map((r) => r.name);
     const isSuperAdmin = permissions.includes('manage:all');
 
+    // Per-org access-token TTL. Super Admins / org-less users fall back to
+    // the env default inside generateTokens().
+    const accessTtl = await this.resolveAccessTtl(user.organizationId);
     const tokens = await this.generateTokens(
       user._id,
       user.email,
       user.organizationId ?? '',
       isSuperAdmin,
+      accessTtl,
     );
 
+    // Reset lockout counters on first successful login. Cheap idempotent set.
     await this.userModel.updateOne(
       { _id: user._id },
       {
         refreshToken: this.hmacRefresh(tokens.refreshToken),
         lastLoginAt: new Date(),
+        failedLoginAttempts: 0,
+        lockedUntil: null,
       },
     );
 
@@ -140,11 +164,13 @@ export class AuthService {
       throw new ForbiddenException('Access denied');
     }
 
+    const accessTtl = await this.resolveAccessTtl(user.organizationId);
     const tokens = await this.generateTokens(
       user._id,
       user.email,
       user.organizationId ?? '',
       await this.userHasSuperAdminPermission(user.roleIds ?? []),
+      accessTtl,
     );
 
     await this.userModel.updateOne(
@@ -153,6 +179,63 @@ export class AuthService {
     );
 
     return tokens;
+  }
+
+  /** Atomically bump failed-login counter and lock when the org's threshold
+   *  is reached. Uses $inc so concurrent failures don't race. */
+  private async recordFailedLogin(
+    userId: string,
+    organizationId: string | null,
+  ): Promise<void> {
+    const { maxAttempts, durationMin } = await this.resolveLockoutPolicy(
+      organizationId,
+    );
+
+    // Atomic increment + read the resulting value.
+    const updated = await this.userModel.findOneAndUpdate(
+      { _id: userId },
+      { $inc: { failedLoginAttempts: 1 } },
+      { new: true, projection: { failedLoginAttempts: 1 } },
+    );
+
+    if (!updated) return;
+
+    if (updated.failedLoginAttempts >= maxAttempts) {
+      const lockedUntil = new Date(Date.now() + durationMin * 60_000);
+      await this.userModel.updateOne(
+        { _id: userId },
+        { lockedUntil, failedLoginAttempts: 0 },
+      );
+    }
+  }
+
+  private async resolveLockoutPolicy(organizationId: string | null) {
+    if (!organizationId) {
+      return {
+        maxAttempts: DEFAULT_LOCKOUT_MAX_ATTEMPTS,
+        durationMin: DEFAULT_LOCKOUT_DURATION_MIN,
+      };
+    }
+    const settings = await this.orgSettingsService.get(organizationId);
+    return {
+      maxAttempts:
+        settings?.lockoutMaxAttempts ?? DEFAULT_LOCKOUT_MAX_ATTEMPTS,
+      durationMin:
+        settings?.lockoutDurationMin ?? DEFAULT_LOCKOUT_DURATION_MIN,
+    };
+  }
+
+  /** Resolve the per-org access-token TTL. Returns a value compatible with
+   *  jsonwebtoken's `expiresIn` (e.g. `"15m"`). Super Admin / org-less users
+   *  get the env default. */
+  private async resolveAccessTtl(
+    organizationId: string | null,
+  ): Promise<string | undefined> {
+    if (!organizationId) return undefined;
+    const settings = await this.orgSettingsService.get(organizationId);
+    const min = settings?.sessionTimeoutMin;
+    if (typeof min !== 'number' || min <= 0) return undefined;
+    return `${min}m`;
   }
 
   private hmacRefresh(raw: string): string {
@@ -231,6 +314,7 @@ export class AuthService {
     email: string,
     organizationId: string | null,
     isSuperAdmin = false,
+    accessExpiresInOverride?: string,
   ) {
     const payload: JwtPayload = {
       sub: userId,
@@ -239,10 +323,14 @@ export class AuthService {
       isSuperAdmin,
     };
 
+    const accessExpiresIn =
+      accessExpiresInOverride ??
+      this.configService.get<string>('jwt.accessExpiresIn');
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('jwt.accessSecret'),
-        expiresIn: this.configService.get<string>('jwt.accessExpiresIn'),
+        expiresIn: accessExpiresIn,
       }),
       this.jwtService.signAsync(payload, {
         secret: this.configService.get<string>('jwt.refreshSecret'),

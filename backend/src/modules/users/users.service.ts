@@ -23,6 +23,7 @@ import { CreateOrgAdminDto } from './dto/create-org-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { UserStatus } from '../../common/enums';
+import { PasswordPolicyService } from '../auth/services/password-policy.service';
 
 const DEFAULT_LOCALIZATION: UserLocalization = {
   language: 'en',
@@ -67,6 +68,7 @@ export class UsersService {
     @InjectModel(Organization.name)
     private organizationModel: Model<OrganizationDocument>,
     @InjectConnection() private connection: Connection,
+    private readonly passwordPolicyService: PasswordPolicyService,
   ) {}
 
   /** Shape a user doc to the API response format the frontend expects.
@@ -200,6 +202,9 @@ export class UsersService {
     const role = await this.roleModel.findOne({ _id: dto.roleId }).lean();
     if (!role) throw new NotFoundException('Role not found');
 
+    // Enforce the org's password policy before we hash. Throws 400 on weak.
+    await this.passwordPolicyService.validate(dto.password, organizationId);
+
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     // create + role-attach in a single transaction (replica set required)
@@ -213,6 +218,7 @@ export class UsersService {
               organizationId,
               email: dto.email,
               passwordHash,
+              passwordChangedAt: new Date(),
               firstName: dto.firstName,
               lastName: dto.lastName,
               phone: dto.phone ?? null,

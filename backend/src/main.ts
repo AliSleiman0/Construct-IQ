@@ -15,6 +15,14 @@ async function bootstrap() {
   const nodeEnv = configService.get<string>('app.nodeEnv');
   const frontendUrl = configService.get<string>('app.frontendUrl');
 
+  // Trust X-Forwarded-For so `request.ip` reflects the original client.
+  // The IpAllowlistGuard depends on this; the Next.js rewrite proxy in dev
+  // and any production proxy/CDN both set X-Forwarded-For.
+  const expressInstance: any = app.getHttpAdapter().getInstance();
+  if (typeof expressInstance?.set === 'function') {
+    expressInstance.set('trust proxy', true);
+  }
+
   // Security middleware
   app.use(helmet());
   app.use(cookieParser());

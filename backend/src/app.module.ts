@@ -9,6 +9,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { OrgContextInterceptor } from './common/interceptors/org-context.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { IpAllowlistGuard } from './common/guards/ip-allowlist.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
@@ -79,6 +80,12 @@ import { SupportTicketsModule } from './modules/support-tickets/support-tickets.
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      // Registered AFTER JwtAuthGuard so `request.user` is populated.
+      // Nest evaluates global guards in registration order.
+      provide: APP_GUARD,
+      useClass: IpAllowlistGuard,
     },
     {
       provide: APP_FILTER,

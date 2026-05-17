@@ -3,6 +3,7 @@ export interface OrgSettings {
   organizationId: string;
   brandColor: string;
   theme: string;
+  emailSender?: string | null;
   timezone: string;
   currency: string;
   dateFormat: string;
@@ -12,7 +13,9 @@ export interface OrgSettings {
   twoFactorRequired: boolean;
   passwordPolicy: string;
   sessionTimeoutMin: number;
-  ssoEnabled: boolean;
+  lockoutMaxAttempts: number;
+  lockoutDurationMin: number;
+  allowedIps: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -20,6 +23,7 @@ export interface OrgSettings {
 export interface UpdateOrgSettingsPayload {
   brandColor?: string;
   theme?: string;
+  emailSender?: string | null;
   timezone?: string;
   currency?: string;
   dateFormat?: string;
@@ -29,5 +33,7 @@ export interface UpdateOrgSettingsPayload {
   twoFactorRequired?: boolean;
   passwordPolicy?: string;
   sessionTimeoutMin?: number;
-  ssoEnabled?: boolean;
+  lockoutMaxAttempts?: number;
+  lockoutDurationMin?: number;
+  allowedIps?: string[];
 }

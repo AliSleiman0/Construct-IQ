@@ -112,6 +112,18 @@ export class User {
   @Prop({ type: String, default: null })
   refreshToken: string | null;
 
+  // Account-lockout tracking. Reset to (0, null) on first successful login.
+  @Prop({ type: Number, default: 0 })
+  failedLoginAttempts: number;
+
+  @Prop({ type: Date, default: null })
+  lockedUntil: Date | null;
+
+  // Captured on password set/change. Reserved for a future password-rotation
+  // policy that reads it; not yet consulted at login.
+  @Prop({ type: Date, default: null })
+  passwordChangedAt: Date | null;
+
   // Replaces the old UserRole join collection. Populated against `Role`.
   @Prop({ type: [String], ref: 'Role', default: [] })
   roleIds: string[];

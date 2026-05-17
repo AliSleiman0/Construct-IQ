@@ -17,6 +17,9 @@ export class OrgSettings {
   @Prop({ type: String, default: 'auto' })
   theme: string;
 
+  @Prop({ type: String, default: null })
+  emailSender: string | null;
+
   @Prop({ type: String, default: 'America/Los_Angeles' })
   timezone: string;
 
@@ -38,14 +41,24 @@ export class OrgSettings {
   @Prop({ type: Boolean, default: false })
   twoFactorRequired: boolean;
 
-  @Prop({ type: String, default: 'standard' })
+  @Prop({ type: String, enum: ['standard', 'strong', 'strict'], default: 'standard' })
   passwordPolicy: string;
 
   @Prop({ type: Number, default: 120 })
   sessionTimeoutMin: number;
 
-  @Prop({ type: Boolean, default: false })
-  ssoEnabled: boolean;
+  // Account lockout policy. After `lockoutMaxAttempts` consecutive failed
+  // logins, the user is blocked for `lockoutDurationMin` minutes.
+  @Prop({ type: Number, default: 5 })
+  lockoutMaxAttempts: number;
+
+  @Prop({ type: Number, default: 15 })
+  lockoutDurationMin: number;
+
+  // IP allowlist. Empty array means "allow all". Each entry is an IPv4/IPv6
+  // address or CIDR range (e.g. `10.0.0.0/8`). Super Admins bypass.
+  @Prop({ type: [String], default: [] })
+  allowedIps: string[];
 
   createdAt: Date;
   updatedAt: Date;

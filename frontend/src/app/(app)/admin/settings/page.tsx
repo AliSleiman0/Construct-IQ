@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -44,11 +44,6 @@ import StraightenIcon from '@mui/icons-material/Straighten';
 import SquareFootIcon from '@mui/icons-material/SquareFoot';
 import LockOutlineIcon from '@mui/icons-material/LockOutlined';
 import LockIcon from '@mui/icons-material/Lock';
-import VpnKeyIcon from '@mui/icons-material/VpnKey';
-import DomainVerificationIcon from '@mui/icons-material/DomainVerification';
-import LaptopMacIcon from '@mui/icons-material/LaptopMac';
-import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
-import DesktopWindowsIcon from '@mui/icons-material/DesktopWindows';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
@@ -58,6 +53,11 @@ import { useSnackbar } from 'notistack';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { useOrgSettings } from '@/features/settings/hooks/useOrgSettings';
 import { useUpdateOrgSettings } from '@/features/settings/hooks/useSettingsMutations';
+import {
+  useCurrentOrg,
+  useUpdateOrganization,
+  useUploadOrgLogo,
+} from '@/features/organizations/hooks/useOrganizations';
 import { useAuthStore } from '@/store/auth.store';
 
 /* ------------------------------------------------------------------ */
@@ -101,7 +101,11 @@ interface Settings {
   twoFactorRequired: boolean;
   passwordPolicy: 'standard' | 'strong' | 'strict';
   sessionTimeoutMin: number;
-  ssoEnabled: boolean;
+  lockoutMaxAttempts: number;
+  lockoutDurationMin: number;
+  /** Local form value: newline/comma-separated string the user types into a
+   *  textarea. Normalized to `string[]` at save time. */
+  allowedIpsText: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -121,7 +125,7 @@ const DEFAULT_SETTINGS: Settings = {
   website: 'https://www.company-a.com',
   brandColor: '#1976d2',
   theme: 'auto',
-  emailSender: 'Company A via ConstructIQ',
+  emailSender: '',
   timezone: 'America/Los_Angeles',
   currency: 'USD',
   dateFormat: 'MMM D, YYYY',
@@ -140,7 +144,9 @@ const DEFAULT_SETTINGS: Settings = {
   twoFactorRequired: true,
   passwordPolicy: 'strong',
   sessionTimeoutMin: 120,
-  ssoEnabled: false,
+  lockoutMaxAttempts: 5,
+  lockoutDurationMin: 15,
+  allowedIpsText: '',
 };
 
 const SECTIONS = [
@@ -149,7 +155,7 @@ const SECTIONS = [
   { id: 'branding', label: 'Branding', icon: PaletteIcon },
   { id: 'localization', label: 'Localization', icon: LanguageIcon },
   { id: 'notifications', label: 'Notifications', icon: NotificationsIcon },
-  { id: 'security', label: 'Security & SSO', icon: SecurityIcon },
+  { id: 'security', label: 'Security', icon: SecurityIcon },
   { id: 'danger', label: 'Danger zone', icon: WarningIcon },
 ];
 
@@ -170,12 +176,6 @@ const BRAND_COLORS = [
   { name: 'Deep Orange', value: '#e64a19' },
   { name: 'Slate', value: '#455a64' },
   { name: 'Plum', value: '#7b1fa2' },
-];
-
-const SESSIONS = [
-  { device: 'MacBook Pro \u00B7 Chrome 124', loc: 'San Francisco, CA', ip: '73.114.x.x', at: 'Active now', current: true, iconType: 'laptop' },
-  { device: 'iPhone 15 \u00B7 iOS app', loc: 'San Francisco, CA', ip: '73.114.x.x', at: '2 hours ago', current: false, iconType: 'phone' },
-  { device: 'Windows 11 \u00B7 Edge', loc: 'Portland, OR', ip: '184.32.x.x', at: 'Yesterday at 4:18 PM', current: false, iconType: 'desktop' },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -390,21 +390,36 @@ export default function AdminSettingsPage() {
   const { enqueueSnackbar } = useSnackbar();
   const user = useAuthStore((st) => st.user);
   const { data: orgSettings } = useOrgSettings();
+  const { data: orgDoc } = useCurrentOrg();
   const updateSettings = useUpdateOrgSettings();
+  const updateOrg = useUpdateOrganization();
+  const uploadLogo = useUploadOrgLogo();
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const initial = useMemo<Settings>(() => {
-    const org = user?.organization;
+    const fallback = user?.organization;
+    const org = orgDoc ?? fallback;
     const os = orgSettings;
     const notifs = (os?.notifications ?? {}) as Record<string, any>;
     return {
       ...DEFAULT_SETTINGS,
       name: org?.name ?? DEFAULT_SETTINGS.name,
+      shortName: (org as any)?.shortName ?? DEFAULT_SETTINGS.shortName,
       slug: org?.slug ?? DEFAULT_SETTINGS.slug,
+      industry: (org as any)?.industry ?? DEFAULT_SETTINGS.industry,
+      size: (org as any)?.size ?? DEFAULT_SETTINGS.size,
+      description: (org as any)?.description ?? DEFAULT_SETTINGS.description,
+      street: (org as any)?.street ?? DEFAULT_SETTINGS.street,
+      city: (org as any)?.city ?? DEFAULT_SETTINGS.city,
+      state: (org as any)?.state ?? DEFAULT_SETTINGS.state,
+      zip: (org as any)?.zip ?? DEFAULT_SETTINGS.zip,
+      country: (org as any)?.country ?? DEFAULT_SETTINGS.country,
       phone: (org as any)?.phone ?? DEFAULT_SETTINGS.phone,
       publicEmail: (org as any)?.email ?? DEFAULT_SETTINGS.publicEmail,
       website: (org as any)?.website ?? DEFAULT_SETTINGS.website,
       brandColor: os?.brandColor ?? DEFAULT_SETTINGS.brandColor,
       theme: (os?.theme ?? DEFAULT_SETTINGS.theme) as 'light' | 'dark' | 'auto',
+      emailSender: os?.emailSender ?? DEFAULT_SETTINGS.emailSender,
       timezone: os?.timezone ?? DEFAULT_SETTINGS.timezone,
       currency: os?.currency ?? DEFAULT_SETTINGS.currency,
       dateFormat: os?.dateFormat ?? DEFAULT_SETTINGS.dateFormat,
@@ -413,7 +428,9 @@ export default function AdminSettingsPage() {
       twoFactorRequired: os?.twoFactorRequired ?? DEFAULT_SETTINGS.twoFactorRequired,
       passwordPolicy: (os?.passwordPolicy ?? DEFAULT_SETTINGS.passwordPolicy) as 'standard' | 'strong' | 'strict',
       sessionTimeoutMin: os?.sessionTimeoutMin ?? DEFAULT_SETTINGS.sessionTimeoutMin,
-      ssoEnabled: os?.ssoEnabled ?? DEFAULT_SETTINGS.ssoEnabled,
+      lockoutMaxAttempts: os?.lockoutMaxAttempts ?? DEFAULT_SETTINGS.lockoutMaxAttempts,
+      lockoutDurationMin: os?.lockoutDurationMin ?? DEFAULT_SETTINGS.lockoutDurationMin,
+      allowedIpsText: (os?.allowedIps ?? []).join('\n'),
       notif: {
         newProject: notifs.projectStatusChange ?? DEFAULT_SETTINGS.notif.newProject,
         invoiceDue: notifs.budgetAlert ?? DEFAULT_SETTINGS.notif.invoiceDue,
@@ -424,7 +441,7 @@ export default function AdminSettingsPage() {
         securityAlerts: notifs.poApproval ?? DEFAULT_SETTINGS.notif.securityAlerts,
       },
     };
-  }, [user, orgSettings]);
+  }, [user, orgSettings, orgDoc]);
 
   const [s, setS] = useState<Settings>(initial);
   useEffect(() => { setS(initial); }, [initial]);
@@ -496,23 +513,53 @@ export default function AdminSettingsPage() {
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 3, mb: 3 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
                   <Avatar
+                    src={orgDoc?.logoUrl ?? user?.organization.logoUrl ?? undefined}
                     sx={{
                       width: 96,
                       height: 96,
                       borderRadius: 4,
-                      background: `linear-gradient(135deg, ${s.brandColor}, ${s.brandColor}aa)`,
+                      background: orgDoc?.logoUrl
+                        ? undefined
+                        : `linear-gradient(135deg, ${s.brandColor}, ${s.brandColor}aa)`,
                       fontSize: 36,
                       fontWeight: 600,
                       letterSpacing: 1,
                     }}
                   >
-                    {s.shortName.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                    {(s.shortName || s.name).split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
                   </Avatar>
-                  <Button variant="outlined" color="inherit" size="small" startIcon={<UploadIcon />}>
-                    Upload logo
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (!file || !orgDoc) return;
+                      if (file.size > 2 * 1024 * 1024) {
+                        enqueueSnackbar('Logo must be 2 MB or smaller.', { variant: 'error' });
+                        return;
+                      }
+                      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                        enqueueSnackbar('Logo must be PNG, JPEG, or WebP.', { variant: 'error' });
+                        return;
+                      }
+                      uploadLogo.mutate({ id: orgDoc.id, file });
+                    }}
+                  />
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    startIcon={<UploadIcon />}
+                    disabled={!orgDoc || uploadLogo.isPending}
+                    onClick={() => logoInputRef.current?.click()}
+                  >
+                    {uploadLogo.isPending ? 'Uploading…' : 'Upload logo'}
                   </Button>
                   <Typography variant="caption" color="text.secondary" textAlign="center">
-                    PNG or SVG &middot; max 2 MB
+                    PNG, JPEG, or WebP &middot; max 2 MB
                   </Typography>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -801,9 +848,9 @@ export default function AdminSettingsPage() {
                     Minimum complexity for member passwords
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 1.5 }}>
-                    <RadioCard value="standard" current={s.passwordPolicy} onChange={(v) => set({ passwordPolicy: v as Settings['passwordPolicy'] })} title="Standard" hint="8+ chars, mixed case" icon={LockOutlineIcon} />
-                    <RadioCard value="strong" current={s.passwordPolicy} onChange={(v) => set({ passwordPolicy: v as Settings['passwordPolicy'] })} title="Strong" hint="12+ chars, special chars, no reuse" icon={LockIcon} />
-                    <RadioCard value="strict" current={s.passwordPolicy} onChange={(v) => set({ passwordPolicy: v as Settings['passwordPolicy'] })} title="Strict" hint="14+ chars, 90-day rotation" icon={SecurityIcon} />
+                    <RadioCard value="standard" current={s.passwordPolicy} onChange={(v) => set({ passwordPolicy: v as Settings['passwordPolicy'] })} title="Standard" hint="8+ chars, upper, lower, digit" icon={LockOutlineIcon} />
+                    <RadioCard value="strong" current={s.passwordPolicy} onChange={(v) => set({ passwordPolicy: v as Settings['passwordPolicy'] })} title="Strong" hint="12+ chars, plus a special character" icon={LockIcon} />
+                    <RadioCard value="strict" current={s.passwordPolicy} onChange={(v) => set({ passwordPolicy: v as Settings['passwordPolicy'] })} title="Strict" hint="14+ chars, plus no whitespace" icon={SecurityIcon} />
                   </Box>
                 </Box>
 
@@ -811,7 +858,7 @@ export default function AdminSettingsPage() {
                   <Box>
                     <Typography variant="body2" fontWeight={500}>Session timeout</Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                      Automatically sign members out after inactivity
+                      Access tokens expire after this much time. Applies to new logins.
                     </Typography>
                   </Box>
                   <TextField
@@ -830,63 +877,46 @@ export default function AdminSettingsPage() {
                 </Box>
               </SettingsSection>
 
-              <SettingsSection title="Single sign-on (SSO)" subtitle="Use your existing identity provider for Company A logins.">
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: '#e3f2fd', color: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <VpnKeyIcon sx={{ fontSize: 22 }} />
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>SAML 2.0 SSO</Typography>
-                      <Typography variant="caption" color="text.secondary">Okta, Azure AD, OneLogin, and more</Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <EnterpriseBadge />
-                    <Button size="small" variant="outlined" onClick={() => enqueueSnackbar('Enterprise trial request sent.', { variant: 'success' })}>
-                      Request trial
-                    </Button>
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Box sx={{ width: 40, height: 40, borderRadius: 2, bgcolor: '#fff4e5', color: 'warning.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <DomainVerificationIcon sx={{ fontSize: 22 }} />
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" fontWeight={500}>SCIM provisioning</Typography>
-                      <Typography variant="caption" color="text.secondary">Auto-provision and de-provision users from your IdP</Typography>
-                    </Box>
-                  </Box>
-                  <EnterpriseBadge />
-                </Box>
+              <SettingsSection title="Account lockout" subtitle="Block sign-in after repeated failures to defend against brute-force attacks.">
+                <FieldGrid>
+                  <TextField
+                    label="Max failed attempts"
+                    type="number"
+                    size="small"
+                    fullWidth
+                    value={s.lockoutMaxAttempts}
+                    onChange={(e) =>
+                      set({ lockoutMaxAttempts: Number(e.target.value) || 0 })
+                    }
+                    inputProps={{ min: 3, max: 20 }}
+                    helperText="Between 3 and 20"
+                  />
+                  <TextField
+                    label="Lockout duration (minutes)"
+                    type="number"
+                    size="small"
+                    fullWidth
+                    value={s.lockoutDurationMin}
+                    onChange={(e) =>
+                      set({ lockoutDurationMin: Number(e.target.value) || 0 })
+                    }
+                    inputProps={{ min: 1, max: 1440 }}
+                    helperText="Between 1 and 1440 minutes"
+                  />
+                </FieldGrid>
               </SettingsSection>
 
-              <SettingsSection title="Active sessions" subtitle="Devices currently signed in to your admin account.">
-                {SESSIONS.map((d, i) => {
-                  const DeviceIcon = d.iconType === 'phone' ? PhoneIphoneIcon : d.iconType === 'desktop' ? DesktopWindowsIcon : LaptopMacIcon;
-                  return (
-                    <Box key={i} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, py: 1.5, borderBottom: i < SESSIONS.length - 1 ? '1px solid' : 'none', borderColor: 'divider' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <DeviceIcon sx={{ fontSize: 22, color: 'text.secondary' }} />
-                        <Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography variant="body2" fontWeight={500}>{d.device}</Typography>
-                            {d.current && <Chip label="This device" color="success" size="small" sx={{ height: 20, fontSize: 11 }} />}
-                          </Box>
-                          <Typography variant="caption" color="text.secondary">
-                            {d.loc} &middot; {d.ip} &middot; {d.at}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      {!d.current && (
-                        <Button size="small" variant="text" color="error" onClick={() => enqueueSnackbar('Session revoked.', { variant: 'success' })}>
-                          Revoke
-                        </Button>
-                      )}
-                    </Box>
-                  );
-                })}
+              <SettingsSection title="IP allowlist" subtitle="Restrict platform access to specific networks. Leave empty to allow all. Super Admins are never blocked.">
+                <TextField
+                  multiline
+                  minRows={4}
+                  fullWidth
+                  size="small"
+                  value={s.allowedIpsText}
+                  onChange={(e) => set({ allowedIpsText: e.target.value })}
+                  placeholder={'e.g.\n10.0.0.0/8\n192.168.1.42\n2001:db8::/32'}
+                  helperText="One entry per line or comma-separated. IPv4, IPv6, and CIDR ranges supported."
+                />
               </SettingsSection>
             </>
           )}
@@ -953,33 +983,77 @@ export default function AdminSettingsPage() {
             <Button
               variant="contained"
               startIcon={<SaveIcon />}
+              disabled={updateOrg.isPending || updateSettings.isPending}
               onClick={async () => {
-                try {
-                  await updateSettings.mutateAsync({
-                    brandColor: s.brandColor,
-                    theme: s.theme,
-                    timezone: s.timezone,
-                    currency: s.currency,
-                    dateFormat: s.dateFormat,
-                    weekStart: s.weekStart,
-                    measurement: s.measurement,
-                    twoFactorRequired: s.twoFactorRequired,
-                    passwordPolicy: s.passwordPolicy,
-                    sessionTimeoutMin: s.sessionTimeoutMin,
-                    ssoEnabled: s.ssoEnabled,
-                    notifications: {
-                      projectStatusChange: s.notif.newProject,
-                      budgetAlert: s.notif.invoiceDue,
-                      deliveryUpdate: s.notif.invoicePaid,
-                      newIssue: s.notif.ticketUpdate,
-                      emailDigest: s.notif.weeklyDigest ? 'weekly' : 'never',
-                      newMember: s.notif.productNews,
-                      poApproval: s.notif.securityAlerts,
-                    },
-                  });
+                if (!orgDoc) {
+                  enqueueSnackbar('Organization not loaded yet.', { variant: 'error' });
+                  return;
+                }
+                const orgPayload = {
+                  name: s.name,
+                  slug: s.slug,
+                  shortName: s.shortName || null,
+                  industry: s.industry || null,
+                  size: s.size || null,
+                  description: s.description || null,
+                  street: s.street || null,
+                  city: s.city || null,
+                  state: s.state || null,
+                  zip: s.zip || null,
+                  country: s.country || null,
+                  phone: s.phone || null,
+                  email: s.publicEmail || null,
+                  website: s.website || null,
+                };
+                const settingsPayload = {
+                  brandColor: s.brandColor,
+                  theme: s.theme,
+                  emailSender: s.emailSender || null,
+                  timezone: s.timezone,
+                  currency: s.currency,
+                  dateFormat: s.dateFormat,
+                  weekStart: s.weekStart,
+                  measurement: s.measurement,
+                  twoFactorRequired: s.twoFactorRequired,
+                  passwordPolicy: s.passwordPolicy,
+                  sessionTimeoutMin: s.sessionTimeoutMin,
+                  lockoutMaxAttempts: s.lockoutMaxAttempts,
+                  lockoutDurationMin: s.lockoutDurationMin,
+                  allowedIps: Array.from(
+                    new Set(
+                      s.allowedIpsText
+                        .split(/[\s,]+/)
+                        .map((entry) => entry.trim())
+                        .filter((entry) => entry.length > 0),
+                    ),
+                  ),
+                  notifications: {
+                    projectStatusChange: s.notif.newProject,
+                    budgetAlert: s.notif.invoiceDue,
+                    deliveryUpdate: s.notif.invoicePaid,
+                    newIssue: s.notif.ticketUpdate,
+                    emailDigest: s.notif.weeklyDigest ? 'weekly' : 'never',
+                    newMember: s.notif.productNews,
+                    poApproval: s.notif.securityAlerts,
+                  },
+                };
+                const results = await Promise.allSettled([
+                  updateOrg.mutateAsync({ id: orgDoc.id, payload: orgPayload }),
+                  updateSettings.mutateAsync(settingsPayload),
+                ]);
+                const failures = results.filter(
+                  (r): r is PromiseRejectedResult => r.status === 'rejected',
+                );
+                if (failures.length === 0) {
                   enqueueSnackbar('Settings saved.', { variant: 'success' });
-                } catch {
-                  enqueueSnackbar('Failed to save settings.', { variant: 'error' });
+                } else {
+                  const msg = failures
+                    .map((f) => {
+                      const raw = (f.reason as any)?.response?.data?.message;
+                      return Array.isArray(raw) ? raw.join(', ') : raw ?? 'Save failed.';
+                    })
+                    .join(' ');
+                  enqueueSnackbar(msg, { variant: 'error' });
                 }
               }}
             >

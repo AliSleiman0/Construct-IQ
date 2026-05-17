@@ -1,4 +1,16 @@
-import { IsBoolean, IsInt, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class UpdateOrgSettingsDto {
   @IsOptional()
@@ -8,6 +20,11 @@ export class UpdateOrgSettingsDto {
   @IsOptional()
   @IsString()
   theme?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  emailSender?: string | null;
 
   @IsOptional()
   @IsString()
@@ -38,7 +55,7 @@ export class UpdateOrgSettingsDto {
   twoFactorRequired?: boolean;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['standard', 'strong', 'strict'])
   passwordPolicy?: string;
 
   @IsOptional()
@@ -48,6 +65,24 @@ export class UpdateOrgSettingsDto {
   sessionTimeoutMin?: number;
 
   @IsOptional()
-  @IsBoolean()
-  ssoEnabled?: boolean;
+  @IsInt()
+  @Min(3)
+  @Max(20)
+  lockoutMaxAttempts?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  lockoutDurationMin?: number;
+
+  // IPv4/IPv6 addresses or CIDR ranges. Empty array clears the allowlist.
+  // Each entry validated as a string ≤ 64 chars; runtime IP/CIDR validation
+  // happens in OrgSettingsService.update().
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  @MaxLength(64, { each: true })
+  allowedIps?: string[];
 }
