@@ -119,6 +119,14 @@ import {
   FeatureSchema,
 } from '../../modules/features/schemas/feature.schema';
 import {
+  AiFeature,
+  AiFeatureSchema,
+} from '../../modules/ai-features/schemas/ai-feature.schema';
+import {
+  AiPlan,
+  AiPlanSchema,
+} from '../../modules/ai-plans/schemas/ai-plan.schema';
+import {
   OrgSettings,
   OrgSettingsSchema,
 } from '../../modules/org-settings/schemas/org-settings.schema';
@@ -155,6 +163,8 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: Variation.name, schema: VariationSchema },
   { name: Valuation.name, schema: ValuationSchema },
   { name: Feature.name, schema: FeatureSchema },
+  { name: AiFeature.name, schema: AiFeatureSchema },
+  { name: AiPlan.name, schema: AiPlanSchema },
   { name: OrgSettings.name, schema: OrgSettingsSchema },
 ]);
 

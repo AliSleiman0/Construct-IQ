@@ -24,11 +24,13 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 import { ProcurementModule } from './modules/procurement/procurement.module';
 import { BudgetModule } from './modules/budget/budget.module';
 import { PlansModule } from './modules/plans/plans.module';
+import { AiPlansModule } from './modules/ai-plans/ai-plans.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { UnitsModule } from './modules/units/units.module';
 import { SurveyorModule } from './modules/surveyor/surveyor.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { FeaturesModule } from './modules/features/features.module';
+import { AiFeaturesModule } from './modules/ai-features/ai-features.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OrgSettingsModule } from './modules/org-settings/org-settings.module';
 import { SupportTicketsModule } from './modules/support-tickets/support-tickets.module';
@@ -67,11 +69,13 @@ import { SupportTicketsModule } from './modules/support-tickets/support-tickets.
     ProcurementModule,
     BudgetModule,
     PlansModule,
+    AiPlansModule,
     BillingModule,
     UnitsModule,
     SurveyorModule,
     DocumentsModule,
     FeaturesModule,
+    AiFeaturesModule,
     DashboardModule,
     OrgSettingsModule,
     SupportTicketsModule,

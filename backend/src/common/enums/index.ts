@@ -144,6 +144,12 @@ export enum PlanTier {
   ENTERPRISE = 'ENTERPRISE',
 }
 
+export enum AiPlanTier {
+  ESSENTIALS = 'ESSENTIALS',
+  ADVANCED = 'ADVANCED',
+  PRO = 'PRO',
+}
+
 export enum InvoiceStatus {
   DRAFT = 'DRAFT',
   ISSUED = 'ISSUED',
