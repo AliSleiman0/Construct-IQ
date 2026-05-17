@@ -66,6 +66,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isLoading: false,
     }),
 
+  refreshMe: async () => {
+    try {
+      const user = await authApi.getMe();
+      set({
+        user,
+        role: roleFromUser(user.roles),
+        isAuthenticated: true,
+      });
+    } catch (err) {
+      console.error('refreshMe failed', err);
+    }
+  },
+
   logout: () =>
     set({ user: null, role: null, isAuthenticated: false, isLoading: false }),
 }));

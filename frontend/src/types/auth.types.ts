@@ -4,7 +4,19 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
+  shortName?: string | null;
+  industry?: string | null;
+  size?: string | null;
+  description?: string | null;
   logoUrl?: string | null;
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
   maxUsers?: number | null;
 }
 
@@ -46,6 +58,8 @@ export interface AuthState {
   loginWithEmail: (credentials: LoginCredentials) => Promise<string>;
   /** Synchronously hydrate the store from a user resolved by the Server Component layout. */
   hydrateFromUser: (user: AuthUser) => void;
+  /** Re-fetch /auth/me and update the store. Used after mutations that change user/org. */
+  refreshMe: () => Promise<void>;
   /** Clear local auth state. The backend cookies are cleared by /auth/logout via useLogout. */
   logout: () => void;
 }

@@ -25,10 +25,6 @@ export class CreateOrganizationDto {
 
   @IsString()
   @IsOptional()
-  address?: string;
-
-  @IsString()
-  @IsOptional()
   phone?: string;
 
   @IsString()

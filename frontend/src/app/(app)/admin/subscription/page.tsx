@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Paper,
@@ -12,36 +12,62 @@ import {
 } from '@mui/material';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import GroupIcon from '@mui/icons-material/Group';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import CloudIcon from '@mui/icons-material/Cloud';
 import InfoIcon from '@mui/icons-material/Info';
-import { useSnackbar } from 'notistack';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { usePlans } from '@/features/plans/hooks/usePlans';
 import { useOrgDashboard } from '@/features/dashboard/hooks/useOrgDashboard';
+import { useCurrentOrg, useSetOrgPlan } from '@/features/organizations/hooks/useOrganizations';
+import { ChangePlanModal, type PlanOption } from '@/features/organizations/components/ChangePlanModal';
 
+const TIER_ORDER = ['STARTER', 'PRO', 'ENTERPRISE'] as const;
 const USAGE_ICONS = { Members: GroupIcon, Projects: FolderOpenIcon, Storage: CloudIcon };
 const USAGE_COLORS = { Members: 'primary' as const, Projects: 'info' as const, Storage: 'success' as const };
 
 export default function AdminSubscriptionPage() {
-  const { enqueueSnackbar } = useSnackbar();
   const { data: plans = [], isLoading: plansLoading } = usePlans();
   const { data: dashboard, isLoading: dashLoading } = useOrgDashboard();
+  const { data: org, isLoading: orgLoading } = useCurrentOrg();
+  const setPlan = useSetOrgPlan();
 
-  // Pick the current plan (for now use the popular one or first PRO plan)
-  const currentPlan = useMemo(() => {
-    const popular = plans.find((p: any) => p.isPopular);
-    if (popular) return popular;
-    const pro = plans.find((p: any) => p.tier === 'PRO');
-    return pro ?? plans[0] ?? null;
-  }, [plans]);
+  const sortedPlans = useMemo<PlanOption[]>(
+    () =>
+      [...plans]
+        .map((p: any): PlanOption => ({
+          id: p._id ?? p.id,
+          name: p.name,
+          tier: p.tier,
+          pricePerMonth: p.pricePerMonth,
+          maxUsers: p.maxUsers,
+          maxProjects: p.maxProjects,
+          features: p.features,
+          isPopular: p.isPopular,
+        }))
+        .sort(
+          (a, b) =>
+            (TIER_ORDER as readonly string[]).indexOf(a.tier) -
+            (TIER_ORDER as readonly string[]).indexOf(b.tier),
+        ),
+    [plans],
+  );
+
+  const currentPlan = useMemo(
+    () => sortedPlans.find((p) => p.id === org?.planId) ?? null,
+    [sortedPlans, org?.planId],
+  );
+
+  const currentIdx = currentPlan ? sortedPlans.findIndex((p) => p.id === currentPlan.id) : -1;
+  const nextUp = currentIdx >= 0 ? sortedPlans[currentIdx + 1] ?? null : sortedPlans[0] ?? null;
+  const nextDown = currentIdx > 0 ? sortedPlans[currentIdx - 1] ?? null : null;
 
   const features = currentPlan?.features ?? [];
-  const maxUsers = currentPlan?.maxUsers ?? 50;
-  const maxProjects = currentPlan?.maxProjects ?? 50;
+  const maxUsers = currentPlan?.maxUsers ?? 0;
+  const maxProjects = currentPlan?.maxProjects ?? 0;
 
   const usersUsed = dashboard?.teamMemberCount ?? 0;
   const projectsUsed = dashboard?.totalProjectCount ?? 0;
@@ -52,7 +78,32 @@ export default function AdminSubscriptionPage() {
     { label: 'Storage', current: 8.2, max: 100, unit: 'GB' },
   ];
 
-  const isLoading = plansLoading || dashLoading;
+  const [modalOpen, setModalOpen] = useState(false);
+  const [preselect, setPreselect] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  const handleConfirm = (planId: string) => {
+    if (!org) return;
+    setModalError(null);
+    setPlan.mutate(
+      { orgId: org.id, planId },
+      {
+        onSuccess: () => setModalOpen(false),
+        onError: (err: any) => {
+          const raw = err?.response?.data?.message ?? 'Failed to update plan.';
+          setModalError(Array.isArray(raw) ? raw.join(', ') : String(raw));
+        },
+      },
+    );
+  };
+
+  const openModal = (preselectId: string | null) => {
+    setPreselect(preselectId);
+    setModalError(null);
+    setModalOpen(true);
+  };
+
+  const isLoading = plansLoading || dashLoading || orgLoading;
 
   if (isLoading) {
     return (
@@ -76,16 +127,25 @@ export default function AdminSubscriptionPage() {
           <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 3, mb: 3 }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                <Chip label="ACTIVE" color="success" size="small" sx={{ fontWeight: 600 }} />
-                <Typography variant="caption" color="text.secondary">
-                  Renews May 28, 2026
-                </Typography>
+                <Chip
+                  label={currentPlan ? 'ACTIVE' : 'NO PLAN'}
+                  color={currentPlan ? 'success' : 'default'}
+                  size="small"
+                  sx={{ fontWeight: 600 }}
+                />
+                {currentPlan && (
+                  <Typography variant="caption" color="text.secondary">
+                    Renews May 28, 2026
+                  </Typography>
+                )}
               </Box>
               <Typography variant="h4" fontWeight={500} sx={{ mb: 0.5 }}>
-                {currentPlan?.name ?? 'Professional'}
+                {currentPlan?.name ?? 'No plan selected'}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                <Typography sx={{ fontSize: 36, fontWeight: 500 }}>${currentPlan?.pricePerMonth ?? 299}</Typography>
+                <Typography sx={{ fontSize: 36, fontWeight: 500 }}>
+                  ${currentPlan?.pricePerMonth ?? 0}
+                </Typography>
                 <Typography variant="body2" color="text.secondary">/ month</Typography>
               </Box>
             </Box>
@@ -147,20 +207,19 @@ export default function AdminSubscriptionPage() {
             <AppButton
               variant="contained"
               startIcon={<ArrowUpwardIcon />}
-              onClick={() =>
-                enqueueSnackbar('Enterprise upgrade quote requested. Our team will reach out within 1 business day.', { variant: 'success' })
-              }
+              disabled={!org || !nextUp}
+              onClick={() => openModal(nextUp?.id ?? null)}
             >
-              Upgrade to Enterprise
+              {nextUp ? `Upgrade to ${nextUp.name}` : 'Upgrade'}
             </AppButton>
             <AppButton
               variant="outlined"
               color="inherit"
-              onClick={() =>
-                enqueueSnackbar('Downgrade flow is not available in this demo.', { variant: 'error' })
-              }
+              startIcon={<ArrowDownwardIcon />}
+              disabled={!org || !nextDown}
+              onClick={() => openModal(nextDown?.id ?? null)}
             >
-              Downgrade
+              {nextDown ? `Downgrade to ${nextDown.name}` : 'Downgrade'}
             </AppButton>
           </Box>
         </Paper>
@@ -218,11 +277,27 @@ export default function AdminSubscriptionPage() {
           >
             <InfoIcon sx={{ fontSize: 18, color: 'info.main', flexShrink: 0, mt: 0.125 }} />
             <Typography variant="caption" sx={{ lineHeight: 1.5, color: 'text.primary' }}>
-              You&apos;re using <strong>{Math.round((usersUsed / maxUsers) * 100)}%</strong> of your members and <strong>{Math.round((projectsUsed / maxProjects) * 100)}%</strong> of your projects. Plenty of room.
+              You&apos;re using{' '}
+              <strong>{maxUsers > 0 ? Math.round((usersUsed / maxUsers) * 100) : 0}%</strong>{' '}
+              of your members and{' '}
+              <strong>{maxProjects > 0 ? Math.round((projectsUsed / maxProjects) * 100) : 0}%</strong>{' '}
+              of your projects. Plenty of room.
             </Typography>
           </Box>
         </Paper>
       </Box>
+
+      <ChangePlanModal
+        open={modalOpen}
+        plans={sortedPlans}
+        currentPlanId={org?.planId ?? null}
+        preselectedPlanId={preselect}
+        usage={{ users: usersUsed, projects: projectsUsed }}
+        isLoading={setPlan.isPending}
+        error={modalError}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handleConfirm}
+      />
     </Box>
   );
 }

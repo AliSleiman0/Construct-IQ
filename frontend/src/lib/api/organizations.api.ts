@@ -4,9 +4,17 @@ export interface OrgListItem {
   id: string;
   name: string;
   slug: string;
+  shortName?: string | null;
+  industry?: string | null;
+  size?: string | null;
+  description?: string | null;
   logoUrl?: string | null;
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
   email?: string | null;
-  address?: string | null;
   phone?: string | null;
   website?: string | null;
   maxUsers?: number | null;
@@ -21,7 +29,6 @@ export interface CreateOrgPayload {
   name: string;
   slug: string;
   email?: string;
-  address?: string;
   phone?: string;
   website?: string;
   maxUsers?: number;
@@ -33,11 +40,20 @@ export interface CreateOrgPayload {
 
 export interface UpdateOrgPayload {
   name?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  website?: string;
-  logoUrl?: string;
+  slug?: string;
+  shortName?: string | null;
+  industry?: string | null;
+  size?: string | null;
+  description?: string | null;
+  street?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  logoUrl?: string | null;
   maxUsers?: number | null;
 }
 
@@ -74,6 +90,15 @@ export const organizationsApi = {
 
   setPlan: async (id: string, planId: string | null): Promise<{ id: string; name: string; planId: string | null }> => {
     const res = await apiClient.patch(`/organizations/${id}/plan`, { planId });
+    return res.data;
+  },
+
+  uploadLogo: async (id: string, file: File): Promise<OrgListItem> => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await apiClient.post<OrgListItem>(`/organizations/${id}/logo`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
   },
 };

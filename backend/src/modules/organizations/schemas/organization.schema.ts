@@ -14,10 +14,34 @@ export class Organization {
   slug: string;
 
   @Prop({ type: String, default: null })
+  shortName: string | null;
+
+  @Prop({ type: String, default: null })
+  industry: string | null;
+
+  @Prop({ type: String, default: null })
+  size: string | null;
+
+  @Prop({ type: String, default: null })
+  description: string | null;
+
+  @Prop({ type: String, default: null })
   logoUrl: string | null;
 
   @Prop({ type: String, default: null })
-  address: string | null;
+  street: string | null;
+
+  @Prop({ type: String, default: null })
+  city: string | null;
+
+  @Prop({ type: String, default: null })
+  state: string | null;
+
+  @Prop({ type: String, default: null })
+  zip: string | null;
+
+  @Prop({ type: String, default: null })
+  country: string | null;
 
   @Prop({ type: String, default: null })
   phone: string | null;

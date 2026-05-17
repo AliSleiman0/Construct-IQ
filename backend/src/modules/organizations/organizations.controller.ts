@@ -1,6 +1,9 @@
 import {
   Controller, Get, Post, Patch, Param, Body, UseGuards, ForbiddenException,
+  UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { createId } from '@paralleldrive/cuid2';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { OrganizationsService } from './organizations.service';
@@ -10,7 +13,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { PERMISSIONS } from '../../common/constants/permissions';
+import { S3Service } from '../uploads/s3.service';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
+
+const ALLOWED_LOGO_MIME = ['image/png', 'image/jpeg', 'image/webp'];
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 class SetActiveDto {
   @IsBoolean()
@@ -26,7 +33,10 @@ class SetPlanDto {
 @Controller('organizations')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(
+    private readonly organizationsService: OrganizationsService,
+    private readonly s3Service: S3Service,
+  ) {}
 
   /** Super Admin only — list all organizations on the platform */
   @Get()
@@ -71,14 +81,46 @@ export class OrganizationsController {
     return this.organizationsService.setActive(id, dto.isActive);
   }
 
-  /** Super Admin only — assign a subscription plan to an org */
+  /** Assign a subscription plan. Super Admin: any org. Org Admin: own org only. */
   @Patch(':id/plan')
-  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.MANAGE)
+  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.UPDATE)
   setPlan(@Param('id') id: string, @Body() dto: SetPlanDto, @CurrentUser() user: JwtPayload) {
-    if (!user.isSuperAdmin) {
-      throw new ForbiddenException('Only Super Admins can set organization plans');
+    if (!user.isSuperAdmin && user.organizationId !== id) {
+      throw new ForbiddenException("You can only change your own organization's plan");
     }
     return this.organizationsService.setPlan(id, dto.planId ?? null);
+  }
+
+  /** Upload a logo image. Super Admin: any org. Org Admin: own org only. */
+  @Post(':id/logo')
+  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.UPDATE)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: LOGO_MAX_BYTES },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_LOGO_MIME.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Logo must be PNG, JPEG, or WebP'), false);
+        }
+      },
+    }),
+  )
+  async uploadLogo(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    if (!user.isSuperAdmin && user.organizationId !== id) {
+      throw new ForbiddenException("You can only update your own organization's logo");
+    }
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+    const ext = file.mimetype.split('/')[1];
+    const key = `org-logos/${id}/${createId()}.${ext}`;
+    const url = await this.s3Service.uploadFile(file.buffer, key, file.mimetype);
+    return this.organizationsService.setLogo(id, user.organizationId, url, user.isSuperAdmin);
   }
 
   @Get(':id/stats')

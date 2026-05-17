@@ -37,7 +37,7 @@ const editSchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE', 'SUSPENDED']),
 });
 
-type CreateFormValues = z.infer<typeof createSchema>;
+export type CreateFormValues = z.infer<typeof createSchema>;
 type EditFormValues = z.infer<typeof editSchema>;
 
 const STATUS_OPTIONS = [

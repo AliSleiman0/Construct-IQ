@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Box,
   Paper,
@@ -19,13 +20,38 @@ import { useSnackbar } from 'notistack';
 import dayjs from 'dayjs';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
-import { useUsers } from '@/features/users/hooks/useUsers';
+import { useUsers, useRoles } from '@/features/users/hooks/useUsers';
+import { useCreateUser } from '@/features/users/hooks/useUserMutations';
+import { CreateUserModal, type CreateFormValues } from '@/features/users/components/UserModals';
 import { useAuthStore } from '@/store/auth.store';
+import type { CreateUserPayload } from '@/types/user.types';
 
 export default function AdminPeoplePage() {
   const { enqueueSnackbar } = useSnackbar();
   const user = useAuthStore((s) => s.user);
   const { data: users = [], isLoading } = useUsers();
+  const { data: roles = [] } = useRoles();
+  const createUser = useCreateUser();
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const handleInvite = (values: CreateFormValues) => {
+    setInviteError(null);
+    const { confirmPassword: _confirm, ...rest } = values;
+    const payload: CreateUserPayload = rest;
+    createUser.mutate(payload, {
+      onSuccess: () => {
+        enqueueSnackbar('Member invited.', { variant: 'success' });
+        setInviteOpen(false);
+      },
+      onError: (err: any) => {
+        const raw = err?.response?.data?.message ?? 'Failed to invite member.';
+        const msg = Array.isArray(raw) ? raw.join(', ') : String(raw);
+        setInviteError(msg);
+        enqueueSnackbar(msg, { variant: 'error' });
+      },
+    });
+  };
 
   return (
     <Box>
@@ -36,7 +62,10 @@ export default function AdminPeoplePage() {
           <AppButton
             variant="contained"
             startIcon={<PersonAddIcon />}
-            onClick={() => enqueueSnackbar('Invite flow opened (demo).', { variant: 'info' })}
+            onClick={() => {
+              setInviteError(null);
+              setInviteOpen(true);
+            }}
           >
             Invite member
           </AppButton>
@@ -106,6 +135,15 @@ export default function AdminPeoplePage() {
           </Table>
         </TableContainer>
       )}
+
+      <CreateUserModal
+        open={inviteOpen}
+        roles={roles}
+        isLoading={createUser.isPending}
+        error={inviteError}
+        onClose={() => setInviteOpen(false)}
+        onSubmit={handleInvite}
+      />
     </Box>
   );
 }

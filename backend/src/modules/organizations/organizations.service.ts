@@ -181,12 +181,21 @@ export interface OrgResponse {
   id: string;
   name: string;
   slug: string;
+  shortName: string | null;
+  industry: string | null;
+  size: string | null;
+  description: string | null;
   logoUrl: string | null;
-  address: string | null;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
   maxUsers: number | null;
+  planId: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -217,12 +226,21 @@ export class OrganizationsService {
       id: org._id,
       name: org.name,
       slug: org.slug,
+      shortName: org.shortName,
+      industry: org.industry,
+      size: org.size,
+      description: org.description,
       logoUrl: org.logoUrl,
-      address: org.address,
+      street: org.street,
+      city: org.city,
+      state: org.state,
+      zip: org.zip,
+      country: org.country,
       phone: org.phone,
       email: org.email,
       website: org.website,
       maxUsers: org.maxUsers,
+      planId: org.planId,
       isActive: org.isActive,
       createdAt: org.createdAt,
       updatedAt: org.updatedAt,
@@ -291,7 +309,6 @@ export class OrganizationsService {
               name: dto.name,
               slug: dto.slug,
               email: dto.email ?? null,
-              address: dto.address ?? null,
               phone: dto.phone ?? null,
               website: dto.website ?? null,
               maxUsers: dto.maxUsers ?? null,
@@ -340,12 +357,21 @@ export class OrganizationsService {
             id: org._id,
             name: org.name,
             slug: org.slug,
+            shortName: org.shortName,
+            industry: org.industry,
+            size: org.size,
+            description: org.description,
             logoUrl: org.logoUrl,
-            address: org.address,
+            street: org.street,
+            city: org.city,
+            state: org.state,
+            zip: org.zip,
+            country: org.country,
             phone: org.phone,
             email: org.email,
             website: org.website,
             maxUsers: org.maxUsers,
+            planId: org.planId,
             isActive: org.isActive,
             createdAt: org.createdAt,
             updatedAt: org.updatedAt,
@@ -388,24 +414,37 @@ export class OrganizationsService {
     const org = await this.organizationModel.findOne({ _id: id });
     if (!org) throw new NotFoundException('Organization not found');
 
+    if (dto.slug && dto.slug !== org.slug) {
+      const clash = await this.organizationModel
+        .findOne({ slug: dto.slug, _id: { $ne: id } }, { _id: 1 })
+        .lean();
+      if (clash) throw new ConflictException('Slug already in use');
+    }
+
     Object.assign(org, dto);
     await org.save();
 
-    return {
-      id: org._id,
-      name: org.name,
-      slug: org.slug,
-      logoUrl: org.logoUrl,
-      address: org.address,
-      phone: org.phone,
-      email: org.email,
-      website: org.website,
-      isActive: org.isActive,
-      updatedAt: org.updatedAt,
-    };
+    return this.withCounts(org);
   }
 
-  /** Super Admin only — assign or remove a subscription plan from an org */
+  /** Set the logoUrl on an organization. Same access rules as update(). */
+  async setLogo(
+    id: string,
+    requestingOrgId: string,
+    logoUrl: string,
+    isSuperAdmin = false,
+  ) {
+    if (!isSuperAdmin && id !== requestingOrgId) {
+      throw new ForbiddenException("You can only update your own organization's logo");
+    }
+    const org = await this.organizationModel.findOne({ _id: id });
+    if (!org) throw new NotFoundException('Organization not found');
+    org.logoUrl = logoUrl;
+    await org.save();
+    return this.withCounts(org);
+  }
+
+  /** Assign or remove a subscription plan from an org */
   async setPlan(id: string, planId: string | null): Promise<any> {
     const org = await this.organizationModel.findById(id);
     if (!org) throw new NotFoundException('Organization not found');
