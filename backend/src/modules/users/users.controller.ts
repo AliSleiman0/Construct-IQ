@@ -22,6 +22,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateOrgAdminDto } from './dto/create-org-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
 
 @ApiTags('Users')
@@ -60,6 +61,17 @@ export class UsersController {
   @ApiOperation({ summary: 'Get own profile' })
   getProfile(@CurrentUser() user: JwtPayload) {
     return this.usersService.findById(user.sub);
+  }
+
+  // Note: must be declared above `@Patch(':id')` so Nest routes the literal
+  // `me` segment instead of capturing it as `:id`.
+  @Patch('me')
+  @ApiOperation({ summary: 'Update own profile (localization, etc.)' })
+  updateMe(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateMyProfileDto,
+  ) {
+    return this.usersService.updateSelf(user.sub, dto);
   }
 
   // ── Organization users ─────────────────────────────────────────────────

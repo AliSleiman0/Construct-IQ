@@ -5,6 +5,66 @@ import { UserStatus } from '../../../common/enums';
 
 export type UserDocument = CuidHydratedDocument<User>;
 
+@Schema({ _id: false })
+export class UserLocalization {
+  @Prop({ type: String, enum: ['en', 'fr', 'es', 'ar'], default: 'en' })
+  language: string;
+
+  // `'auto'` defers to the browser-resolved IANA zone at render time.
+  @Prop({ type: String, default: 'auto', maxlength: 64 })
+  timezone: string;
+
+  @Prop({
+    type: String,
+    enum: ['MMM D, YYYY', 'MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'],
+    default: 'MMM D, YYYY',
+  })
+  dateFormat: string;
+
+  @Prop({ type: String, enum: ['12h', '24h'], default: '12h' })
+  timeFormat: string;
+
+  @Prop({
+    type: String,
+    enum: ['sunday', 'monday', 'saturday'],
+    default: 'sunday',
+  })
+  firstDayOfWeek: string;
+
+  @Prop({ type: String, enum: ['imperial', 'metric'], default: 'imperial' })
+  measurement: string;
+}
+export const UserLocalizationSchema =
+  SchemaFactory.createForClass(UserLocalization);
+
+@Schema({ _id: false })
+export class UserNotificationPreferences {
+  // Cadence for the periodic activity digest. Independent of org-level
+  // notification policy — every user picks their own.
+  @Prop({ type: String, enum: ['daily', 'weekly', 'never'], default: 'weekly' })
+  digest: string;
+
+  // Per-event opt-out toggles. `true` = "I want this email". Actual send
+  // requires both the org-level event to be enabled AND this flag to be
+  // true. Security alerts are intentionally absent and always deliver.
+  @Prop({ type: Boolean, default: true })
+  newProject: boolean;
+
+  @Prop({ type: Boolean, default: true })
+  invoiceDue: boolean;
+
+  @Prop({ type: Boolean, default: true })
+  invoicePaid: boolean;
+
+  @Prop({ type: Boolean, default: true })
+  ticketUpdate: boolean;
+
+  @Prop({ type: Boolean, default: false })
+  productNews: boolean;
+}
+export const UserNotificationPreferencesSchema =
+  SchemaFactory.createForClass(UserNotificationPreferences);
+
 @Schema({ collection: 'users', timestamps: true })
 export class User {
   _id: string;
@@ -55,6 +115,15 @@ export class User {
   // Replaces the old UserRole join collection. Populated against `Role`.
   @Prop({ type: [String], ref: 'Role', default: [] })
   roleIds: string[];
+
+  // Per-user localization preferences. Defaults populate the subdoc on
+  // first read for legacy documents — no migration required.
+  @Prop({ type: UserLocalizationSchema, default: () => ({}) })
+  localization: UserLocalization;
+
+  // Per-user notification preferences. Same migration-free default pattern.
+  @Prop({ type: UserNotificationPreferencesSchema, default: () => ({}) })
+  notifications: UserNotificationPreferences;
 
   // softDeletePlugin adds `deletedAt: Date|null` and auto-filters reads.
   deletedAt: Date | null;

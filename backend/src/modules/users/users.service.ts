@@ -7,7 +7,12 @@ import {
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { User, UserDocument } from './schemas/user.schema';
+import {
+  User,
+  UserDocument,
+  UserLocalization,
+  UserNotificationPreferences,
+} from './schemas/user.schema';
 import { Role, RoleDocument } from './schemas/role.schema';
 import {
   Organization,
@@ -16,7 +21,26 @@ import {
 import { CreateUserDto } from './dto/create-user.dto';
 import { CreateOrgAdminDto } from './dto/create-org-admin.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { UserStatus } from '../../common/enums';
+
+const DEFAULT_LOCALIZATION: UserLocalization = {
+  language: 'en',
+  timezone: 'auto',
+  dateFormat: 'MMM D, YYYY',
+  timeFormat: '12h',
+  firstDayOfWeek: 'sunday',
+  measurement: 'imperial',
+};
+
+const DEFAULT_NOTIFICATIONS: UserNotificationPreferences = {
+  digest: 'weekly',
+  newProject: true,
+  invoiceDue: true,
+  invoicePaid: true,
+  ticketUpdate: true,
+  productNews: false,
+};
 
 export interface UserResponse {
   id: string;
@@ -30,6 +54,8 @@ export interface UserResponse {
   lastLoginAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  localization: UserLocalization;
+  notifications: UserNotificationPreferences;
   userRoles: Array<{ role: { id: string; name: string } }>;
 }
 
@@ -58,6 +84,8 @@ export class UsersService {
       lastLoginAt: Date | null;
       createdAt: Date;
       updatedAt: Date;
+      localization?: UserLocalization | null;
+      notifications?: UserNotificationPreferences | null;
     },
     roles: Array<{ _id: string; name: string }>,
   ): UserResponse {
@@ -73,6 +101,8 @@ export class UsersService {
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      localization: { ...DEFAULT_LOCALIZATION, ...(user.localization ?? {}) },
+      notifications: { ...DEFAULT_NOTIFICATIONS, ...(user.notifications ?? {}) },
       userRoles: roles.map((r) => ({ role: { id: r._id, name: r.name } })),
     };
   }
@@ -290,6 +320,36 @@ export class UsersService {
 
     await this.userModel.updateOne({ _id: id }, dto);
     return this.findById(id);
+  }
+
+  /** Self-update: a user editing their own profile. Field-merges each
+   *  preference subdoc so partial payloads don't wipe unspecified fields. */
+  async updateSelf(
+    userId: string,
+    dto: UpdateMyProfileDto,
+  ): Promise<UserResponse> {
+    const user = await this.userModel.findOne({ _id: userId });
+    if (!user) throw new NotFoundException('User not found');
+
+    const $set: Record<string, unknown> = {};
+
+    if (dto.localization) {
+      for (const [key, value] of Object.entries(dto.localization)) {
+        if (value !== undefined) $set[`localization.${key}`] = value;
+      }
+    }
+
+    if (dto.notifications) {
+      for (const [key, value] of Object.entries(dto.notifications)) {
+        if (value !== undefined) $set[`notifications.${key}`] = value;
+      }
+    }
+
+    if (Object.keys($set).length > 0) {
+      await this.userModel.updateOne({ _id: userId }, { $set });
+    }
+
+    return this.findById(userId);
   }
 
   async softDelete(id: string, organizationId: string) {

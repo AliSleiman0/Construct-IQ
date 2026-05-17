@@ -4,6 +4,7 @@ import type {
   Role,
   CreateUserPayload,
   UpdateUserPayload,
+  UpdateMyProfilePayload,
   CreateOrgAdminPayload,
 } from '@/types/user.types';
 
@@ -15,6 +16,16 @@ export const usersApi = {
 
   getById: async (id: string): Promise<User> => {
     const res = await apiClient.get<User>(`/users/${id}`);
+    return res.data;
+  },
+
+  getMe: async (): Promise<User> => {
+    const res = await apiClient.get<User>('/users/me');
+    return res.data;
+  },
+
+  updateMe: async (payload: UpdateMyProfilePayload): Promise<User> => {
+    const res = await apiClient.patch<User>('/users/me', payload);
     return res.data;
   },
 
