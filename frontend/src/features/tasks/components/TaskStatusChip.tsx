@@ -4,6 +4,7 @@ import type { TaskStatus } from '@/types/task.types';
 
 const STATUS_CONFIG: Record<TaskStatus, { label: string; color: 'default' | 'info' | 'error' | 'warning' | 'success' }> = {
   TODO: { label: 'To Do', color: 'default' },
+  IN_PREPARATION: { label: 'In Preparation', color: 'default' },
   IN_PROGRESS: { label: 'In Progress', color: 'info' },
   BLOCKED: { label: 'Blocked', color: 'error' },
   REVIEW: { label: 'Review', color: 'warning' },

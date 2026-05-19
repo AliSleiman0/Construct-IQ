@@ -62,12 +62,12 @@ export default function ProjectDetailPage() {
   const updateProjectMutation = useUpdateProject(projectId);
 
   // Tasks
-  const { data: tasks, isLoading: tasksLoading, isError: tasksError, refetch: refetchTasks } = useTasks(projectId);
+  const { data: tasks, isLoading: tasksLoading, isError: tasksError, refetch: refetchTasks } = useTasks({ projectId });
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
-  const createTaskMutation = useCreateTask(projectId);
-  const updateTaskMutation = useUpdateTask(projectId);
-  const deleteTaskMutation = useDeleteTask(projectId);
+  const createTaskMutation = useCreateTask();
+  const updateTaskMutation = useUpdateTask();
+  const deleteTaskMutation = useDeleteTask();
 
   // Issues
   const { data: issues, isLoading: issuesLoading, isError: issuesError, refetch: refetchIssues } = useIssues(projectId);

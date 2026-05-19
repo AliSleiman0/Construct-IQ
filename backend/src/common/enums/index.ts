@@ -18,6 +18,7 @@ export enum ProjectStatus {
 
 export enum TaskStatus {
   TODO = 'TODO',
+  IN_PREPARATION = 'IN_PREPARATION',
   IN_PROGRESS = 'IN_PROGRESS',
   BLOCKED = 'BLOCKED',
   REVIEW = 'REVIEW',
