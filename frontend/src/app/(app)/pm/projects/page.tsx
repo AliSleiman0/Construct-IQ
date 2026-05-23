@@ -12,7 +12,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
 import { CreateProjectModal } from '@/features/projects/components/ProjectModals';
 import { useProjects } from '@/features/projects/hooks/useProjects';
-import { useCreateProject } from '@/features/projects/hooks/useProjectMutations';
+import { useCreateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
 import { useAuthStore } from '@/store/auth.store';
 import type { Project, ProjectStatus } from '@/types/project.types';
 
@@ -24,6 +24,7 @@ export default function PMProjectsPage() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const isSuperAdmin = !!useAuthStore((s) => s.user?.isSuperAdmin);
   const canCreate = isSuperAdmin || hasPermission('create:projects');
+  const canDelete = isSuperAdmin || hasPermission('delete:projects');
 
   const { data: projects, isLoading, isError, refetch } = useProjects();
 
@@ -35,6 +36,16 @@ export default function PMProjectsPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const createMutation = useCreateProject();
+  const deleteMutation = useDeleteProject();
+
+  const handleDelete = async (project: Project) => {
+    if (!confirm(`Delete project "${project.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteMutation.mutateAsync(project.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.message ?? 'Failed to delete project');
+    }
+  };
 
   const visible = useMemo(() => {
     const q = search.toLowerCase();
@@ -182,7 +193,12 @@ export default function PMProjectsPage() {
         />
       )}
       {!isLoading && !isError && visible.length > 0 && (
-        <ProjectsTable projects={visible} detailBasePath="/pm/projects" />
+        <ProjectsTable
+          projects={visible}
+          detailBasePath="/pm/projects"
+          onDelete={canDelete ? handleDelete : undefined}
+          isDeleting={deleteMutation.isPending}
+        />
       )}
 
       <CreateProjectModal

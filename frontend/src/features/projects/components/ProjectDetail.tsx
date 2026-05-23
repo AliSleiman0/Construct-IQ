@@ -17,9 +17,9 @@ import { IssueTable } from '@/features/issues/components/IssueTable';
 import { CreateIssueModal, EditIssueModal } from '@/features/issues/components/IssueModals';
 import { ReportList } from '@/features/reports/components/ReportList';
 import { CreateReportModal, EditReportModal } from '@/features/reports/components/ReportModals';
-import { AddMemberModal } from './MemberModals';
+import { AddMemberModal, EditRoleModal } from './MemberModals';
 import { useProject } from '@/features/projects/hooks/useProjects';
-import { useUpdateProject, useAddMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
+import { useUpdateProject, useAddMember, useUpdateMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
 import { useTasks } from '@/features/tasks/hooks/useTasks';
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
 import { useIssues } from '@/features/issues/hooks/useIssues';
@@ -27,6 +27,7 @@ import { useCreateIssue, useUpdateIssue, useDeleteIssue } from '@/features/issue
 import { useReports } from '@/features/reports/hooks/useReports';
 import { useCreateReport, useUpdateReport } from '@/features/reports/hooks/useReportMutations';
 import { useAuthStore } from '@/store/auth.store';
+import type { ProjectMember } from '@/types/project.types';
 import type { Task } from '@/types/task.types';
 import type { Issue } from '@/types/issue.types';
 import type { DailyReport } from '@/types/report.types';
@@ -78,7 +79,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   // Members
   const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [editMember, setEditMember] = useState<ProjectMember | null>(null);
   const addMemberMutation = useAddMember(projectId);
+  const updateMemberMutation = useUpdateMember(projectId);
   const removeMemberMutation = useRemoveMember(projectId);
 
   // Handlers
@@ -138,6 +141,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     if (!confirm(`Remove ${member.user.firstName} ${member.user.lastName} from this project?`)) return;
     try { await removeMemberMutation.mutateAsync(member.id); }
     catch (e: any) { alert(e?.response?.data?.message ?? 'Failed to remove member'); }
+  };
+  const handleUpdateMemberRole = async (values: { role?: string }) => {
+    if (!editMember) return;
+    setFormError(null);
+    try {
+      await updateMemberMutation.mutateAsync({ userId: editMember.id, payload: { role: values.role || undefined } });
+      setEditMember(null);
+    } catch (e: any) { setFormError(e?.response?.data?.message ?? 'Failed to update role'); }
   };
 
   if (projectLoading) return <AppLoader />;
@@ -262,6 +273,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 </Box>
                 {member.role && <Chip label={member.role} size="small" variant="outlined" />}
                 {canManageMembers && (
+                  <Tooltip title="Edit role">
+                    <IconButton
+                      size="small"
+                      aria-label={`Edit role for ${member.user.firstName} ${member.user.lastName}`}
+                      onClick={() => { setFormError(null); setEditMember(member); }}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {canManageMembers && (
                   <Tooltip title={(project.members?.length ?? 0) <= 1 ? 'A project must keep at least one member' : 'Remove member'}>
                     <span>
                       <IconButton
@@ -310,6 +332,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <CreateReportModal open={createReportOpen} isLoading={createReportMutation.isPending} error={formError} onClose={() => setCreateReportOpen(false)} onSubmit={handleCreateReport} />
       <EditReportModal open={!!editReport} report={editReport} isLoading={updateReportMutation.isPending} error={formError} onClose={() => setEditReport(null)} onSubmit={handleUpdateReport} />
       <AddMemberModal open={addMemberOpen} existingMembers={project.members ?? []} isLoading={addMemberMutation.isPending} error={formError} onClose={() => setAddMemberOpen(false)} onSubmit={handleAddMember} />
+      <EditRoleModal open={!!editMember} member={editMember} isLoading={updateMemberMutation.isPending} error={formError} onClose={() => setEditMember(null)} onSubmit={handleUpdateMemberRole} />
     </Box>
   );
 }

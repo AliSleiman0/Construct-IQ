@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { Project, CreateProjectPayload, UpdateProjectPayload, AddMemberPayload, ProjectMember } from '@/types/project.types';
+import type { Project, CreateProjectPayload, UpdateProjectPayload, AddMemberPayload, UpdateMemberPayload, ProjectMember } from '@/types/project.types';
 
 export const projectsApi = {
   list: async (): Promise<Project[]> => {
@@ -28,6 +28,11 @@ export const projectsApi = {
 
   addMember: async (projectId: string, payload: AddMemberPayload): Promise<ProjectMember> => {
     const res = await apiClient.post<ProjectMember>(`/projects/${projectId}/members`, payload);
+    return res.data;
+  },
+
+  updateMember: async (projectId: string, userId: string, payload: UpdateMemberPayload): Promise<ProjectMember> => {
+    const res = await apiClient.patch<ProjectMember>(`/projects/${projectId}/members/${userId}`, payload);
     return res.data;
   },
 

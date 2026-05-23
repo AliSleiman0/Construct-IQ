@@ -62,6 +62,38 @@ describe('ProjectsService — members', () => {
     });
   });
 
+  describe('updateMember', () => {
+    it('throws NotFound when the user is not a member', async () => {
+      projectModel.findOne.mockResolvedValue(makeProject([{ userId: 'u-1' }]));
+      await expect(
+        service.updateMember('p-1', 'org-1', 'u-ghost', { role: 'Foreman' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('updates the role, saves, and returns the hydrated row', async () => {
+      const project = makeProject([{ userId: 'u-1', role: null, joinedAt: new Date() }]);
+      projectModel.findOne.mockResolvedValue(project);
+      userModel.findOne.mockReturnValue({
+        select: () => ({
+          lean: () => Promise.resolve({ _id: 'u-1', firstName: 'Sara', lastName: 'Diaz', email: 's@x.com' }),
+        }),
+      });
+      const res = await service.updateMember('p-1', 'org-1', 'u-1', { role: 'Foreman' });
+      expect(project.members[0].role).toBe('Foreman');
+      expect(project.save).toHaveBeenCalled();
+      expect(res).toMatchObject({ id: 'u-1', role: 'Foreman', user: { firstName: 'Sara' } });
+    });
+
+    it('clears the role when role is omitted', async () => {
+      const project = makeProject([{ userId: 'u-1', role: 'Foreman', joinedAt: new Date() }]);
+      projectModel.findOne.mockResolvedValue(project);
+      userModel.findOne.mockReturnValue({ select: () => ({ lean: () => Promise.resolve(null) }) });
+      const res = await service.updateMember('p-1', 'org-1', 'u-1', {});
+      expect(project.members[0].role).toBeNull();
+      expect(res.user).toBeNull();
+    });
+  });
+
   describe('removeMember', () => {
     it('throws NotFound when the user is not a member', async () => {
       projectModel.findOne.mockResolvedValue(makeProject([{ userId: 'u-1' }, { userId: 'u-2' }]));

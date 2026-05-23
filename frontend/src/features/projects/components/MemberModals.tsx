@@ -62,3 +62,43 @@ export function AddMemberModal({ open, existingMembers, isLoading, error, onClos
     </AppModal>
   );
 }
+
+const editRoleSchema = z.object({ role: z.string().optional() });
+type EditRoleFormValues = z.infer<typeof editRoleSchema>;
+
+interface EditRoleModalProps {
+  open: boolean;
+  member: ProjectMember | null;
+  isLoading: boolean;
+  error?: string | null;
+  onClose: () => void;
+  onSubmit: (values: EditRoleFormValues) => void;
+}
+
+export function EditRoleModal({ open, member, isLoading, error, onClose, onSubmit }: EditRoleModalProps) {
+  const { control, handleSubmit, reset } = useForm<EditRoleFormValues>({
+    resolver: zodResolver(editRoleSchema),
+    defaultValues: { role: '' },
+  });
+  useEffect(() => {
+    if (open && member) reset({ role: member.role ?? '' });
+  }, [open, member, reset]);
+
+  const name = member ? `${member.user.firstName} ${member.user.lastName}`.trim() : '';
+
+  return (
+    <AppModal open={open} onClose={onClose} title={name ? `Edit role: ${name}` : 'Edit role'}
+      actions={
+        <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
+          <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
+          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(onSubmit)}>Update role</AppButton>
+        </Stack>
+      }
+    >
+      <Stack spacing={2.5} px={3} pb={1}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <FormTextField name="role" control={control} label="Project role (optional)" fullWidth placeholder="e.g. Site Engineer, Foreman" />
+      </Stack>
+    </AppModal>
+  );
+}

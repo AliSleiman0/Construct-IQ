@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi } from '@/lib/api/projects.api';
-import type { CreateProjectPayload, UpdateProjectPayload, AddMemberPayload } from '@/types/project.types';
+import type { CreateProjectPayload, UpdateProjectPayload, AddMemberPayload, UpdateMemberPayload } from '@/types/project.types';
 
 export function useCreateProject() {
   const queryClient = useQueryClient();
@@ -33,6 +33,15 @@ export function useAddMember(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: AddMemberPayload) => projectsApi.addMember(projectId, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects', projectId] }),
+  });
+}
+
+export function useUpdateMember(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, payload }: { userId: string; payload: UpdateMemberPayload }) =>
+      projectsApi.updateMember(projectId, userId, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects', projectId] }),
   });
 }

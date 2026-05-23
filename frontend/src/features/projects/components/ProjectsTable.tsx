@@ -2,6 +2,7 @@
 
 import {
   Box,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -9,8 +10,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import Link from 'next/link';
 import dayjs from 'dayjs';
 import { ProjectStatusBadge } from './ProjectStatusBadge';
@@ -19,6 +22,9 @@ import type { Project } from '@/types/project.types';
 interface ProjectsTableProps {
   projects: Project[];
   detailBasePath: string;
+  /** When provided, renders a per-row delete action column. */
+  onDelete?: (project: Project) => void;
+  isDeleting?: boolean;
 }
 
 function formatBudget(total?: number | null, currency?: string): string {
@@ -42,7 +48,8 @@ function formatDateRange(start?: string | null, end?: string | null): string {
   return `${s ?? '—'} – ${e ?? '—'}`;
 }
 
-export function ProjectsTable({ projects, detailBasePath }: ProjectsTableProps) {
+export function ProjectsTable({ projects, detailBasePath, onDelete, isDeleting }: ProjectsTableProps) {
+  const colSpan = onDelete ? 8 : 7;
   return (
     <TableContainer
       component={Paper}
@@ -59,12 +66,13 @@ export function ProjectsTable({ projects, detailBasePath }: ProjectsTableProps) 
             <TableCell align="right">Tasks</TableCell>
             <TableCell>Budget</TableCell>
             <TableCell>Dates</TableCell>
+            {onDelete && <TableCell align="right">Actions</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
           {projects.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7}>
+              <TableCell colSpan={colSpan}>
                 <Box textAlign="center" py={5}>
                   <Typography variant="body2" color="text.secondary">
                     No projects yet.
@@ -92,6 +100,21 @@ export function ProjectsTable({ projects, detailBasePath }: ProjectsTableProps) 
               <TableCell>
                 <Typography variant="body2">{formatDateRange(p.startDate, p.endDate)}</Typography>
               </TableCell>
+              {onDelete && (
+                <TableCell align="right">
+                  <Tooltip title="Delete project">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      aria-label={`Delete ${p.name}`}
+                      disabled={isDeleting}
+                      onClick={() => onDelete(p)}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

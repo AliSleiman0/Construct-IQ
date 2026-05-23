@@ -18,6 +18,7 @@ import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
+import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -70,6 +71,17 @@ export class ProjectsController {
     @Body() dto: AddProjectMemberDto,
   ) {
     return this.projectsService.addMember(id, user.organizationId, dto);
+  }
+
+  @Patch(':id/members/:userId')
+  @RequirePermissions(PERMISSIONS.PROJECTS.ASSIGN_MEMBERS)
+  updateMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateProjectMemberDto,
+  ) {
+    return this.projectsService.updateMember(id, user.organizationId, userId, dto);
   }
 
   @Delete(':id/members/:userId')
