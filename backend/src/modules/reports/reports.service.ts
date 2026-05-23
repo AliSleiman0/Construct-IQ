@@ -17,6 +17,42 @@ export class ReportsService {
     private reportModel: Model<DailyReportDocument>,
   ) {}
 
+  private static readonly POPULATE = [
+    { path: 'createdById', select: 'firstName lastName' },
+    { path: 'projectId', select: 'name' },
+  ];
+
+  private flattenUser(
+    u: any,
+  ): { id: string; firstName: string; lastName: string } | null {
+    if (!u || typeof u !== 'object') return null;
+    return { id: u._id, firstName: u.firstName, lastName: u.lastName };
+  }
+
+  /**
+   * Flattens a populated, lean DailyReport into the shape the frontend expects:
+   * keeps the raw id fields and adds `createdBy` + `project` objects (mirrors
+   * IssuesService.mapIssue). Mongoose `populate` replaces the ref field with the
+   * joined doc, so we read the id back off `_id`.
+   */
+  private mapReport(doc: any): any {
+    if (!doc) return doc;
+    const createdBy = this.flattenUser(doc.createdById);
+    const project =
+      doc.projectId && typeof doc.projectId === 'object'
+        ? { id: doc.projectId._id, name: doc.projectId.name }
+        : null;
+
+    return {
+      ...doc,
+      id: doc._id,
+      createdById: createdBy?.id ?? (typeof doc.createdById === 'string' ? doc.createdById : null),
+      projectId: project?.id ?? (typeof doc.projectId === 'string' ? doc.projectId : doc.projectId),
+      createdBy,
+      project,
+    };
+  }
+
   async findAll(
     organizationId: string,
     isSuperAdmin: boolean,
@@ -24,14 +60,22 @@ export class ReportsService {
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
-    return this.reportModel.find(filter).sort({ reportDate: -1 }).lean();
+    const docs = await this.reportModel
+      .find(filter)
+      .sort({ reportDate: -1 })
+      .populate(ReportsService.POPULATE)
+      .lean();
+    return docs.map((d) => this.mapReport(d));
   }
 
   async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
-    const report = await this.reportModel.findOne(filter).lean();
+    const report = await this.reportModel
+      .findOne(filter)
+      .populate(ReportsService.POPULATE)
+      .lean();
     if (!report) throw new NotFoundException('Daily report not found');
-    return report;
+    return this.mapReport(report);
   }
 
   async create(
@@ -92,6 +136,6 @@ export class ReportsService {
     if (dto.equipmentEntries !== undefined) report.equipmentEntries = dto.equipmentEntries as any;
 
     await report.save();
-    return report.toObject();
+    return this.findById(id, organizationId, isSuperAdmin);
   }
 }

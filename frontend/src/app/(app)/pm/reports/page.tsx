@@ -5,7 +5,7 @@ import AddIcon from '@mui/icons-material/Add';
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
-import { ReportList } from '@/features/site-reports/components/ReportList';
+import { ReportBoardList } from '@/features/reports/components/ReportBoardList';
 
 export default function PMReportsPage() {
   return (
@@ -19,7 +19,7 @@ export default function PMReportsPage() {
           </AppButton>
         }
       />
-      <ReportList detailBasePath="/pm/reports" />
+      <ReportBoardList detailBasePath="/pm/reports" />
     </Box>
   );
 }

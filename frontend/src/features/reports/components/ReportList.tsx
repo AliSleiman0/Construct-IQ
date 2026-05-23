@@ -34,11 +34,11 @@ export function ReportList({ reports, onEdit }: ReportListProps) {
             )}
           </Stack>
 
-          {report.achievements && (
+          {report.workCompleted && (
             <Box mb={1}>
-              <Typography variant="caption" color="success.main" fontWeight={600}>Achievements</Typography>
+              <Typography variant="caption" color="success.main" fontWeight={600}>Work completed</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                {report.achievements}
+                {report.workCompleted}
               </Typography>
             </Box>
           )}
