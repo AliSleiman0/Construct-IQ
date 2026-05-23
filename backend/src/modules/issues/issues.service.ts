@@ -17,6 +17,53 @@ export class IssuesService {
     @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
   ) {}
 
+  private static readonly POPULATE = [
+    { path: 'createdById', select: 'firstName lastName' },
+    { path: 'assignedToId', select: 'firstName lastName' },
+    { path: 'projectId', select: 'name' },
+    { path: 'comments.authorId', select: 'firstName lastName' },
+  ];
+
+  private flattenUser(
+    u: any,
+  ): { id: string; firstName: string; lastName: string } | null {
+    if (!u || typeof u !== 'object') return null;
+    return { id: u._id, firstName: u.firstName, lastName: u.lastName };
+  }
+
+  /**
+   * Flattens a populated, lean Issue doc into the shape the frontend expects:
+   * keeps the raw id fields, and adds `createdBy` / `assignedTo` / `project`
+   * objects plus `comments[].author`. Mongoose `populate` replaces the ref
+   * field with the joined doc, so we read the id back off `_id`.
+   */
+  private mapIssue(doc: any): any {
+    if (!doc) return doc;
+    const createdBy = this.flattenUser(doc.createdById);
+    const assignedTo = this.flattenUser(doc.assignedToId);
+    const project =
+      doc.projectId && typeof doc.projectId === 'object'
+        ? { id: doc.projectId._id, name: doc.projectId.name }
+        : null;
+
+    return {
+      ...doc,
+      id: doc._id,
+      createdById: createdBy?.id ?? (typeof doc.createdById === 'string' ? doc.createdById : null),
+      assignedToId: assignedTo?.id ?? (typeof doc.assignedToId === 'string' ? doc.assignedToId : null),
+      projectId: project?.id ?? (typeof doc.projectId === 'string' ? doc.projectId : doc.projectId),
+      createdBy,
+      assignedTo,
+      project,
+      comments: (doc.comments ?? []).map((c: any) => ({
+        ...c,
+        id: c._id,
+        authorId: this.flattenUser(c.authorId)?.id ?? (typeof c.authorId === 'string' ? c.authorId : null),
+        author: this.flattenUser(c.authorId),
+      })),
+    };
+  }
+
   async findAll(
     organizationId: string,
     isSuperAdmin: boolean,
@@ -32,14 +79,22 @@ export class IssuesService {
     if (status) filter.status = status;
     if (severity) filter.severity = severity;
 
-    return this.issueModel.find(filter).sort({ createdAt: -1 }).lean();
+    const docs = await this.issueModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .populate(IssuesService.POPULATE)
+      .lean();
+    return docs.map((d) => this.mapIssue(d));
   }
 
   async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
-    const issue = await this.issueModel.findOne(filter).lean();
+    const issue = await this.issueModel
+      .findOne(filter)
+      .populate(IssuesService.POPULATE)
+      .lean();
     if (!issue) throw new NotFoundException('Issue not found');
-    return issue;
+    return this.mapIssue(issue);
   }
 
   async create(
@@ -85,7 +140,7 @@ export class IssuesService {
       issue.resolvedAt = dto.resolvedAt ? new Date(dto.resolvedAt) : null;
 
     await issue.save();
-    return issue.toObject();
+    return this.findById(id, organizationId, isSuperAdmin);
   }
 
   async assign(
@@ -100,7 +155,7 @@ export class IssuesService {
 
     issue.assignedToId = assignedToId;
     await issue.save();
-    return issue.toObject();
+    return this.findById(id, organizationId, isSuperAdmin);
   }
 
   async addComment(
