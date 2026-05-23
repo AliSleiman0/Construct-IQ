@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { DashboardStats, OrgDashboardData } from '@/types/dashboard.types';
+import type { DashboardStats, OrgDashboardData, PmDashboardData } from '@/types/dashboard.types';
 import type { Project } from '@/types/project.types';
 
 export const dashboardApi = {
@@ -15,6 +15,11 @@ export const dashboardApi = {
 
   getOrgDashboard: async (): Promise<OrgDashboardData> => {
     const res = await apiClient.get<OrgDashboardData>('/dashboard/org');
+    return res.data;
+  },
+
+  getPmDashboard: async (): Promise<PmDashboardData> => {
+    const res = await apiClient.get<PmDashboardData>('/dashboard/pm');
     return res.data;
   },
 };

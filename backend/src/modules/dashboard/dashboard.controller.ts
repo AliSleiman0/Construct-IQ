@@ -17,4 +17,10 @@ export class DashboardController {
   getOrgDashboard(@CurrentUser() user: JwtPayload) {
     return this.dashboardService.getOrgDashboard(user.organizationId);
   }
+
+  @Get('pm')
+  @RequirePermissions(PERMISSIONS.DASHBOARD.READ)
+  getPmDashboard(@CurrentUser() user: JwtPayload) {
+    return this.dashboardService.getPmDashboard(user.organizationId, user.sub);
+  }
 }

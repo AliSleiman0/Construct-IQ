@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Project } from '../projects/schemas/project.schema';
+import { Task } from '../projects/schemas/task.schema';
 import { User } from '../users/schemas/user.schema';
 import { Issue } from '../issues/schemas/issue.schema';
 import { DailyReport } from '../reports/schemas/daily-report.schema';
@@ -12,6 +13,7 @@ import { Expense } from '../budget/schemas/expense.schema';
 export class DashboardService {
   constructor(
     @InjectModel(Project.name) private projectModel: Model<any>,
+    @InjectModel(Task.name) private taskModel: Model<any>,
     @InjectModel(User.name) private userModel: Model<any>,
     @InjectModel(Issue.name) private issueModel: Model<any>,
     @InjectModel(DailyReport.name) private dailyReportModel: Model<any>,
@@ -150,6 +152,135 @@ export class DashboardService {
       reportsFiledLast30d,
       recentActivity,
     };
+  }
+
+  /**
+   * Dashboard for a Project Manager — scoped to the projects they belong to
+   * (mirrors ProjectsService.findAll member-scoping). Returns the metrics the
+   * /pm/dashboard widgets render: stat-card counts + a 7-day task-throughput
+   * series + an open-tasks-by-status breakdown.
+   */
+  async getPmDashboard(organizationId: string, userId: string) {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id status')
+      .lean();
+    const projectIds = projects.map((p: any) => p._id);
+    const activeProjectCount = projects.filter((p: any) => p.status === 'ACTIVE').length;
+
+    const TASK_STATUSES: { id: string; label: string }[] = [
+      { id: 'TODO', label: 'To Do' },
+      { id: 'IN_PREPARATION', label: 'Prep' },
+      { id: 'IN_PROGRESS', label: 'In Progress' },
+      { id: 'BLOCKED', label: 'Blocked' },
+      { id: 'REVIEW', label: 'Review' },
+    ];
+    const emptyByStatus = () => TASK_STATUSES.map((s) => ({ label: s.label, value: 0 }));
+
+    if (projectIds.length === 0) {
+      return {
+        projectCount: 0,
+        activeProjectCount: 0,
+        openTaskCount: 0,
+        tasksDueThisWeek: 0,
+        openIssueCount: 0,
+        escalatedIssueCount: 0,
+        reportsThisWeek: 0,
+        taskThroughput: this.emptyThroughput(),
+        openTasksByStatus: emptyByStatus(),
+      };
+    }
+
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const taskBase = { projectId: { $in: projectIds }, deletedAt: null };
+
+    const [
+      openTaskCount,
+      tasksDueThisWeek,
+      openTasksByStatusGroups,
+      completedTasks,
+      openIssueGroups,
+      reportsThisWeek,
+    ] = await Promise.all([
+      this.taskModel.countDocuments({ ...taskBase, status: { $ne: 'DONE' } }),
+      this.taskModel.countDocuments({
+        ...taskBase,
+        status: { $ne: 'DONE' },
+        dueDate: { $gte: now, $lte: weekAhead },
+      }),
+      this.taskModel.aggregate([
+        { $match: { ...taskBase, status: { $ne: 'DONE' } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      this.taskModel
+        .find({ ...taskBase, status: 'DONE', completedAt: { $gte: weekAgo } })
+        .select('completedAt')
+        .lean(),
+      this.issueModel.aggregate([
+        { $match: { projectId: { $in: projectIds }, deletedAt: null, status: { $in: ['OPEN', 'IN_PROGRESS'] } } },
+        { $group: { _id: '$severity', count: { $sum: 1 } } },
+      ]),
+      this.dailyReportModel.countDocuments({
+        projectId: { $in: projectIds },
+        reportDate: { $gte: weekAgo },
+      }),
+    ]);
+
+    // Open tasks by status (fixed order, zero-filled).
+    const statusCounts = new Map<string, number>(
+      openTasksByStatusGroups.map((g: any) => [g._id, g.count]),
+    );
+    const openTasksByStatus = TASK_STATUSES.map((s) => ({
+      label: s.label,
+      value: statusCounts.get(s.id) ?? 0,
+    }));
+
+    // Open issues: total + escalated (HIGH/CRITICAL).
+    let openIssueCount = 0;
+    let escalatedIssueCount = 0;
+    for (const g of openIssueGroups) {
+      openIssueCount += g.count;
+      if (g._id === 'HIGH' || g._id === 'CRITICAL') escalatedIssueCount += g.count;
+    }
+
+    // Task throughput — completed per day over the last 7 days.
+    const taskThroughput = this.buildThroughput(completedTasks.map((t: any) => t.completedAt));
+
+    return {
+      projectCount: projects.length,
+      activeProjectCount,
+      openTaskCount,
+      tasksDueThisWeek,
+      openIssueCount,
+      escalatedIssueCount,
+      reportsThisWeek,
+      taskThroughput,
+      openTasksByStatus,
+    };
+  }
+
+  private buildThroughput(completedAts: (Date | string | null)[]): { label: string; value: number }[] {
+    const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+    const buckets: { label: string; key: string; value: number }[] = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      buckets.push({ label: days[d.getDay()], key: d.toISOString().slice(0, 10), value: 0 });
+    }
+    const byKey = new Map(buckets.map((b) => [b.key, b]));
+    for (const c of completedAts) {
+      if (!c) continue;
+      const key = new Date(c).toISOString().slice(0, 10);
+      const b = byKey.get(key);
+      if (b) b.value += 1;
+    }
+    return buckets.map((b) => ({ label: b.label, value: b.value }));
+  }
+
+  private emptyThroughput(): { label: string; value: number }[] {
+    return this.buildThroughput([]);
   }
 
   private async getWeeklyReportCounts(organizationId: string) {
