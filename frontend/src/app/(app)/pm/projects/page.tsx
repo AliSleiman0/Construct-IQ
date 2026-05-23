@@ -1,14 +1,12 @@
 'use client';
 
-import { Box } from '@mui/material';
+import { Box, Skeleton } from '@mui/material';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
-import { projectsForOrg } from '@/mocks/projects.mock';
-import { useAuthStore } from '@/store/auth.store';
+import { useProjects } from '@/features/projects/hooks/useProjects';
 
 export default function PMProjectsPage() {
-  const user = useAuthStore((s) => s.user);
-  const projects = user ? projectsForOrg(user.organization.id) : [];
+  const { data: projects = [], isLoading } = useProjects();
 
   return (
     <Box>
@@ -16,7 +14,13 @@ export default function PMProjectsPage() {
         title="My Projects"
         subtitle="Active projects you manage."
       />
-      <ProjectsTable projects={projects} detailBasePath="/pm/projects" hideOrgColumn />
+      {isLoading ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {[1, 2, 3].map((i) => <Skeleton key={i} variant="rounded" height={52} />)}
+        </Box>
+      ) : (
+        <ProjectsTable projects={projects} detailBasePath="/pm/projects" />
+      )}
     </Box>
   );
 }
