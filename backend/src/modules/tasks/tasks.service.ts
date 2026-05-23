@@ -23,7 +23,7 @@ export class TasksService {
     if (projectId) filter.projectId = projectId;
     if (assignedToId) filter.assignedToId = assignedToId;
     if (status) filter.status = status;
-    return this.taskModel.find(filter).sort({ createdAt: -1 }).lean();
+    return this.taskModel.find(filter).sort({ position: 1, createdAt: -1 }).lean();
   }
 
   async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
@@ -88,6 +88,44 @@ export class TasksService {
 
     await task.save();
     return task.toObject();
+  }
+
+  /**
+   * Persist the order of a Kanban column. `taskIds` is the column's full ordered list;
+   * each task gets `position = index` and `status`. Also commits a cross-column drop (the
+   * moved card's status changes here). `completedAt` is reconciled for the whole column:
+   * entering DONE stamps it only where unset (so reordering within DONE never clobbers an
+   * existing completion time); any non-DONE column clears it.
+   */
+  async reorder(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    status: TaskStatus,
+    taskIds: string[],
+  ): Promise<{ updated: number }> {
+    const orgFilter = isSuperAdmin ? {} : { organizationId };
+
+    const ops = taskIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: id, ...orgFilter },
+        update: { $set: { position: index, status } },
+      },
+    }));
+    const res = await this.taskModel.bulkWrite(ops);
+
+    if (status === TaskStatus.DONE) {
+      await this.taskModel.updateMany(
+        { _id: { $in: taskIds }, ...orgFilter, completedAt: null },
+        { $set: { completedAt: new Date() } },
+      );
+    } else {
+      await this.taskModel.updateMany(
+        { _id: { $in: taskIds }, ...orgFilter },
+        { $set: { completedAt: null } },
+      );
+    }
+
+    return { updated: res.modifiedCount ?? taskIds.length };
   }
 
   async assign(

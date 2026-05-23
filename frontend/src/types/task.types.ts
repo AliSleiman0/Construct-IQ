@@ -16,6 +16,7 @@ export interface Task {
   projectId: string;
   assignedToId?: string | null;
   dueDate?: string | null;
+  position?: number;
   createdAt: string;
   updatedAt: string;
   assignedTo?: {

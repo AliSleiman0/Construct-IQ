@@ -18,6 +18,7 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { ReorderTasksDto } from './dto/reorder-tasks.dto';
 import { TaskStatus } from '../../common/enums';
 
 @Controller('tasks')
@@ -52,6 +53,18 @@ export class TasksController {
   @RequirePermissions(PERMISSIONS.TASKS.READ)
   findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
     return this.tasksService.findById(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  // Must precede @Patch(':id') so 'reorder' isn't captured as an :id.
+  @Patch('reorder')
+  @RequirePermissions(PERMISSIONS.TASKS.UPDATE)
+  reorder(@CurrentUser() user: JwtPayload, @Body() dto: ReorderTasksDto): Promise<any> {
+    return this.tasksService.reorder(
+      user.organizationId,
+      user.isSuperAdmin,
+      dto.status,
+      dto.taskIds,
+    );
   }
 
   @Patch(':id')

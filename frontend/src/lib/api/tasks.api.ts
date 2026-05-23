@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { Task, CreateTaskPayload, UpdateTaskPayload } from '@/types/task.types';
+import type { Task, TaskStatus, CreateTaskPayload, UpdateTaskPayload } from '@/types/task.types';
 
 type RawTask = Omit<Task, 'id'> & { id?: string; _id?: string };
 
@@ -32,6 +32,11 @@ export const tasksApi = {
   assign: async (id: string, assignedToId: string): Promise<Task> => {
     const res = await apiClient.patch<RawTask>(`/tasks/${id}/assign`, { assignedToId });
     return normalise(res.data);
+  },
+
+  // Persist a column's card order (top → bottom). Also commits a cross-column drop.
+  reorder: async (payload: { status: TaskStatus; taskIds: string[] }): Promise<void> => {
+    await apiClient.patch('/tasks/reorder', payload);
   },
 
   delete: async (id: string): Promise<void> => {

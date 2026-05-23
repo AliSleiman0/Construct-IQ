@@ -57,6 +57,11 @@ export class Task {
   @Prop({ type: Number, default: 0, min: 0, max: 100 })
   progress: number;
 
+  // Manual sort order within a Kanban column (per status). Lower = higher in the column.
+  // Defaults to 0; ties break on createdAt (newest first), preserving pre-reorder behaviour.
+  @Prop({ type: Number, default: 0, index: true })
+  position: number;
+
   @Prop({ type: Number, default: null, min: 0 })
   estimatedHours: number | null;
 
@@ -77,5 +82,5 @@ export const TaskSchema = SchemaFactory.createForClass(Task);
 
 TaskSchema.plugin(softDeletePlugin);
 
-TaskSchema.index({ projectId: 1, status: 1 });
+TaskSchema.index({ projectId: 1, status: 1, position: 1 });
 TaskSchema.index({ organizationId: 1, projectId: 1 });

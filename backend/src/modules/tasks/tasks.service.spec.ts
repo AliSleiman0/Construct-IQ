@@ -1,0 +1,160 @@
+import { Test } from '@nestjs/testing';
+import { getModelToken } from '@nestjs/mongoose';
+import { NotFoundException } from '@nestjs/common';
+import { TasksService } from './tasks.service';
+import { Task } from '../projects/schemas/task.schema';
+import { TaskStatus, TaskPriority } from '../../common/enums';
+
+/**
+ * Unit tests for TasksService — multi-tenancy scoping + not-found behaviour.
+ * The Mongoose model is fully mocked; no database is touched.
+ */
+describe('TasksService', () => {
+  let service: TasksService;
+  let model: any;
+
+  // find(...).sort(...).lean() chain
+  const findChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
+
+  beforeEach(async () => {
+    model = {
+      find: jest.fn().mockReturnValue(findChain([])),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
+      updateMany: jest.fn().mockResolvedValue({ acknowledged: true }),
+      bulkWrite: jest.fn().mockResolvedValue({ modifiedCount: 3 }),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [TasksService, { provide: getModelToken(Task.name), useValue: model }],
+    }).compile();
+    service = moduleRef.get(TasksService);
+  });
+
+  describe('findAll', () => {
+    it('scopes by organizationId for non-super-admins', async () => {
+      await service.findAll('org-1', false);
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1' });
+    });
+
+    it('does NOT scope by org for super admins', async () => {
+      await service.findAll('org-1', true);
+      expect(model.find).toHaveBeenCalledWith({});
+    });
+
+    it('adds projectId / assignedToId / status filters when provided', async () => {
+      await service.findAll('org-1', false, 'proj-1', 'user-9', TaskStatus.IN_PROGRESS);
+      expect(model.find).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        projectId: 'proj-1',
+        assignedToId: 'user-9',
+        status: TaskStatus.IN_PROGRESS,
+      });
+    });
+  });
+
+  describe('findById', () => {
+    it('throws NotFound when the task is missing (or belongs to another org)', async () => {
+      model.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+      await expect(service.findById('t-1', 'org-1', false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(model.findOne).toHaveBeenCalledWith({ _id: 't-1', organizationId: 'org-1' });
+    });
+  });
+
+  describe('create', () => {
+    it('persists with the caller org + creator and defaults status to TODO', async () => {
+      model.create.mockResolvedValue({ id: 't-1' });
+      await service.create('org-1', 'user-1', {
+        projectId: 'proj-1',
+        title: 'Pour foundation',
+        priority: TaskPriority.MEDIUM,
+      } as any);
+      expect(model.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org-1',
+          createdById: 'user-1',
+          projectId: 'proj-1',
+          title: 'Pour foundation',
+          status: TaskStatus.TODO,
+        }),
+      );
+    });
+  });
+
+  describe('update', () => {
+    it('throws NotFound (org-scoped) when the task is not found', async () => {
+      model.findOne.mockResolvedValue(null);
+      await expect(
+        service.update('t-1', 'org-1', { status: TaskStatus.DONE } as any, false),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(model.findOne).toHaveBeenCalledWith({ _id: 't-1', organizationId: 'org-1' });
+    });
+
+    it('stamps completedAt when status becomes DONE', async () => {
+      const doc: any = { completedAt: null, save: jest.fn(), toObject: () => doc };
+      model.findOne.mockResolvedValue(doc);
+      await service.update('t-1', 'org-1', { status: TaskStatus.DONE } as any, false);
+      expect(doc.status).toBe(TaskStatus.DONE);
+      expect(doc.completedAt).toBeInstanceOf(Date);
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('clears completedAt when moving away from DONE', async () => {
+      const doc: any = { completedAt: new Date(), save: jest.fn(), toObject: () => doc };
+      model.findOne.mockResolvedValue(doc);
+      await service.update('t-1', 'org-1', { status: TaskStatus.IN_PROGRESS } as any, false);
+      expect(doc.completedAt).toBeNull();
+    });
+  });
+
+  describe('reorder', () => {
+    it('writes position=index + status for each id, org-scoped', async () => {
+      await service.reorder('org-1', false, TaskStatus.TODO, ['c', 'b', 'a']);
+      expect(model.bulkWrite).toHaveBeenCalledWith([
+        { updateOne: { filter: { _id: 'c', organizationId: 'org-1' }, update: { $set: { position: 0, status: TaskStatus.TODO } } } },
+        { updateOne: { filter: { _id: 'b', organizationId: 'org-1' }, update: { $set: { position: 1, status: TaskStatus.TODO } } } },
+        { updateOne: { filter: { _id: 'a', organizationId: 'org-1' }, update: { $set: { position: 2, status: TaskStatus.TODO } } } },
+      ]);
+    });
+
+    it('does NOT scope by org for super admins', async () => {
+      await service.reorder('org-1', true, TaskStatus.TODO, ['a']);
+      expect(model.bulkWrite).toHaveBeenCalledWith([
+        { updateOne: { filter: { _id: 'a' }, update: { $set: { position: 0, status: TaskStatus.TODO } } } },
+      ]);
+    });
+
+    it('stamps completedAt only where unset when reordering into DONE', async () => {
+      await service.reorder('org-1', false, TaskStatus.DONE, ['a', 'b']);
+      expect(model.updateMany).toHaveBeenCalledWith(
+        { _id: { $in: ['a', 'b'] }, organizationId: 'org-1', completedAt: null },
+        { $set: { completedAt: expect.any(Date) } },
+      );
+    });
+
+    it('clears completedAt for any non-DONE column', async () => {
+      await service.reorder('org-1', false, TaskStatus.IN_PROGRESS, ['a', 'b']);
+      expect(model.updateMany).toHaveBeenCalledWith(
+        { _id: { $in: ['a', 'b'] }, organizationId: 'org-1' },
+        { $set: { completedAt: null } },
+      );
+    });
+  });
+
+  describe('softDelete', () => {
+    it('throws NotFound when missing and never writes', async () => {
+      model.findOne.mockResolvedValue(null);
+      await expect(service.softDelete('t-1', 'org-1', false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(model.updateOne).not.toHaveBeenCalled();
+    });
+
+    it('soft-deletes by setting deletedAt', async () => {
+      model.findOne.mockResolvedValue({ _id: 't-1' });
+      await service.softDelete('t-1', 'org-1', false);
+      expect(model.updateOne).toHaveBeenCalledWith(
+        { _id: 't-1' },
+        expect.objectContaining({ deletedAt: expect.any(Date) }),
+      );
+    });
+  });
+});

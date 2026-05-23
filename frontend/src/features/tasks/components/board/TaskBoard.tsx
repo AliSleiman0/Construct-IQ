@@ -49,6 +49,7 @@ import {
   useCreateTask,
   useUpdateTask,
   useDeleteTask,
+  useReorderTasks,
 } from '../../hooks/useTaskMutations';
 import { useProjects } from '@/features/projects/hooks/useProjects';
 import { useUsers } from '@/features/users/hooks/useUsers';
@@ -99,6 +100,7 @@ export function TaskBoard() {
   const createMutation = useCreateTask();
   const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
+  const reorderMutation = useReorderTasks();
 
   // Default to the first project once the project list resolves.
   useEffect(() => {
@@ -274,13 +276,21 @@ export function TaskBoard() {
 
     const originalCol = findColumnOfTask(snapshot, wasActive);
     const newCol = findColumnOfTask(tasksByColumn, wasActive);
-    if (!originalCol || !newCol || originalCol === newCol) return;
+    if (!originalCol || !newCol) return;
+
+    // The destination column's local order is final after handleDragOver — persist it.
+    // One call covers both an in-column reorder and a cross-column drop (the moved card's
+    // status is set server-side from `status`).
+    const destIds = tasksByColumn[newCol].map((t) => t.id);
+    const prevIds = snapshot[newCol].map((t) => t.id);
+    const unchanged =
+      originalCol === newCol &&
+      destIds.length === prevIds.length &&
+      destIds.every((id, i) => id === prevIds[i]);
+    if (unchanged) return;
 
     try {
-      await updateMutation.mutateAsync({
-        id: wasActive,
-        payload: { status: newCol as TaskStatus },
-      });
+      await reorderMutation.mutateAsync({ status: newCol as TaskStatus, taskIds: destIds });
     } catch (err: any) {
       setTasksByColumn(snapshot);
       const msg = err?.response?.data?.error?.message ?? "Couldn't update task";
