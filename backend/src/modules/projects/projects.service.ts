@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -300,6 +301,12 @@ export class ProjectsService {
     const idx = project.members.findIndex((m) => m.userId === userId);
     if (idx === -1) {
       throw new NotFoundException('User is not a member of this project');
+    }
+
+    if (project.members.length <= 1) {
+      throw new BadRequestException(
+        'Cannot remove the last member of a project',
+      );
     }
 
     project.members.splice(idx, 1);

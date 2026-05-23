@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Box, Stack, Typography, Tabs, Tab, Avatar, Divider, Chip } from '@mui/material';
+import { Box, Stack, Typography, Tabs, Tab, Avatar, Divider, Chip, IconButton, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppLoader } from '@/components/ui/AppLoader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
@@ -16,8 +17,9 @@ import { IssueTable } from '@/features/issues/components/IssueTable';
 import { CreateIssueModal, EditIssueModal } from '@/features/issues/components/IssueModals';
 import { ReportList } from '@/features/reports/components/ReportList';
 import { CreateReportModal, EditReportModal } from '@/features/reports/components/ReportModals';
+import { AddMemberModal } from './MemberModals';
 import { useProject } from '@/features/projects/hooks/useProjects';
-import { useUpdateProject } from '@/features/projects/hooks/useProjectMutations';
+import { useUpdateProject, useAddMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
 import { useTasks } from '@/features/tasks/hooks/useTasks';
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
 import { useIssues } from '@/features/issues/hooks/useIssues';
@@ -41,6 +43,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const canCreateTask = isSuperAdmin || hasPermission('create:tasks');
   const canCreateIssue = isSuperAdmin || hasPermission('create:issues');
   const canCreateReport = isSuperAdmin || hasPermission('create:reports');
+  const canManageMembers = isSuperAdmin || hasPermission('assign:project_members');
 
   const [tab, setTab] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
@@ -72,6 +75,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [editReport, setEditReport] = useState<DailyReport | null>(null);
   const createReportMutation = useCreateReport(projectId);
   const updateReportMutation = useUpdateReport(projectId);
+
+  // Members
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const addMemberMutation = useAddMember(projectId);
+  const removeMemberMutation = useRemoveMember(projectId);
 
   // Handlers
   const handleUpdateProject = async (values: any) => {
@@ -119,6 +127,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     setFormError(null);
     try { await updateReportMutation.mutateAsync({ id: editReport!.id, payload: values }); setEditReport(null); }
     catch (e: any) { setFormError(e?.response?.data?.message ?? 'Failed to update report'); }
+  };
+
+  const handleAddMember = async (values: any) => {
+    setFormError(null);
+    try { await addMemberMutation.mutateAsync({ userId: values.userId, role: values.role || undefined }); setAddMemberOpen(false); }
+    catch (e: any) { setFormError(e?.response?.data?.message ?? 'Failed to add member'); }
+  };
+  const handleRemoveMember = async (member: { id: string; user: { firstName: string; lastName: string } }) => {
+    if (!confirm(`Remove ${member.user.firstName} ${member.user.lastName} from this project?`)) return;
+    try { await removeMemberMutation.mutateAsync(member.id); }
+    catch (e: any) { alert(e?.response?.data?.message ?? 'Failed to remove member'); }
   };
 
   if (projectLoading) return <AppLoader />;
@@ -221,6 +240,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Members Tab */}
       <TabPanel value={tab} index={2}>
+        {canManageMembers && (
+          <Stack direction="row" justifyContent="flex-end" mb={2}>
+            <AppButton variant="contained" startIcon={<AddIcon />} onClick={() => { setFormError(null); setAddMemberOpen(true); }}>
+              Add member
+            </AppButton>
+          </Stack>
+        )}
         {(project.members?.length ?? 0) === 0 ? (
           <AppEmptyState title="No members" description="Members of this project will appear here." />
         ) : (
@@ -235,6 +261,21 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   <Typography variant="caption" color="text.secondary">{member.user.email}</Typography>
                 </Box>
                 {member.role && <Chip label={member.role} size="small" variant="outlined" />}
+                {canManageMembers && (
+                  <Tooltip title={(project.members?.length ?? 0) <= 1 ? 'A project must keep at least one member' : 'Remove member'}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label={`Remove ${member.user.firstName} ${member.user.lastName}`}
+                        disabled={(project.members?.length ?? 0) <= 1 || removeMemberMutation.isPending}
+                        onClick={() => handleRemoveMember(member)}
+                      >
+                        <PersonRemoveIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
               </Box>
             ))}
           </Stack>
@@ -268,6 +309,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <EditIssueModal open={!!editIssue} issue={editIssue} isLoading={updateIssueMutation.isPending} error={formError} onClose={() => setEditIssue(null)} onSubmit={handleUpdateIssue} />
       <CreateReportModal open={createReportOpen} isLoading={createReportMutation.isPending} error={formError} onClose={() => setCreateReportOpen(false)} onSubmit={handleCreateReport} />
       <EditReportModal open={!!editReport} report={editReport} isLoading={updateReportMutation.isPending} error={formError} onClose={() => setEditReport(null)} onSubmit={handleUpdateReport} />
+      <AddMemberModal open={addMemberOpen} existingMembers={project.members ?? []} isLoading={addMemberMutation.isPending} error={formError} onClose={() => setAddMemberOpen(false)} onSubmit={handleAddMember} />
     </Box>
   );
 }
