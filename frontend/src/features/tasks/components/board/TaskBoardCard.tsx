@@ -30,6 +30,8 @@ interface TaskBoardCardProps {
   task: BoardTask;
   isOverlay?: boolean;
   onMenu?: (task: BoardTask, anchor: HTMLElement) => void;
+  onOpen?: (task: BoardTask) => void;
+  dragDisabled?: boolean;
 }
 
 function initials(firstName?: string, lastName?: string) {
@@ -47,12 +49,14 @@ interface CardSurfaceProps {
   task: BoardTask;
   isOverlay?: boolean;
   onMenu?: (task: BoardTask, anchor: HTMLElement) => void;
+  onOpen?: (task: BoardTask) => void;
+  dragDisabled?: boolean;
 }
 
 const CardSurface = forwardRef<
   HTMLDivElement,
   CardSurfaceProps & React.HTMLAttributes<HTMLDivElement>
->(function CardSurface({ task, isOverlay, onMenu, style, ...rest }, ref) {
+>(function CardSurface({ task, isOverlay, onMenu, onOpen, dragDisabled, style, ...rest }, ref) {
   const theme = useTheme();
   const projectTagBg = alpha(
     theme.palette.primary.main,
@@ -76,13 +80,14 @@ const CardSurface = forwardRef<
       {...rest}
       style={overlayStyle}
       elevation={isOverlay ? 8 : 0}
+      onClick={onOpen ? () => onOpen(task) : undefined}
       sx={{
         p: 1.5,
         borderRadius: 1.5,
         border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.paper',
-        cursor: isOverlay ? 'grabbing' : 'grab',
+        cursor: isOverlay ? 'grabbing' : dragDisabled ? 'pointer' : 'grab',
         userSelect: 'none',
         touchAction: 'none',
         transition: 'border-color 120ms ease, box-shadow 120ms ease',
@@ -210,7 +215,7 @@ const CardSurface = forwardRef<
   );
 });
 
-export function TaskBoardCard({ task, isOverlay = false, onMenu }: TaskBoardCardProps) {
+export function TaskBoardCard({ task, isOverlay = false, onMenu, onOpen, dragDisabled }: TaskBoardCardProps) {
   const {
     attributes,
     listeners,
@@ -218,7 +223,7 @@ export function TaskBoardCard({ task, isOverlay = false, onMenu }: TaskBoardCard
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.id, disabled: dragDisabled });
 
   if (isOverlay) {
     return <CardSurface task={task} isOverlay />;
@@ -248,6 +253,8 @@ export function TaskBoardCard({ task, isOverlay = false, onMenu }: TaskBoardCard
       ref={setNodeRef}
       task={task}
       onMenu={onMenu}
+      onOpen={onOpen}
+      dragDisabled={dragDisabled}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,

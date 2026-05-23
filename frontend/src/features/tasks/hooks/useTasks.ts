@@ -17,3 +17,12 @@ export function useTasks(options: UseTasksOptions = {}) {
     enabled: isAuthenticated,
   });
 }
+
+export function useTask(id: string | null) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['tasks', 'detail', id],
+    queryFn: () => tasksApi.getById(id!),
+    enabled: isAuthenticated && !!id,
+  });
+}

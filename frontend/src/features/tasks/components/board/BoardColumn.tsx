@@ -14,9 +14,11 @@ interface BoardColumnProps {
   onAddTask?: (columnId: BoardColumnId) => void;
   addDisabledReason?: string;
   onCardMenu?: (task: BoardTask, anchor: HTMLElement) => void;
+  onCardOpen?: (task: BoardTask) => void;
+  dragDisabled?: boolean;
 }
 
-export function BoardColumn({ id, label, tasks, onAddTask, addDisabledReason, onCardMenu }: BoardColumnProps) {
+export function BoardColumn({ id, label, tasks, onAddTask, addDisabledReason, onCardMenu, onCardOpen, dragDisabled }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const theme = useTheme();
   const taskIds = tasks.map((t) => t.id);
@@ -84,7 +86,13 @@ export function BoardColumn({ id, label, tasks, onAddTask, addDisabledReason, on
       >
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
-            <TaskBoardCard key={task.id} task={task} onMenu={onCardMenu} />
+            <TaskBoardCard
+              key={task.id}
+              task={task}
+              onMenu={onCardMenu}
+              onOpen={onCardOpen}
+              dragDisabled={dragDisabled}
+            />
           ))}
         </SortableContext>
         {tasks.length === 0 && (

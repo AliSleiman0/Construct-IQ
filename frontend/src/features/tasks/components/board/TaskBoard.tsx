@@ -3,18 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  Button,
   CircularProgress,
   FormControl,
+  InputAdornment,
   InputLabel,
   Menu,
   MenuItem,
   Select,
   Stack,
+  TextField,
   Tooltip,
   Typography,
   type SelectChangeEvent,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import { useRouter } from 'next/navigation';
 import {
   DndContext,
   DragOverlay,
@@ -91,8 +96,12 @@ function findColumnOfTask(state: TasksByColumn, taskId: string): BoardColumnId |
 
 export function TaskBoard() {
   const { enqueueSnackbar } = useSnackbar();
+  const router = useRouter();
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const [projectFilter, setProjectFilter] = useState<string>('');
+  const [searchText, setSearchText] = useState('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('');
+  const isFiltered = !!searchText.trim() || !!assigneeFilter;
   const { data: tasks, isLoading: tasksLoading } = useTasks({
     projectId: projectFilter || undefined,
   });
@@ -143,18 +152,27 @@ export function TaskBoard() {
 
   const enrichedTasks = useMemo<BoardTask[]>(() => {
     const list = tasks ?? [];
-    return list.map((t) => {
-      const assignedTo = t.assignedToId
-        ? userById.get(t.assignedToId) ?? t.assignedTo ?? null
-        : null;
-      const projectTag = projectNameById.get(t.projectId);
-      return {
-        ...t,
-        assignedTo,
-        projectTag,
-      };
-    });
-  }, [tasks, projectNameById, userById]);
+    const q = searchText.trim().toLowerCase();
+    return list
+      .filter((t) => {
+        const matchesSearch = !q || t.title.toLowerCase().includes(q);
+        const matchesAssignee =
+          !assigneeFilter ||
+          (assigneeFilter === 'UNASSIGNED' ? !t.assignedToId : t.assignedToId === assigneeFilter);
+        return matchesSearch && matchesAssignee;
+      })
+      .map((t) => {
+        const assignedTo = t.assignedToId
+          ? userById.get(t.assignedToId) ?? t.assignedTo ?? null
+          : null;
+        const projectTag = projectNameById.get(t.projectId);
+        return {
+          ...t,
+          assignedTo,
+          projectTag,
+        };
+      });
+  }, [tasks, projectNameById, userById, searchText, assigneeFilter]);
 
   // Sync local drag-state mirror from server data — but never mid-drag.
   useEffect(() => {
@@ -438,6 +456,52 @@ export function TaskBoard() {
         </Box>
       </Stack>
 
+      {/* Filter / search bar. Drag-reorder is disabled while filtered so a partial
+          taskIds list can't be sent to /tasks/reorder and corrupt hidden cards. */}
+      <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap">
+        <TextField
+          size="small"
+          placeholder="Search tasks…"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          sx={{ width: 260 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel id="board-assignee-filter-label">Assignee</InputLabel>
+          <Select
+            labelId="board-assignee-filter-label"
+            label="Assignee"
+            value={assigneeFilter}
+            onChange={(e: SelectChangeEvent) => setAssigneeFilter(e.target.value)}
+          >
+            <MenuItem value="">All assignees</MenuItem>
+            <MenuItem value="UNASSIGNED">Unassigned</MenuItem>
+            {(users ?? []).map((u) => (
+              <MenuItem key={u.id} value={u.id}>
+                {u.firstName} {u.lastName}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        {isFiltered && (
+          <>
+            <Button size="small" onClick={() => { setSearchText(''); setAssigneeFilter(''); }}>
+              Clear
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              Reordering disabled while filtered
+            </Typography>
+          </>
+        )}
+      </Stack>
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -466,6 +530,8 @@ export function TaskBoard() {
               onAddTask={handleAddTask}
               addDisabledReason={addDisabledReason}
               onCardMenu={handleCardMenu}
+              onCardOpen={(t) => router.push(`/pm/tasks/${t.id}`)}
+              dragDisabled={isFiltered}
             />
           ))}
         </Box>
