@@ -29,18 +29,25 @@ import { ProjectStatus, UserStatus } from '../../common/enums';
 
 // All roles provisioned for every new organization, with their permission sets.
 // Permissions are global (no org scope) so we look them up by name at creation time.
+//
+// `name` MUST be the canonical role CODE (matching backend/scripts/seed.ts and
+// frontend/src/config/roles.ts) — login returns `roles: Role.name[]` and the
+// frontend resolves the landing route / sidebar from those codes. Human-readable
+// labels live in `description` (and frontend ROLE_LABELS). The trailing three
+// roles (PLANNING_ENG / FINANCE_VIEWER / SUPPLIER) have no frontend section yet;
+// they remain available for assignment but route to the default fallback.
 const STANDARD_ROLES: Array<{
   name: string;
   description: string;
   permissions: string[];
 }> = [
   {
-    name: 'Admin',
+    name: 'ORG_ADMIN',
     description: 'Full control within own organization',
     permissions: ['manage:company'],
   },
   {
-    name: 'Project Manager',
+    name: 'PM',
     description: 'Manages assigned projects, team, tasks, and approves POs',
     permissions: [
       'read:organizations',
@@ -68,7 +75,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Site Engineer',
+    name: 'SITE_ENG',
     description:
       'Submits daily reports, creates issues, updates assigned tasks',
     permissions: [
@@ -90,7 +97,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Planning Engineer',
+    name: 'PLANNING_ENG',
     description: 'Manages phases, milestones, and project schedule',
     permissions: [
       'read:projects',
@@ -107,7 +114,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Quantity Surveyor',
+    name: 'SURVEYOR',
     description: 'Owns budget management and cost tracking',
     permissions: [
       'read:projects',
@@ -126,7 +133,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Procurement Officer',
+    name: 'PROCUREMENT',
     description: 'Manages suppliers, purchase orders, and deliveries',
     permissions: [
       'read:projects',
@@ -143,7 +150,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Finance / Management Viewer',
+    name: 'FINANCE_VIEWER',
     description:
       'Read-only visibility across projects, budget, and procurement',
     permissions: [
@@ -162,7 +169,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Client Viewer',
+    name: 'CLIENT',
     description:
       'External client — limited read access to assigned project overview',
     permissions: [
@@ -174,7 +181,7 @@ const STANDARD_ROLES: Array<{
     ],
   },
   {
-    name: 'Supplier User',
+    name: 'SUPPLIER',
     description: 'External supplier — view own POs and update delivery status',
     permissions: ['read:purchase_orders', 'update:deliveries'],
   },
@@ -340,7 +347,7 @@ export class OrganizationsService {
         const createdRoles = await this.roleModel.insertMany(roleDocs, {
           session,
         });
-        const adminRole = createdRoles.find((r) => r.name === 'Admin');
+        const adminRole = createdRoles.find((r) => r.name === 'ORG_ADMIN');
 
         // 3. Create the admin user with the Admin role attached
         const [adminUser] = await this.userModel.create(
