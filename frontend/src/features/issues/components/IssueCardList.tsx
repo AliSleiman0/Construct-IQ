@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Paper, Typography, Stack } from '@mui/material';
+import { Box, Paper, Typography } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import Link from 'next/link';
 import dayjs from 'dayjs';
@@ -15,7 +15,7 @@ function userName(u?: UserRef | null): string {
 /** The rich card view of issues (the "cards" toggle of the triage console). */
 export function IssueCardList({ issues, detailBasePath }: { issues: Issue[]; detailBasePath: string }) {
   return (
-    <Stack gap={1.5}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1.5 }}>
       {issues.map((iss) => (
         <Paper
           key={iss.id}
@@ -70,6 +70,6 @@ export function IssueCardList({ issues, detailBasePath }: { issues: Issue[]; det
           </Box>
         </Paper>
       ))}
-    </Stack>
+    </Box>
   );
 }
