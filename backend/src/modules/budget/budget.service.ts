@@ -110,4 +110,29 @@ export class BudgetService {
       notes: dto.notes ?? null,
     });
   }
+
+  async listExpenses(budgetId: string, organizationId: string, isSuperAdmin: boolean): Promise<any[]> {
+    const filter = isSuperAdmin ? { _id: budgetId } : { _id: budgetId, organizationId };
+    const budget = await this.budgetModel.findOne(filter).lean();
+    if (!budget) throw new NotFoundException('Budget not found');
+
+    const expenseFilter: Record<string, unknown> = { budgetId };
+    if (!isSuperAdmin) expenseFilter.organizationId = organizationId;
+    return this.expenseModel.find(expenseFilter).sort({ date: -1, createdAt: -1 }).lean();
+  }
+
+  async removeExpense(budgetId: string, expenseId: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: budgetId } : { _id: budgetId, organizationId };
+    const budget = await this.budgetModel.findOne(filter).lean();
+    if (!budget) throw new NotFoundException('Budget not found');
+
+    // Scope the delete to this budget (and org, unless super admin) so a mismatched
+    // id can never reach across budgets/tenants. findByProject recomputes spend from
+    // the remaining expenses, so no extra recompute is needed here.
+    const expenseFilter: Record<string, unknown> = { _id: expenseId, budgetId };
+    if (!isSuperAdmin) expenseFilter.organizationId = organizationId;
+    const expense = await this.expenseModel.findOneAndDelete(expenseFilter);
+    if (!expense) throw new NotFoundException('Expense not found');
+    return { message: 'Expense deleted successfully' };
+  }
 }

@@ -61,4 +61,20 @@ export class BudgetController {
   addExpense(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateExpenseDto): Promise<any> {
     return this.budgetService.addExpense(id, user.organizationId, dto, user.isSuperAdmin);
   }
+
+  @Get(':id/expenses')
+  @RequirePermissions(PERMISSIONS.BUDGET.READ)
+  listExpenses(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any[]> {
+    return this.budgetService.listExpenses(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  @Delete(':id/expenses/:expenseId')
+  @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
+  removeExpense(
+    @Param('id') id: string,
+    @Param('expenseId') expenseId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<any> {
+    return this.budgetService.removeExpense(id, expenseId, user.organizationId, user.isSuperAdmin);
+  }
 }

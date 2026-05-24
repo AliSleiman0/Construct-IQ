@@ -26,6 +26,20 @@ export interface Budget {
   updatedAt: string;
 }
 
+export interface Expense {
+  id: string;
+  budgetId: string;
+  budgetLineId?: string | null;
+  description: string;
+  amount: number;
+  currency: string;
+  date: string;
+  reference?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateBudgetPayload {
   projectId: string;
   totalAmount: number;

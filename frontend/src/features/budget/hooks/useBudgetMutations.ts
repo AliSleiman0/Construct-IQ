@@ -52,3 +52,11 @@ export function useAddExpense(budgetId: string) {
     onSuccess: invalidate,
   });
 }
+
+export function useRemoveExpense(budgetId: string) {
+  const invalidate = useInvalidateBudget();
+  return useMutation({
+    mutationFn: (expenseId: string) => budgetApi.removeExpense(budgetId, expenseId),
+    onSuccess: invalidate,
+  });
+}

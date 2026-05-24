@@ -8,12 +8,13 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import dayjs from 'dayjs';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
-import { useBudget } from '../hooks/useBudget';
+import { useBudget, useExpenses } from '../hooks/useBudget';
 import {
-  useCreateBudget, useAddBudgetLine, useRemoveBudgetLine, useAddExpense,
+  useCreateBudget, useAddBudgetLine, useRemoveBudgetLine, useAddExpense, useRemoveExpense,
 } from '../hooks/useBudgetMutations';
 import { CreateBudgetModal, AddLineModal, AddExpenseModal } from './BudgetModals';
 
@@ -32,6 +33,8 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
   const addLine = useAddBudgetLine(budget?.id ?? '');
   const removeLine = useRemoveBudgetLine(budget?.id ?? '');
   const addExpense = useAddExpense(budget?.id ?? '');
+  const removeExpense = useRemoveExpense(budget?.id ?? '');
+  const { data: expenses } = useExpenses(budget?.id);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [lineOpen, setLineOpen] = useState(false);
@@ -86,6 +89,7 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
   }
 
   const currency = budget.currency || 'USD';
+  const lineCategory = new Map(budget.lines.map((l) => [l.id, l.category]));
   const allocated = budget.lines.reduce((s, l) => s + l.plannedAmount, 0);
   const spent = budget.totalSpent ?? 0;
   const remaining = budget.totalAmount - spent;
@@ -184,6 +188,66 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
                   </TableRow>
                 );
               })}
+            </TableBody>
+          </Table>
+        )}
+      </Paper>
+
+      {/* Expense history */}
+      <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="subtitle1" fontWeight={700} mb={1.5}>Expenses</Typography>
+        {!expenses || expenses.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No expenses recorded yet.</Typography>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Date</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Line</TableCell>
+                <TableCell>Reference</TableCell>
+                <TableCell align="right">Amount</TableCell>
+                {canManage && <TableCell align="right">Actions</TableCell>}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {expenses.map((e) => (
+                <TableRow key={e.id} hover>
+                  <TableCell>{dayjs(e.date).format('MMM D, YYYY')}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{e.description}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">
+                      {(e.budgetLineId && lineCategory.get(e.budgetLineId)) || '—'}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary">{e.reference || '—'}</Typography>
+                  </TableCell>
+                  <TableCell align="right">{money(e.amount, e.currency || currency)}</TableCell>
+                  {canManage && (
+                    <TableCell align="right">
+                      <Tooltip title="Delete expense">
+                        <span>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={`Delete expense ${e.description}`}
+                            disabled={removeExpense.isPending}
+                            onClick={async () => {
+                              if (!confirm(`Delete expense "${e.description}"?`)) return;
+                              await removeExpense.mutateAsync(e.id);
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}

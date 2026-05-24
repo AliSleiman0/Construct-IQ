@@ -10,3 +10,12 @@ export function useBudget(projectId?: string) {
     enabled: isAuthenticated && !!projectId,
   });
 }
+
+export function useExpenses(budgetId?: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['budget', budgetId, 'expenses'],
+    queryFn: () => budgetApi.listExpenses(budgetId!),
+    enabled: isAuthenticated && !!budgetId,
+  });
+}

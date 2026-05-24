@@ -3,6 +3,7 @@ import apiClient from './client';
 import type {
   Budget,
   BudgetLine,
+  Expense,
   CreateBudgetPayload,
   UpdateBudgetPayload,
   CreateBudgetLinePayload,
@@ -58,5 +59,14 @@ export const budgetApi = {
   addExpense: async (budgetId: string, payload: CreateExpensePayload): Promise<Raw> => {
     const res = await apiClient.post<Raw>(`/budget/${budgetId}/expenses`, payload);
     return idify(res.data);
+  },
+
+  listExpenses: async (budgetId: string): Promise<Expense[]> => {
+    const res = await apiClient.get<Raw[]>(`/budget/${budgetId}/expenses`);
+    return Array.isArray(res.data) ? res.data.map((e) => idify<Expense>(e)) : [];
+  },
+
+  removeExpense: async (budgetId: string, expenseId: string): Promise<void> => {
+    await apiClient.delete(`/budget/${budgetId}/expenses/${expenseId}`);
   },
 };
