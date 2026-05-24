@@ -23,4 +23,10 @@ export class DashboardController {
   getPmDashboard(@CurrentUser() user: JwtPayload) {
     return this.dashboardService.getPmDashboard(user.organizationId, user.sub);
   }
+
+  @Get('site-eng')
+  @RequirePermissions(PERMISSIONS.DASHBOARD.READ)
+  getSiteEngDashboard(@CurrentUser() user: JwtPayload) {
+    return this.dashboardService.getSiteEngDashboard(user.organizationId, user.sub);
+  }
 }

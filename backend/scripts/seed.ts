@@ -216,6 +216,7 @@ async function main() {
       'create:issues', 'read:issues', 'update:issues',
       'read:phases', 'read:milestones',
       'read:documents', 'upload:documents', 'read:ai',
+      'read:dashboard',
     ],
     CLIENT: ['read:projects', 'read:milestones', 'read:issues', 'read:reports', 'read:documents'],
   };

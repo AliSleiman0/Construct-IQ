@@ -18,6 +18,17 @@ export interface PmDashboardData {
   openTasksByStatus: { label: string; value: number }[];
 }
 
+export interface SiteEngDashboardData {
+  projectCount: number;
+  myOpenTaskCount: number;
+  myTasksDueThisWeek: number;
+  openIssueCount: number;
+  escalatedIssueCount: number;
+  myReportsThisWeek: number;
+  taskThroughput: { label: string; value: number }[];
+  myOpenTasksByStatus: { label: string; value: number }[];
+}
+
 export interface OrgDashboardData {
   activeProjectCount: number;
   totalProjectCount: number;

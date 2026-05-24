@@ -94,6 +94,7 @@ const STANDARD_ROLES: Array<{
       'read:documents',
       'upload:documents',
       'read:ai',
+      'read:dashboard',
     ],
   },
   {
