@@ -30,9 +30,12 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   projectId: string;
+  phaseId?: string | null;
   assignedToId?: string | null;
+  startDate?: string | null;
   dueDate?: string | null;
   position?: number;
+  dependsOnTaskIds?: string[];
   comments?: TaskComment[];
   createdAt: string;
   updatedAt: string;
@@ -43,10 +46,13 @@ export interface CreateTaskPayload {
   projectId: string;
   title: string;
   description?: string;
+  phaseId?: string;
   assignedToId?: string;
   priority?: TaskPriority;
   status?: TaskStatus;
+  startDate?: string;
   dueDate?: string;
+  dependsOnTaskIds?: string[];
 }
 
 export type UpdateTaskPayload = Partial<Omit<CreateTaskPayload, 'projectId'>>;

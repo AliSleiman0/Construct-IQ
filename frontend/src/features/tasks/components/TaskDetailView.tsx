@@ -9,9 +9,10 @@ import SendIcon from '@mui/icons-material/Send';
 import dayjs from 'dayjs';
 import { AppLoader } from '@/components/ui/AppLoader';
 import { AppErrorState } from '@/components/ui/AppErrorState';
-import { useTask } from '../hooks/useTasks';
+import { useTask, useTasks } from '../hooks/useTasks';
 import { useUpdateTask, useDeleteTask, useAddTaskComment } from '../hooks/useTaskMutations';
 import { EditTaskModal, type TaskFormValues } from './TaskModals';
+import { wouldCreateCycle } from '../utils/dependencies';
 import { TaskStatusChip } from './TaskStatusChip';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { useUsers } from '@/features/users/hooks/useUsers';
@@ -38,6 +39,7 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
   const { data: task, isLoading, isError, refetch } = useTask(taskId);
   const { data: users } = useUsers();
   const { data: projects } = useProjects();
+  const { data: projectTasks } = useTasks({ projectId: task?.projectId });
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const isSuperAdmin = !!useAuthStore((s) => s.user?.isSuperAdmin);
   const canUpdate = isSuperAdmin || hasPermission('update:tasks');
@@ -74,6 +76,14 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
 
   const handleEdit = async (values: TaskFormValues) => {
     setFormError(null);
+    // Client-side cycle guard — the backend does not enforce it.
+    const deps = values.dependsOnTaskIds ?? [];
+    const cyclic = deps.find((depId) => wouldCreateCycle(projectTasks ?? [], task.id, depId));
+    if (cyclic) {
+      const name = (projectTasks ?? []).find((t) => t.id === cyclic)?.title ?? 'that task';
+      setFormError(`"${name}" already depends on this task — that would create a circular dependency.`);
+      return;
+    }
     try {
       await updateTask.mutateAsync({ id: task.id, payload: values });
       setEditOpen(false);
@@ -226,6 +236,7 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
         task={task}
         isLoading={updateTask.isPending}
         error={formError}
+        dependencyTasks={(projectTasks ?? []).filter((t) => t.id !== task.id)}
         onClose={() => setEditOpen(false)}
         onSubmit={handleEdit}
       />

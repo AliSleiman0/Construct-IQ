@@ -1,9 +1,11 @@
 'use client';
 import { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Stack, Alert } from '@mui/material';
+import {
+  Stack, Alert, FormControl, InputLabel, Select, MenuItem, OutlinedInput, Chip, Box,
+} from '@mui/material';
 import { AppModal } from '@/components/ui/AppModal';
 import { AppButton } from '@/components/ui/AppButton';
 import { FormTextField } from '@/components/form/FormTextField';
@@ -18,6 +20,7 @@ const taskSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
   dueDate: z.string().optional(),
   assignedToId: z.string().optional(),
+  dependsOnTaskIds: z.array(z.string()).optional(),
 });
 export type TaskFormValues = z.infer<typeof taskSchema>;
 
@@ -81,6 +84,7 @@ export function CreateTaskModal({
       priority: 'MEDIUM',
       dueDate: '',
       assignedToId: UNASSIGNED_VALUE,
+      dependsOnTaskIds: [],
     },
   });
 
@@ -163,11 +167,13 @@ interface EditTaskModalProps {
   task: Task | null;
   isLoading: boolean;
   error?: string | null;
+  /** Other tasks in the project (excluding this one) to pick dependencies from. */
+  dependencyTasks?: Task[];
   onClose: () => void;
   onSubmit: (values: TaskFormValues) => void;
 }
 
-export function EditTaskModal({ open, task, isLoading, error, onClose, onSubmit }: EditTaskModalProps) {
+export function EditTaskModal({ open, task, isLoading, error, dependencyTasks, onClose, onSubmit }: EditTaskModalProps) {
   const assigneeOptions = useAssigneeOptions();
   const { control, handleSubmit, reset } = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -178,8 +184,14 @@ export function EditTaskModal({ open, task, isLoading, error, onClose, onSubmit 
       priority: 'MEDIUM',
       dueDate: '',
       assignedToId: UNASSIGNED_VALUE,
+      dependsOnTaskIds: [],
     },
   });
+
+  const depTitle = useMemo(
+    () => new Map((dependencyTasks ?? []).map((t) => [t.id, t.title])),
+    [dependencyTasks],
+  );
 
   useEffect(() => {
     if (task) {
@@ -190,6 +202,7 @@ export function EditTaskModal({ open, task, isLoading, error, onClose, onSubmit 
         priority: task.priority,
         dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
         assignedToId: task.assignedToId ?? UNASSIGNED_VALUE,
+        dependsOnTaskIds: task.dependsOnTaskIds ?? [],
       });
     }
   }, [task, reset]);
@@ -251,6 +264,37 @@ export function EditTaskModal({ open, task, isLoading, error, onClose, onSubmit 
           fullWidth
           InputLabelProps={{ shrink: true }}
         />
+        {dependencyTasks && dependencyTasks.length > 0 && (
+          <Controller
+            name="dependsOnTaskIds"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth>
+                <InputLabel id="depends-on-label">Depends on</InputLabel>
+                <Select
+                  labelId="depends-on-label"
+                  multiple
+                  value={field.value ?? []}
+                  onChange={(e) =>
+                    field.onChange(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)
+                  }
+                  input={<OutlinedInput label="Depends on" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {(selected as string[]).map((id) => (
+                        <Chip key={id} size="small" label={depTitle.get(id) ?? id} />
+                      ))}
+                    </Box>
+                  )}
+                >
+                  {dependencyTasks.map((t) => (
+                    <MenuItem key={t.id} value={t.id}>{t.title}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          />
+        )}
       </Stack>
     </AppModal>
   );
