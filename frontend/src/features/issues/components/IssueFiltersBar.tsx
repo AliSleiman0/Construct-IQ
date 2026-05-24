@@ -76,43 +76,43 @@ export function IssueFiltersBar({
         </ToggleButtonGroup>
       </Stack>
 
-      {/* Filters */}
-      <Stack direction={{ xs: 'column', md: 'row' }} gap={1.5} flexWrap="wrap">
+      {/* Filters — wrap onto 1–2 compact rows (flex-basis lets them pack + wrap). */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
         <TextField
           size="small"
           placeholder="Search title, location, trade…"
           value={searchText}
           onChange={(e) => onSearch(e.target.value)}
-          sx={{ flex: 1, minWidth: 220 }}
+          sx={{ flex: '2 1 240px' }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" color="action" /></InputAdornment> }}
         />
-        <TextField size="small" select label="Severity" value={params.severity ?? ''} sx={{ minWidth: 130 }}
+        <TextField size="small" select label="Severity" value={params.severity ?? ''} sx={{ flex: '1 1 150px' }}
           onChange={(e) => onPatch({ severity: (e.target.value || undefined) as any })}>
           <MenuItem value="">All severities</MenuItem>
           {SEVERITIES.map((s) => <MenuItem key={s} value={s}>{titleCase(s)}</MenuItem>)}
         </TextField>
-        <TextField size="small" select label="Status" value={params.status ?? ''} sx={{ minWidth: 130 }}
+        <TextField size="small" select label="Status" value={params.status ?? ''} sx={{ flex: '1 1 150px' }}
           onChange={(e) => onPatch({ status: (e.target.value || undefined) as any })}>
           <MenuItem value="">All statuses</MenuItem>
           {STATUSES.map((s) => <MenuItem key={s} value={s}>{titleCase(s)}</MenuItem>)}
         </TextField>
-        <TextField size="small" select label="Type" value={params.type ?? ''} sx={{ minWidth: 130 }}
+        <TextField size="small" select label="Type" value={params.type ?? ''} sx={{ flex: '1 1 150px' }}
           onChange={(e) => onPatch({ type: (e.target.value || undefined) as any })}>
           <MenuItem value="">All types</MenuItem>
           {TYPES.map((s) => <MenuItem key={s} value={s}>{titleCase(s)}</MenuItem>)}
         </TextField>
-        <TextField size="small" select label="Project" value={params.projectId ?? ''} sx={{ minWidth: 150 }}
+        <TextField size="small" select label="Project" value={params.projectId ?? ''} sx={{ flex: '1 1 160px' }}
           onChange={(e) => onPatch({ projectId: e.target.value || undefined })}>
           <MenuItem value="">All projects</MenuItem>
           {(projects ?? []).map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </TextField>
-        <TextField size="small" select label="Assignee" value={params.assignedToId ?? ''} sx={{ minWidth: 150 }}
+        <TextField size="small" select label="Assignee" value={params.assignedToId ?? ''} sx={{ flex: '1 1 160px' }}
           onChange={(e) => onPatch({ assignedToId: e.target.value || undefined })}>
           <MenuItem value="">Anyone</MenuItem>
           <MenuItem value="NONE">Unassigned</MenuItem>
           {(users ?? []).map((u) => <MenuItem key={u.id} value={u.id}>{u.firstName} {u.lastName}</MenuItem>)}
         </TextField>
-      </Stack>
+      </Box>
     </Stack>
   );
 }
