@@ -3,13 +3,18 @@
 import { Box, Tooltip, Typography, useTheme } from '@mui/material';
 import dayjs from 'dayjs';
 import type { Milestone, MilestoneStatus } from '@/types/milestone.types';
-import { dateToPercent, type DateWindow } from './timeline.utils';
+import { dateToPercent, shiftDateByDays, type DateWindow } from './timeline.utils';
+import { useTimelineDrag } from '../../hooks/useTimelineDrag';
 
 interface MilestonePinProps {
   milestone: Milestone;
   window: DateWindow;
   totalHeight: number;
+  windowSpanMs: number;
+  getTrackWidth: () => number;
+  canEdit?: boolean;
   onClick?: (milestone: Milestone) => void;
+  onCommitDate?: (milestoneId: string, targetDate: string) => void;
 }
 
 const STATUS_COLOR: Record<MilestoneStatus, 'warning' | 'info' | 'success'> = {
@@ -18,11 +23,25 @@ const STATUS_COLOR: Record<MilestoneStatus, 'warning' | 'info' | 'success'> = {
   COMPLETED: 'success',
 };
 
-export function MilestonePin({ milestone, window, totalHeight, onClick }: MilestonePinProps) {
+export function MilestonePin({
+  milestone, window, totalHeight, windowSpanMs, getTrackWidth, canEdit = true, onClick, onCommitDate,
+}: MilestonePinProps) {
   const theme = useTheme();
+  const draggable = canEdit && !!milestone.targetDate && !!onCommitDate;
+
+  const { drag, begin } = useTimelineDrag({
+    getTrackWidth,
+    windowSpanMs,
+    onCommit: (_mode, days) => {
+      if (milestone.targetDate) onCommitDate!(milestone.id, shiftDateByDays(milestone.targetDate, days));
+    },
+    onClick: () => onClick?.(milestone),
+  });
+
   if (!milestone.targetDate) return null;
 
-  const leftPct = dateToPercent(milestone.targetDate, window.startMs, window.endMs);
+  const effDate = drag ? shiftDateByDays(milestone.targetDate, drag.days) : milestone.targetDate;
+  const leftPct = dateToPercent(effDate, window.startMs, window.endMs);
   if (leftPct < 0 || leftPct > 100) return null;
 
   const paletteKey = STATUS_COLOR[milestone.status];
@@ -84,7 +103,8 @@ export function MilestonePin({ milestone, window, totalHeight, onClick }: Milest
         <Box
           role="button"
           tabIndex={0}
-          onClick={() => onClick?.(milestone)}
+          onPointerDown={draggable ? (e) => begin(e, 'move') : undefined}
+          onClick={!draggable ? () => onClick?.(milestone) : undefined}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -100,9 +120,10 @@ export function MilestonePin({ milestone, window, totalHeight, onClick }: Milest
             flexDirection: 'column',
             alignItems: 'center',
             gap: 0.25,
-            cursor: 'pointer',
+            cursor: draggable ? (drag ? 'grabbing' : 'grab') : 'pointer',
             pointerEvents: 'auto',
             outline: 'none',
+            touchAction: 'none',
             '&:focus-visible > .pin-dot': {
               boxShadow: `0 0 0 3px ${color}33`,
             },

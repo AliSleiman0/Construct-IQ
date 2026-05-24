@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   CircularProgress,
@@ -45,7 +45,8 @@ import {
   EditMilestoneModal,
   type MilestoneFormValues,
 } from './MilestoneModal';
-import { computeDateWindow } from './timeline.utils';
+import { ZoomControls } from './ZoomControls';
+import { computeDateWindow, type ZoomLevel } from './timeline.utils';
 import type { Phase } from '@/types/phase.types';
 import type { Milestone } from '@/types/milestone.types';
 
@@ -87,6 +88,27 @@ export function TimelineView() {
   }, [phasesQuery.data]);
 
   const milestones = milestonesQuery.data ?? [];
+
+  // Zoom = scrollable track-width multiplier; the percent-positioned bars scale with it.
+  const [zoom, setZoom] = useState<ZoomLevel>(1);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const getTrackWidth = () => trackRef.current?.clientWidth ?? 0;
+
+  // Commit drag/resize date changes for a phase bar.
+  const handlePhaseDates = async (id: string, payload: { startDate?: string; endDate?: string }) => {
+    try {
+      await updatePhase.mutateAsync({ id, payload });
+    } catch {
+      enqueueSnackbar('Failed to update phase dates', { variant: 'error' });
+    }
+  };
+  const handleMilestoneDate = async (id: string, targetDate: string) => {
+    try {
+      await updateMilestone.mutateAsync({ id, payload: { targetDate } });
+    } catch {
+      enqueueSnackbar('Failed to move milestone', { variant: 'error' });
+    }
+  };
 
   const selectedProject = useMemo(
     () => projects?.find((p) => p.id === projectId) ?? null,
@@ -272,7 +294,8 @@ export function TimelineView() {
           </Stack>
         )}
         <Box sx={{ ml: 'auto' }}>
-          <Stack direction="row" gap={1}>
+          <Stack direction="row" gap={1} alignItems="center">
+            <ZoomControls zoom={zoom} onChange={setZoom} />
             <Tooltip
               title={addDisabledReason ?? ''}
               disableHoverListener={!addDisabledReason}
@@ -350,7 +373,10 @@ export function TimelineView() {
             </Stack>
           </Stack>
         ) : (
-          <Box sx={{ position: 'relative', minHeight: totalTimelineHeight, minWidth: 720 }}>
+          <Box
+            ref={trackRef}
+            sx={{ position: 'relative', minHeight: totalTimelineHeight, minWidth: 720, width: `${zoom * 100}%` }}
+          >
             {/* Milestone pin lane (top) */}
             <Box sx={{ position: 'relative', height: PIN_LANE_HEIGHT }}>
               {milestones.map((m) => (
@@ -359,7 +385,10 @@ export function TimelineView() {
                   milestone={m}
                   window={window}
                   totalHeight={PIN_LANE_HEIGHT + AXIS_HEIGHT + phasesAreaHeight}
+                  windowSpanMs={window.endMs - window.startMs}
+                  getTrackWidth={getTrackWidth}
                   onClick={(milestone) => setEditMilestone(milestone)}
+                  onCommitDate={handleMilestoneDate}
                 />
               ))}
             </Box>
@@ -374,7 +403,10 @@ export function TimelineView() {
                   key={p.id}
                   phase={p}
                   window={window}
+                  windowSpanMs={window.endMs - window.startMs}
+                  getTrackWidth={getTrackWidth}
                   onClick={(phase) => setEditPhase(phase)}
+                  onCommitDates={handlePhaseDates}
                 />
               ))}
               {phases.length === 0 && (

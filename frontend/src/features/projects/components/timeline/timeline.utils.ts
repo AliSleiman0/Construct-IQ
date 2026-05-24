@@ -2,6 +2,27 @@ import type { Phase } from '@/types/phase.types';
 import type { Milestone } from '@/types/milestone.types';
 
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Zoom levels expand the scrollable timeline width by this factor. */
+export type ZoomLevel = 1 | 2 | 4;
+
+/**
+ * Convert a horizontal pixel drag delta into a whole-day delta, given the
+ * pixel width of the (zoomed) timeline track and the window's time span.
+ * Snapping to whole days matches the date-only model (phases/tasks store dates).
+ */
+export function snapDaysDelta(dxPx: number, trackWidthPx: number, windowSpanMs: number): number {
+  if (trackWidthPx <= 0 || windowSpanMs <= 0) return 0;
+  const msDelta = (dxPx / trackWidthPx) * windowSpanMs;
+  return Math.round(msDelta / DAY_MS);
+}
+
+/** Shift an ISO/Date value by N whole days, returned as a `YYYY-MM-DD` string. */
+export function shiftDateByDays(date: string | Date, days: number): string {
+  const ms = new Date(date).getTime() + days * DAY_MS;
+  return new Date(ms).toISOString().slice(0, 10);
+}
 
 export interface DateWindow {
   startMs: number;
