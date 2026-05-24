@@ -2,7 +2,7 @@
 
 import { Box } from '@mui/material';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { IssueBoardList } from '@/features/issues/components/IssueBoardList';
+import { IssuesConsole } from '@/features/issues/components/IssuesConsole';
 
 export default function PMIssuesPage() {
   return (
@@ -11,7 +11,7 @@ export default function PMIssuesPage() {
         title="Issues"
         subtitle="Triage and escalate issues across your projects."
       />
-      <IssueBoardList detailBasePath="/pm/issues" />
+      <IssuesConsole detailBasePath="/pm/issues" />
     </Box>
   );
 }
