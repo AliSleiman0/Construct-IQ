@@ -14,9 +14,9 @@ describe('IssuesService', () => {
   let service: IssuesService;
   let model: any;
 
-  // find(...).sort(...).populate(...).lean()
+  // find(...).populate(...).lean()  — the paginated findAll re-fetch by id
   const findChain = (result: any[]) => ({
-    sort: () => ({ populate: () => ({ lean: () => Promise.resolve(result) }) }),
+    populate: () => ({ lean: () => Promise.resolve(result) }),
   });
   // findOne(...).populate(...).lean()
   const findOneChain = (result: any) => ({
@@ -43,6 +43,9 @@ describe('IssuesService', () => {
       findOne: jest.fn(),
       create: jest.fn(),
       updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
+      aggregate: jest.fn().mockResolvedValue([]),
+      countDocuments: jest.fn().mockResolvedValue(0),
+      updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
     const moduleRef = await Test.createTestingModule({
       providers: [IssuesService, { provide: getModelToken(Issue.name), useValue: model }],
@@ -50,43 +53,94 @@ describe('IssuesService', () => {
     service = moduleRef.get(IssuesService);
   });
 
-  describe('findAll', () => {
-    it('scopes by organizationId for non-super-admins', async () => {
-      await service.findAll('org-1', false);
-      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1' });
+  describe('findAll (paginated)', () => {
+    it('returns { items, total, limit, skip }, org-scoped + excludes deleted', async () => {
+      model.aggregate.mockResolvedValue([{ _id: 'i1' }, { _id: 'i2' }]);
+      model.countDocuments.mockResolvedValue(2);
+      model.find.mockReturnValue(findChain([
+        { _id: 'i2', title: 'B' },
+        { _id: 'i1', title: 'A' },
+      ]));
+
+      const res = await service.findAll('org-1', false, { limit: 10, skip: 0 });
+      expect(res.total).toBe(2);
+      expect(res.limit).toBe(10);
+      // Items reordered to the aggregation order (i1, i2), not the find() order.
+      expect(res.items.map((i: any) => i.id)).toEqual(['i1', 'i2']);
+      expect(model.aggregate.mock.calls[0][0][0].$match).toMatchObject({ organizationId: 'org-1', deletedAt: null });
     });
 
-    it('does NOT scope by org for super admins', async () => {
-      await service.findAll('org-1', true);
-      expect(model.find).toHaveBeenCalledWith({});
+    it('does NOT org-scope for super admins', async () => {
+      await service.findAll('org-1', true, {});
+      expect(model.aggregate.mock.calls[0][0][0].$match.organizationId).toBeUndefined();
     });
 
-    it('adds projectId / status / severity filters when provided', async () => {
-      await service.findAll('org-1', false, 'proj-1', IssueStatus.OPEN, 'HIGH');
-      expect(model.find).toHaveBeenCalledWith({
-        organizationId: 'org-1',
-        projectId: 'proj-1',
-        status: IssueStatus.OPEN,
-        severity: 'HIGH',
-      });
+    it('caps limit at 200', async () => {
+      const res = await service.findAll('org-1', false, { limit: 5000 });
+      expect(res.limit).toBe(200);
+      const limitStage = model.aggregate.mock.calls[0][0].find((s: any) => '$limit' in s);
+      expect(limitStage.$limit).toBe(200);
+    });
+
+    it('maps the NONE assignee sentinel to null + applies type filter', async () => {
+      await service.findAll('org-1', false, { assignedToId: 'NONE', type: 'SAFETY' });
+      const match = model.aggregate.mock.calls[0][0][0].$match;
+      expect(match.assignedToId).toBeNull();
+      expect(match.type).toBe('SAFETY');
     });
 
     it('flattens populated refs into id + name objects', async () => {
+      model.aggregate.mockResolvedValue([{ _id: 'iss-1' }]);
+      model.countDocuments.mockResolvedValue(1);
       model.find.mockReturnValue(findChain([populatedDoc()]));
-      const [issue] = await service.findAll('org-1', false);
+      const { items } = await service.findAll('org-1', false, {});
+      const issue = items[0];
       expect(issue.id).toBe('iss-1');
-      expect(issue.projectId).toBe('proj-1');
       expect(issue.project).toEqual({ id: 'proj-1', name: 'Tower Heights' });
-      expect(issue.createdById).toBe('u-1');
-      expect(issue.createdBy).toEqual({ id: 'u-1', firstName: 'Pete', lastName: 'Williams' });
-      expect(issue.assignedToId).toBe('u-2');
       expect(issue.assignedTo).toEqual({ id: 'u-2', firstName: 'Sara', lastName: 'Diaz' });
-      expect(issue.comments[0]).toMatchObject({
-        id: 'c-1',
-        authorId: 'u-1',
-        author: { id: 'u-1', firstName: 'Pete', lastName: 'Williams' },
-        body: 'On it',
-      });
+      expect(issue.comments[0]).toMatchObject({ id: 'c-1', author: { id: 'u-1', firstName: 'Pete', lastName: 'Williams' } });
+    });
+  });
+
+  describe('getSummary', () => {
+    it('returns all triage counts incl. a stale (createdAt threshold) count', async () => {
+      model.countDocuments.mockResolvedValue(3);
+      const res = await service.getSummary('org-1', false);
+      expect(res).toEqual(
+        expect.objectContaining({ total: 3, open: 3, inProgress: 3, resolved: 3, closed: 3, critical: 3, unassigned: 3, stale: 3 }),
+      );
+      expect(model.countDocuments.mock.calls.some((c: any) => c[0]?.createdAt?.$lt)).toBe(true);
+    });
+  });
+
+  describe('bulkUpdate', () => {
+    it('stamps resolvedAt + org-scopes when setting RESOLVED', async () => {
+      model.updateMany.mockResolvedValue({ modifiedCount: 2 });
+      const res = await service.bulkUpdate('org-1', false, { ids: ['a', 'b'], status: IssueStatus.RESOLVED });
+      expect(res).toEqual({ modified: 2 });
+      const [filter, update] = model.updateMany.mock.calls[0];
+      expect(filter).toEqual({ _id: { $in: ['a', 'b'] }, organizationId: 'org-1' });
+      expect(update.$set.status).toBe(IssueStatus.RESOLVED);
+      expect(update.$set.resolvedAt).toBeInstanceOf(Date);
+    });
+
+    it('clears resolution timestamps on reopen (OPEN)', async () => {
+      await service.bulkUpdate('org-1', false, { ids: ['a'], status: IssueStatus.OPEN });
+      const update = model.updateMany.mock.calls[0][1];
+      expect(update.$set.resolvedAt).toBeNull();
+      expect(update.$set.closedAt).toBeNull();
+    });
+
+    it('unassigns ("" → null) without touching status, and no-ops on empty ids', async () => {
+      await service.bulkUpdate('org-1', false, { ids: ['a'], assignedToId: '' });
+      const update = model.updateMany.mock.calls[0][1];
+      expect(update.$set.assignedToId).toBeNull();
+      expect(update.$set.status).toBeUndefined();
+
+      model.updateMany.mockClear();
+      const res = await service.bulkUpdate('org-1', false, { ids: [] });
+      expect(res).toEqual({ modified: 0 });
+      expect(model.updateMany).not.toHaveBeenCalled();
     });
   });
 

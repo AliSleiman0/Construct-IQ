@@ -19,6 +19,7 @@ import { IssuesService } from './issues.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { AddIssueCommentDto } from './dto/add-issue-comment.dto';
+import { BulkUpdateIssuesDto } from './dto/bulk-update-issues.dto';
 import { IssueStatus } from '../../common/enums';
 
 @Controller('issues')
@@ -33,14 +34,39 @@ export class IssuesController {
     @Query('projectId') projectId?: string,
     @Query('status') status?: IssueStatus,
     @Query('severity') severity?: string,
+    @Query('type') type?: string,
+    @Query('assignedToId') assignedToId?: string,
+    @Query('search') search?: string,
+    @Query('sort') sort?: string,
+    @Query('sortDir') sortDir?: 'asc' | 'desc',
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
   ): Promise<any> {
-    return this.issuesService.findAll(
-      user.organizationId,
-      user.isSuperAdmin,
+    return this.issuesService.findAll(user.organizationId, user.isSuperAdmin, {
       projectId,
       status,
       severity,
-    );
+      type,
+      assignedToId,
+      search,
+      sort,
+      sortDir,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      skip: skip ? parseInt(skip, 10) : undefined,
+    });
+  }
+
+  // Literal routes must precede the `:id` capture.
+  @Get('summary')
+  @RequirePermissions(PERMISSIONS.ISSUES.READ)
+  summary(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string): Promise<any> {
+    return this.issuesService.getSummary(user.organizationId, user.isSuperAdmin, projectId);
+  }
+
+  @Patch('bulk')
+  @RequirePermissions(PERMISSIONS.ISSUES.UPDATE)
+  bulkUpdate(@CurrentUser() user: JwtPayload, @Body() dto: BulkUpdateIssuesDto): Promise<any> {
+    return this.issuesService.bulkUpdate(user.organizationId, user.isSuperAdmin, dto);
   }
 
   @Post()
