@@ -162,13 +162,16 @@ export function MilestonePin({
           </Typography>
           <Box
             className="pin-dot"
+            data-testid={milestone.isMajor ? 'major-milestone-marker' : 'milestone-marker'}
             sx={{
-              width: 10,
-              height: 10,
-              borderRadius: '50%',
+              width: milestone.isMajor ? 16 : 10,
+              height: milestone.isMajor ? 16 : 10,
+              borderRadius: milestone.isMajor ? 0.5 : '50%',
+              transform: milestone.isMajor ? 'rotate(45deg)' : 'none',
               bgcolor: color,
-              border: '2px solid',
+              border: milestone.isMajor ? '2px solid' : '2px solid',
               borderColor: 'background.paper',
+              boxShadow: milestone.isMajor ? `0 0 0 1.5px ${color}` : 'none',
               mt: 0.25,
             }}
           />

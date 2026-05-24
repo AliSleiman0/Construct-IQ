@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsDateString,
   IsNumber,
+  IsBoolean,
   Min,
   Max,
   MaxLength,
@@ -36,4 +37,8 @@ export class CreateMilestoneDto {
   @Min(0)
   @Max(100)
   percentComplete?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isMajor?: boolean;
 }

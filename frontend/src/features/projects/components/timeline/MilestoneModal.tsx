@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller, type Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Alert, Stack } from '@mui/material';
+import { Alert, Stack, Checkbox, FormControlLabel } from '@mui/material';
 import { AppModal } from '@/components/ui/AppModal';
 import { AppButton } from '@/components/ui/AppButton';
 import { FormTextField } from '@/components/form/FormTextField';
@@ -21,6 +21,7 @@ const milestoneSchema = z.object({
   targetDate: z.string().optional(),
   percentComplete: z.coerce.number().min(0).max(100).optional(),
   phaseId: z.string().optional(),
+  isMajor: z.boolean().optional(),
 });
 
 export type MilestoneFormValues = z.infer<typeof milestoneSchema>;
@@ -45,6 +46,21 @@ function normalisePhase(value: string | undefined): string | undefined {
   return value;
 }
 
+function MajorCheckbox({ control }: { control: Control<MilestoneFormValues> }) {
+  return (
+    <Controller
+      name="isMajor"
+      control={control}
+      render={({ field }) => (
+        <FormControlLabel
+          control={<Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />}
+          label="Major milestone (large diamond on the timeline)"
+        />
+      )}
+    />
+  );
+}
+
 interface BaseProps {
   open: boolean;
   phases: Phase[];
@@ -65,6 +81,7 @@ export function CreateMilestoneModal({ open, phases, isLoading, error, onClose, 
       targetDate: '',
       percentComplete: 0,
       phaseId: UNLINKED_VALUE,
+      isMajor: false,
     },
   });
 
@@ -77,6 +94,7 @@ export function CreateMilestoneModal({ open, phases, isLoading, error, onClose, 
         targetDate: '',
         percentComplete: 0,
         phaseId: UNLINKED_VALUE,
+        isMajor: false,
       });
     }
   }, [open, reset]);
@@ -145,6 +163,7 @@ export function CreateMilestoneModal({ open, phases, isLoading, error, onClose, 
             fullWidth
           />
         </Stack>
+        <MajorCheckbox control={control} />
       </Stack>
     </AppModal>
   );
@@ -177,6 +196,7 @@ export function EditMilestoneModal({
       targetDate: '',
       percentComplete: 0,
       phaseId: UNLINKED_VALUE,
+      isMajor: false,
     },
   });
 
@@ -189,6 +209,7 @@ export function EditMilestoneModal({
         targetDate: milestone.targetDate ? milestone.targetDate.slice(0, 10) : '',
         percentComplete: milestone.percentComplete,
         phaseId: milestone.phaseId ?? UNLINKED_VALUE,
+        isMajor: milestone.isMajor ?? false,
       });
     }
   }, [milestone, reset]);
@@ -280,6 +301,7 @@ export function EditMilestoneModal({
             fullWidth
           />
         </Stack>
+        <MajorCheckbox control={control} />
       </Stack>
     </AppModal>
   );

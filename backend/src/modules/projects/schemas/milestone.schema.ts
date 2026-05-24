@@ -40,6 +40,11 @@ export class Milestone {
   @Prop({ type: Number, default: 0, min: 0, max: 100 })
   percentComplete: number;
 
+  // Flags a key milestone (e.g. Topping out, Handover) — rendered as a large
+  // diamond on the timeline. Defaults false so existing rows are unaffected.
+  @Prop({ type: Boolean, default: false })
+  isMajor: boolean;
+
   createdAt: Date;
   updatedAt: Date;
 }

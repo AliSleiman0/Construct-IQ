@@ -11,6 +11,7 @@ export interface Milestone {
   completedDate?: string | null;
   status: MilestoneStatus;
   percentComplete: number;
+  isMajor?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,6 +23,7 @@ export interface CreateMilestonePayload {
   targetDate?: string;
   status?: MilestoneStatus;
   percentComplete?: number;
+  isMajor?: boolean;
 }
 
 export type UpdateMilestonePayload = Partial<CreateMilestonePayload>;

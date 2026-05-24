@@ -29,6 +29,7 @@ export class MilestonesService {
       targetDate: dto.targetDate ? new Date(dto.targetDate) : null,
       status: dto.status,
       percentComplete: dto.percentComplete ?? 0,
+      isMajor: dto.isMajor ?? false,
     });
   }
 
@@ -51,6 +52,7 @@ export class MilestonesService {
       milestone.targetDate = dto.targetDate ? new Date(dto.targetDate) : null;
     if (dto.status !== undefined) milestone.status = dto.status;
     if (dto.percentComplete !== undefined) milestone.percentComplete = dto.percentComplete;
+    if (dto.isMajor !== undefined) milestone.isMajor = dto.isMajor;
 
     if (dto.status === 'COMPLETED' && !milestone.completedDate) {
       milestone.completedDate = new Date();

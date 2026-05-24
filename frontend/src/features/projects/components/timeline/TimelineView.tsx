@@ -277,6 +277,7 @@ export function TimelineView() {
         targetDate: values.targetDate || undefined,
         percentComplete: values.percentComplete,
         phaseId: values.phaseId,
+        isMajor: values.isMajor,
       });
       enqueueSnackbar('Milestone created.', { variant: 'success' });
       setCreateMilestoneOpen(false);
@@ -299,6 +300,7 @@ export function TimelineView() {
           targetDate: values.targetDate || undefined,
           percentComplete: values.percentComplete,
           phaseId: values.phaseId,
+          isMajor: values.isMajor,
         },
       });
       enqueueSnackbar('Milestone updated.', { variant: 'success' });
