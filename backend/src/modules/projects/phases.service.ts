@@ -29,6 +29,7 @@ export class PhasesService {
       startDate: dto.startDate ? new Date(dto.startDate) : null,
       endDate: dto.endDate ? new Date(dto.endDate) : null,
       status: dto.status,
+      dependsOnPhaseIds: dto.dependsOnPhaseIds ?? [],
     });
   }
 
@@ -52,6 +53,7 @@ export class PhasesService {
     if (dto.endDate !== undefined)
       phase.endDate = dto.endDate ? new Date(dto.endDate) : null;
     if (dto.status !== undefined) phase.status = dto.status;
+    if (dto.dependsOnPhaseIds !== undefined) phase.dependsOnPhaseIds = dto.dependsOnPhaseIds;
 
     await phase.save();
     return phase.toObject();

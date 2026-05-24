@@ -4,6 +4,7 @@ import {
   IsEnum,
   IsDateString,
   IsNumber,
+  IsArray,
   Min,
   MaxLength,
 } from 'class-validator';
@@ -34,4 +35,9 @@ export class CreatePhaseDto {
   @IsOptional()
   @IsEnum(ProjectStatus)
   status?: ProjectStatus;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dependsOnPhaseIds?: string[];
 }

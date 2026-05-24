@@ -9,6 +9,7 @@ import { AppModal } from '@/components/ui/AppModal';
 import { AppButton } from '@/components/ui/AppButton';
 import { FormTextField } from '@/components/form/FormTextField';
 import { FormSelectField } from '@/components/form/FormSelectField';
+import { DependsOnSelect } from './DependsOnSelect';
 import type { Phase } from '@/types/phase.types';
 
 const phaseSchema = z.object({
@@ -20,6 +21,7 @@ const phaseSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   order: z.coerce.number().min(0).optional(),
+  dependsOnPhaseIds: z.array(z.string()).optional(),
 });
 
 export type PhaseFormValues = z.infer<typeof phaseSchema>;
@@ -122,6 +124,8 @@ export function CreatePhaseModal({ open, isLoading, error, onClose, onSubmit }: 
 
 interface EditPhaseModalProps extends BaseProps {
   phase: Phase | null;
+  /** Other phases in the project (candidate dependencies, excluding self). */
+  dependencyPhases?: Phase[];
   onDelete?: () => void;
   isDeleting?: boolean;
 }
@@ -129,6 +133,7 @@ interface EditPhaseModalProps extends BaseProps {
 export function EditPhaseModal({
   open,
   phase,
+  dependencyPhases = [],
   isLoading,
   error,
   onClose,
@@ -145,6 +150,7 @@ export function EditPhaseModal({
       startDate: '',
       endDate: '',
       order: 0,
+      dependsOnPhaseIds: [],
     },
   });
 
@@ -157,9 +163,14 @@ export function EditPhaseModal({
         startDate: phase.startDate ? phase.startDate.slice(0, 10) : '',
         endDate: phase.endDate ? phase.endDate.slice(0, 10) : '',
         order: phase.order,
+        dependsOnPhaseIds: phase.dependsOnPhaseIds ?? [],
       });
     }
   }, [phase, reset]);
+
+  const depOptions = dependencyPhases
+    .filter((p) => p.id !== phase?.id)
+    .map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <AppModal
@@ -233,6 +244,7 @@ export function EditPhaseModal({
           <FormSelectField name="status" control={control} label="Status" options={STATUS_OPTIONS} fullWidth />
           <FormTextField name="order" control={control} label="Order" type="number" fullWidth />
         </Stack>
+        <DependsOnSelect control={control} name="dependsOnPhaseIds" label="Depends on" options={depOptions} />
       </Stack>
     </AppModal>
   );

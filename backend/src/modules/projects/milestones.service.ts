@@ -30,6 +30,7 @@ export class MilestonesService {
       status: dto.status,
       percentComplete: dto.percentComplete ?? 0,
       isMajor: dto.isMajor ?? false,
+      dependsOnMilestoneIds: dto.dependsOnMilestoneIds ?? [],
     });
   }
 
@@ -53,6 +54,8 @@ export class MilestonesService {
     if (dto.status !== undefined) milestone.status = dto.status;
     if (dto.percentComplete !== undefined) milestone.percentComplete = dto.percentComplete;
     if (dto.isMajor !== undefined) milestone.isMajor = dto.isMajor;
+    if (dto.dependsOnMilestoneIds !== undefined)
+      milestone.dependsOnMilestoneIds = dto.dependsOnMilestoneIds;
 
     if (dto.status === 'COMPLETED' && !milestone.completedDate) {
       milestone.completedDate = new Date();

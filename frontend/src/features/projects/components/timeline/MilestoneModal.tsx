@@ -9,6 +9,7 @@ import { AppModal } from '@/components/ui/AppModal';
 import { AppButton } from '@/components/ui/AppButton';
 import { FormTextField } from '@/components/form/FormTextField';
 import { FormSelectField } from '@/components/form/FormSelectField';
+import { DependsOnSelect } from './DependsOnSelect';
 import type { Milestone } from '@/types/milestone.types';
 import type { Phase } from '@/types/phase.types';
 
@@ -22,6 +23,7 @@ const milestoneSchema = z.object({
   percentComplete: z.coerce.number().min(0).max(100).optional(),
   phaseId: z.string().optional(),
   isMajor: z.boolean().optional(),
+  dependsOnMilestoneIds: z.array(z.string()).optional(),
 });
 
 export type MilestoneFormValues = z.infer<typeof milestoneSchema>;
@@ -171,6 +173,8 @@ export function CreateMilestoneModal({ open, phases, isLoading, error, onClose, 
 
 interface EditMilestoneModalProps extends BaseProps {
   milestone: Milestone | null;
+  /** Other milestones in the project (candidate dependencies, excluding self). */
+  dependencyMilestones?: Milestone[];
   onDelete?: () => void;
   isDeleting?: boolean;
 }
@@ -179,6 +183,7 @@ export function EditMilestoneModal({
   open,
   milestone,
   phases,
+  dependencyMilestones = [],
   isLoading,
   error,
   onClose,
@@ -197,6 +202,7 @@ export function EditMilestoneModal({
       percentComplete: 0,
       phaseId: UNLINKED_VALUE,
       isMajor: false,
+      dependsOnMilestoneIds: [],
     },
   });
 
@@ -210,9 +216,14 @@ export function EditMilestoneModal({
         percentComplete: milestone.percentComplete,
         phaseId: milestone.phaseId ?? UNLINKED_VALUE,
         isMajor: milestone.isMajor ?? false,
+        dependsOnMilestoneIds: milestone.dependsOnMilestoneIds ?? [],
       });
     }
   }, [milestone, reset]);
+
+  const depOptions = dependencyMilestones
+    .filter((m) => m.id !== milestone?.id)
+    .map((m) => ({ id: m.id, name: m.name }));
 
   const submit = handleSubmit((values) =>
     onSubmit({ ...values, phaseId: normalisePhase(values.phaseId) }),
@@ -302,6 +313,7 @@ export function EditMilestoneModal({
           />
         </Stack>
         <MajorCheckbox control={control} />
+        <DependsOnSelect control={control} name="dependsOnMilestoneIds" label="Depends on" options={depOptions} />
       </Stack>
     </AppModal>
   );

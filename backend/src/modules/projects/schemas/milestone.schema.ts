@@ -45,6 +45,11 @@ export class Milestone {
   @Prop({ type: Boolean, default: false })
   isMajor: boolean;
 
+  // Milestones this milestone depends on (finish-to-start). Cycle prevention is
+  // application-level (client guard + renderer visited-set). Defaults [].
+  @Prop({ type: [String], ref: 'Milestone', default: [] })
+  dependsOnMilestoneIds: string[];
+
   createdAt: Date;
   updatedAt: Date;
 }

@@ -51,7 +51,8 @@ import {
   type MilestoneFormValues,
 } from './MilestoneModal';
 import { ZoomControls } from './ZoomControls';
-import { computeDateWindow, dateToPercent, shiftDateByDays, type ZoomLevel } from './timeline.utils';
+import { wouldCreateCycleBy } from '@/features/tasks/utils/dependencies';
+import { computeDateWindow, dateToPercent, type ZoomLevel } from './timeline.utils';
 import type { Phase } from '@/types/phase.types';
 import type { Milestone } from '@/types/milestone.types';
 import type { Task } from '@/types/task.types';
@@ -60,6 +61,8 @@ const PHASE_ROW_HEIGHT = 44;
 const PHASE_ROW_GAP = 8;
 const AXIS_HEIGHT = 40;
 const PIN_LANE_HEIGHT = 56;
+// Approx. y of a milestone pin's dot within the pin lane (label + date + dot).
+const MILESTONE_DOT_CY = 40;
 
 export function TimelineView() {
   const { enqueueSnackbar } = useSnackbar();
@@ -193,6 +196,33 @@ export function TimelineView() {
     return { orderedTasks: ordered, taskGeom: geom };
   }, [phases, tasks, window]);
 
+  // Phase-bar geometry (start/end → bar edges; cy at the row center) for the
+  // phase dependency arrows. Phases without both dates have no bar → no arrow.
+  const phaseGeom = useMemo(() => {
+    const geom = new Map<string, TaskGeom>();
+    phases.forEach((p, i) => {
+      if (!p.startDate || !p.endDate) return;
+      geom.set(p.id, {
+        leftPct: dateToPercent(p.startDate, window.startMs, window.endMs),
+        rightPct: dateToPercent(p.endDate, window.startMs, window.endMs),
+        cy: i * (PHASE_ROW_HEIGHT + PHASE_ROW_GAP) + PHASE_ROW_HEIGHT / 2,
+      });
+    });
+    return geom;
+  }, [phases, window]);
+
+  // Milestone geometry — single point (leftPct == rightPct) at the pin dot's y.
+  const milestoneGeom = useMemo(() => {
+    const geom = new Map<string, TaskGeom>();
+    for (const m of milestones) {
+      if (!m.targetDate) continue;
+      const x = dateToPercent(m.targetDate, window.startMs, window.endMs);
+      if (x < 0 || x > 100) continue;
+      geom.set(m.id, { leftPct: x, rightPct: x, cy: MILESTONE_DOT_CY });
+    }
+    return geom;
+  }, [milestones, window]);
+
   const taskLaneHeight =
     orderedTasks.length === 0
       ? 0
@@ -233,6 +263,14 @@ export function TimelineView() {
 
   const handleEditPhase = async (values: PhaseFormValues) => {
     if (!editPhase) return;
+    // Client-side cycle guard (backend does not enforce it).
+    const deps = values.dependsOnPhaseIds ?? [];
+    const cyclic = deps.find((depId) => wouldCreateCycleBy(phases, editPhase.id, depId, (p) => p.dependsOnPhaseIds));
+    if (cyclic) {
+      const name = phases.find((p) => p.id === cyclic)?.name ?? 'that phase';
+      enqueueSnackbar(`"${name}" already depends on this phase — that would create a cycle.`, { variant: 'error' });
+      return;
+    }
     try {
       await updatePhase.mutateAsync({
         id: editPhase.id,
@@ -243,6 +281,7 @@ export function TimelineView() {
           startDate: values.startDate || undefined,
           endDate: values.endDate || undefined,
           order: values.order,
+          dependsOnPhaseIds: deps,
         },
       });
       enqueueSnackbar('Phase updated.', { variant: 'success' });
@@ -290,6 +329,15 @@ export function TimelineView() {
 
   const handleEditMilestone = async (values: MilestoneFormValues) => {
     if (!editMilestone) return;
+    const deps = values.dependsOnMilestoneIds ?? [];
+    const cyclic = deps.find((depId) =>
+      wouldCreateCycleBy(milestones, editMilestone.id, depId, (m) => m.dependsOnMilestoneIds),
+    );
+    if (cyclic) {
+      const name = milestones.find((m) => m.id === cyclic)?.name ?? 'that milestone';
+      enqueueSnackbar(`"${name}" already depends on this milestone — that would create a cycle.`, { variant: 'error' });
+      return;
+    }
     try {
       await updateMilestone.mutateAsync({
         id: editMilestone.id,
@@ -301,6 +349,7 @@ export function TimelineView() {
           percentComplete: values.percentComplete,
           phaseId: values.phaseId,
           isMajor: values.isMajor,
+          dependsOnMilestoneIds: deps,
         },
       });
       enqueueSnackbar('Milestone updated.', { variant: 'success' });
@@ -463,42 +512,60 @@ export function TimelineView() {
                   onCommitDate={handleMilestoneDate}
                 />
               ))}
+              <DependencyLayer
+                items={milestones.map((m) => ({ id: m.id, dependsOn: m.dependsOnMilestoneIds ?? [] }))}
+                geom={milestoneGeom}
+                trackWidthPx={trackWidthPx}
+                height={PIN_LANE_HEIGHT}
+                markerId="dep-arrow-milestones"
+              />
             </Box>
 
             {/* Quarter axis */}
             <TimelineAxis window={window} />
 
-            {/* Phase rows */}
-            <Stack gap={`${PHASE_ROW_GAP}px`} mt={1}>
-              {phases.map((p) => (
-                <PhaseRow
-                  key={p.id}
-                  phase={p}
-                  window={window}
-                  windowSpanMs={window.endMs - window.startMs}
-                  getTrackWidth={getTrackWidth}
-                  onClick={(phase) => setEditPhase(phase)}
-                  onCommitDates={handlePhaseDates}
+            {/* Phase rows + dependency arrows */}
+            <Box sx={{ position: 'relative', mt: 1 }}>
+              <Stack gap={`${PHASE_ROW_GAP}px`}>
+                {phases.map((p) => (
+                  <PhaseRow
+                    key={p.id}
+                    phase={p}
+                    window={window}
+                    windowSpanMs={window.endMs - window.startMs}
+                    getTrackWidth={getTrackWidth}
+                    onClick={(phase) => setEditPhase(phase)}
+                    onCommitDates={handlePhaseDates}
+                  />
+                ))}
+                {phases.length === 0 && (
+                  <Box
+                    sx={{
+                      height: PHASE_ROW_HEIGHT,
+                      border: '1px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'text.disabled',
+                      fontSize: '0.75rem',
+                    }}
+                  >
+                    No phases yet
+                  </Box>
+                )}
+              </Stack>
+              {phases.length > 0 && (
+                <DependencyLayer
+                  items={phases.map((p) => ({ id: p.id, dependsOn: p.dependsOnPhaseIds ?? [] }))}
+                  geom={phaseGeom}
+                  trackWidthPx={trackWidthPx}
+                  height={phasesAreaHeight}
+                  markerId="dep-arrow-phases"
                 />
-              ))}
-              {phases.length === 0 && (
-                <Box
-                  sx={{
-                    height: PHASE_ROW_HEIGHT,
-                    border: '1px dashed',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'text.disabled',
-                    fontSize: '0.75rem',
-                  }}
-                >
-                  No phases yet
-                </Box>
               )}
-            </Stack>
+            </Box>
 
             {/* Task lane — bars grouped by phase order + dependency arrows */}
             {orderedTasks.length > 0 && (
@@ -521,10 +588,11 @@ export function TimelineView() {
                     ))}
                   </Stack>
                   <DependencyLayer
-                    tasks={orderedTasks}
+                    items={orderedTasks.map((t) => ({ id: t.id, dependsOn: t.dependsOnTaskIds ?? [] }))}
                     geom={taskGeom}
                     trackWidthPx={trackWidthPx}
                     height={taskLaneHeight}
+                    markerId="dep-arrow-tasks"
                   />
                 </Box>
               </Box>
@@ -542,6 +610,7 @@ export function TimelineView() {
       <EditPhaseModal
         open={!!editPhase}
         phase={editPhase}
+        dependencyPhases={phases}
         isLoading={updatePhase.isPending}
         isDeleting={deletePhase.isPending}
         onClose={() => setEditPhase(null)}
@@ -559,6 +628,7 @@ export function TimelineView() {
         open={!!editMilestone}
         milestone={editMilestone}
         phases={phases}
+        dependencyMilestones={milestones}
         isLoading={updateMilestone.isPending}
         isDeleting={deleteMilestone.isPending}
         onClose={() => setEditMilestone(null)}

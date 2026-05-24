@@ -15,6 +15,7 @@ export interface Phase {
   startDate?: string | null;
   endDate?: string | null;
   status: PhaseStatus;
+  dependsOnPhaseIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +27,7 @@ export interface CreatePhasePayload {
   startDate?: string;
   endDate?: string;
   status?: PhaseStatus;
+  dependsOnPhaseIds?: string[];
 }
 
 export type UpdatePhasePayload = Partial<CreatePhasePayload>;
