@@ -1,0 +1,42 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { purchaseOrdersApi } from '@/lib/api/purchaseOrders.api';
+import { useAuthStore } from '@/store/auth.store';
+import type { CreatePurchaseOrderPayload } from '@/types/procurement.types';
+
+export function usePurchaseOrders(projectId?: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['purchase-orders', projectId ?? null],
+    queryFn: () => purchaseOrdersApi.list(projectId ? { projectId } : undefined),
+    enabled: isAuthenticated,
+  });
+}
+
+function useInvalidate() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: ['purchase-orders'] });
+}
+
+export function useCreatePO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (payload: CreatePurchaseOrderPayload) => purchaseOrdersApi.create(payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApprovePO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => purchaseOrdersApi.approve(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => purchaseOrdersApi.delete(id),
+    onSuccess: invalidate,
+  });
+}
