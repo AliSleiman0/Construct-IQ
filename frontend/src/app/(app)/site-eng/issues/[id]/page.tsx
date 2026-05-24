@@ -5,7 +5,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { IssueDetail } from '@/features/site-issues/components/IssueDetail';
+import { IssueDetailView } from '@/features/issues/components/IssueDetailView';
 
 export default function SiteEngIssueDetailPage() {
   const params = useParams();
@@ -22,7 +22,7 @@ export default function SiteEngIssueDetailPage() {
           </Button>
         }
       />
-      <IssueDetail issueId={id} />
+      <IssueDetailView issueId={id} />
     </Box>
   );
 }
