@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../../common/constants/permissions';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { MilestonesService } from './milestones.service';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
+import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 
 @Controller('projects/:projectId/milestones')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -44,7 +45,7 @@ export class MilestonesController {
     @Param('projectId') projectId: string,
     @Param('milestoneId') milestoneId: string,
     @CurrentUser() user: JwtPayload,
-    @Body() dto: CreateMilestoneDto,
+    @Body() dto: UpdateMilestoneDto,
   ): Promise<any> {
     return this.milestonesService.update(milestoneId, projectId, user.organizationId, dto, user.isSuperAdmin);
   }

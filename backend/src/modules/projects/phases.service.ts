@@ -3,9 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Phase, PhaseDocument } from './schemas/phase.schema';
 import { CreatePhaseDto } from './dto/create-phase.dto';
-import { PartialType } from '@nestjs/mapped-types';
-
-class UpdatePhaseDto extends PartialType(CreatePhaseDto) {}
+import { UpdatePhaseDto } from './dto/update-phase.dto';
 
 @Injectable()
 export class PhasesService {

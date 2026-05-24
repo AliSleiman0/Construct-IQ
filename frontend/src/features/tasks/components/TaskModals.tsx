@@ -14,7 +14,7 @@ import { useUsers } from '@/features/users/hooks/useUsers';
 import type { Task } from '@/types/task.types';
 
 const taskSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(256),
+  title: z.string().min(1, 'Title is required').max(300),
   description: z.string().optional(),
   status: z.enum(['TODO', 'IN_PREPARATION', 'IN_PROGRESS', 'BLOCKED', 'REVIEW', 'DONE']).default('TODO'),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),

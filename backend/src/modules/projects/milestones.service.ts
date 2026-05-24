@@ -3,9 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Milestone, MilestoneDocument } from './schemas/milestone.schema';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
-import { PartialType } from '@nestjs/mapped-types';
-
-class UpdateMilestoneDto extends PartialType(CreateMilestoneDto) {}
+import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 
 @Injectable()
 export class MilestonesService {
