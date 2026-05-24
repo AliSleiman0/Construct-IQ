@@ -96,11 +96,6 @@ export default function LandingPage() {
 
         <div className="relative max-w-7xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-16 items-center">
           <div>
-            <div className="relative inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/25 text-blue-300 text-xs font-semibold px-4 py-1.5 rounded-full mb-7">
-              <div className="pulse-badge absolute inset-0 rounded-full" />
-              <span className="relative w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              <span className="relative">Construction Management Platform</span>
-            </div>
             <h1 className="text-5xl lg:text-[3.6rem] font-extrabold leading-[1.1] tracking-tight mb-6">
               Less chaos.<br />
               More&nbsp;<span className="accent-line" id="typewriter-target" />
