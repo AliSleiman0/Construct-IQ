@@ -54,3 +54,44 @@ export type UpdateIssuePayload = Partial<Omit<CreateIssuePayload, 'projectId'>> 
   status?: IssueStatus;
   resolvedAt?: string | null;
 };
+
+/** Query params for the paginated org-wide triage list. */
+export interface IssueListParams {
+  projectId?: string;
+  status?: IssueStatus;
+  severity?: IssueSeverity;
+  type?: IssueType;
+  /** A userId, or the literal 'NONE' for unassigned. */
+  assignedToId?: string;
+  search?: string;
+  /** 'smart' (default) | 'createdAt' | 'severity' | 'status' | 'title' */
+  sort?: string;
+  sortDir?: 'asc' | 'desc';
+  limit?: number;
+  skip?: number;
+}
+
+export interface PaginatedIssues {
+  items: Issue[];
+  total: number;
+  limit: number;
+  skip: number;
+}
+
+export interface IssueSummary {
+  total: number;
+  open: number;
+  inProgress: number;
+  resolved: number;
+  closed: number;
+  critical: number;
+  unassigned: number;
+  stale: number;
+}
+
+export interface BulkUpdateIssuesPayload {
+  ids: string[];
+  status?: IssueStatus;
+  /** A userId, or '' to unassign. */
+  assignedToId?: string;
+}

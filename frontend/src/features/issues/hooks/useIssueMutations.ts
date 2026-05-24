@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { issuesApi } from '@/lib/api/issues.api';
-import type { CreateIssuePayload, UpdateIssuePayload } from '@/types/issue.types';
+import type { CreateIssuePayload, UpdateIssuePayload, BulkUpdateIssuesPayload } from '@/types/issue.types';
 
 // Invalidate every issues query variant (project list, org-wide list, detail).
 function useInvalidateIssues() {
@@ -47,6 +47,14 @@ export function useAssignIssue() {
   return useMutation({
     mutationFn: ({ id, assignedToId }: { id: string; assignedToId: string }) =>
       issuesApi.assign(id, assignedToId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBulkUpdateIssues() {
+  const invalidate = useInvalidateIssues();
+  return useMutation({
+    mutationFn: (payload: BulkUpdateIssuesPayload) => issuesApi.bulkUpdate(payload),
     onSuccess: invalidate,
   });
 }

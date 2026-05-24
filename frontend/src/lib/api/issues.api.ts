@@ -1,5 +1,14 @@
 import apiClient from './client';
-import type { Issue, IssueComment, CreateIssuePayload, UpdateIssuePayload } from '@/types/issue.types';
+import type {
+  Issue,
+  IssueComment,
+  CreateIssuePayload,
+  UpdateIssuePayload,
+  IssueListParams,
+  PaginatedIssues,
+  IssueSummary,
+  BulkUpdateIssuesPayload,
+} from '@/types/issue.types';
 
 type Raw = Record<string, any>;
 
@@ -20,9 +29,32 @@ function normalise(t: Raw): Issue {
 }
 
 export const issuesApi = {
-  list: async (params?: { projectId?: string; status?: string; severity?: string }): Promise<Issue[]> => {
-    const res = await apiClient.get<Raw[]>('/issues', { params });
-    return (res.data ?? []).map(normalise);
+  // Paginated org-wide triage list — { items, total, limit, skip }.
+  listPaged: async (params?: IssueListParams): Promise<PaginatedIssues> => {
+    const res = await apiClient.get<Raw>('/issues', { params });
+    const d = res.data ?? {};
+    return {
+      items: Array.isArray(d.items) ? d.items.map(normalise) : [],
+      total: d.total ?? 0,
+      limit: d.limit ?? 0,
+      skip: d.skip ?? 0,
+    };
+  },
+
+  // Back-compat array helper (project-scoped tab + anything expecting Issue[]).
+  list: async (params?: IssueListParams): Promise<Issue[]> => {
+    const paged = await issuesApi.listPaged({ limit: 200, ...params });
+    return paged.items;
+  },
+
+  summary: async (params?: { projectId?: string }): Promise<IssueSummary> => {
+    const res = await apiClient.get<Raw>('/issues/summary', { params });
+    return res.data as IssueSummary;
+  },
+
+  bulkUpdate: async (payload: BulkUpdateIssuesPayload): Promise<{ modified: number }> => {
+    const res = await apiClient.patch<Raw>('/issues/bulk', payload);
+    return res.data as { modified: number };
   },
 
   getById: async (id: string): Promise<Issue> => {
