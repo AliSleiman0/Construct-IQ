@@ -12,7 +12,8 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
 import { CreateProjectModal, EditProjectModal } from '@/features/projects/components/ProjectModals';
 import { useProjects } from '@/features/projects/hooks/useProjects';
-import { useCreateProject, useUpdateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
+import { useCreateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
+import { useProjectEditController } from '@/features/projects/hooks/useProjectEditController';
 import { useAuthStore } from '@/store/auth.store';
 import type { Project, ProjectStatus } from '@/types/project.types';
 
@@ -34,12 +35,11 @@ export default function PMProjectsPage() {
   const [sortBy, setSortBy] = useState<SortKey>('updatedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [createOpen, setCreateOpen] = useState(false);
-  const [editProject, setEditProject] = useState<Project | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const createMutation = useCreateProject();
-  const updateMutation = useUpdateProject(editProject?.id ?? '');
   const deleteMutation = useDeleteProject();
+  const { editProject, openEdit, closeEdit, handleUpdate, isUpdating, updateError } = useProjectEditController();
 
   const handleDelete = async (project: Project) => {
     if (!confirm(`Delete project "${project.name}"? This cannot be undone.`)) return;
@@ -93,21 +93,6 @@ export default function PMProjectsPage() {
     } catch (e: any) {
       setFormError(e?.response?.data?.message ?? 'Failed to create project');
     }
-  };
-
-  const handleUpdate = async (values: Parameters<typeof updateMutation.mutateAsync>[0]) => {
-    setFormError(null);
-    try {
-      await updateMutation.mutateAsync(values);
-      setEditProject(null);
-    } catch (e: any) {
-      setFormError(e?.response?.data?.message ?? 'Failed to update project');
-    }
-  };
-
-  const openEdit = (project: Project) => {
-    setFormError(null);
-    setEditProject(project);
   };
 
   return (
@@ -215,7 +200,7 @@ export default function PMProjectsPage() {
           projects={visible}
           detailBasePath="/pm/projects"
           onEdit={canUpdate ? openEdit : undefined}
-          isEditing={updateMutation.isPending}
+          isEditing={isUpdating}
           onDelete={canDelete ? handleDelete : undefined}
           isDeleting={deleteMutation.isPending}
         />
@@ -232,9 +217,9 @@ export default function PMProjectsPage() {
       <EditProjectModal
         open={!!editProject}
         project={editProject}
-        isLoading={updateMutation.isPending}
-        error={formError}
-        onClose={() => setEditProject(null)}
+        isLoading={isUpdating}
+        error={updateError}
+        onClose={closeEdit}
         onSubmit={handleUpdate}
       />
     </Box>

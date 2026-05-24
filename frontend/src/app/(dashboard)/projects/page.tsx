@@ -13,7 +13,8 @@ import { AppErrorState } from '@/components/ui/AppErrorState';
 import { ProjectCard } from '@/features/projects/components/ProjectCard';
 import { CreateProjectModal, EditProjectModal } from '@/features/projects/components/ProjectModals';
 import { useProjects } from '@/features/projects/hooks/useProjects';
-import { useCreateProject, useUpdateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
+import { useCreateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
+import { useProjectEditController } from '@/features/projects/hooks/useProjectEditController';
 import { useAuthStore } from '@/store/auth.store';
 import { ROUTES } from '@/constants/routes';
 import type { Project } from '@/types/project.types';
@@ -29,12 +30,11 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [createOpen, setCreateOpen] = useState(false);
-  const [editProject, setEditProject] = useState<Project | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const createMutation = useCreateProject();
-  const updateMutation = useUpdateProject(editProject?.id ?? '');
   const deleteMutation = useDeleteProject();
+  const { editProject, closeEdit, handleUpdate, isUpdating, updateError } = useProjectEditController();
 
   const filtered = (projects ?? []).filter((p) => {
     const q = search.toLowerCase();
@@ -58,16 +58,6 @@ export default function ProjectsPage() {
       setCreateOpen(false);
     } catch (e: any) {
       setFormError(e?.response?.data?.message ?? 'Failed to create project');
-    }
-  };
-
-  const handleUpdate = async (values: any) => {
-    setFormError(null);
-    try {
-      await updateMutation.mutateAsync(values);
-      setEditProject(null);
-    } catch (e: any) {
-      setFormError(e?.response?.data?.message ?? 'Failed to update project');
     }
   };
 
@@ -163,9 +153,9 @@ export default function ProjectsPage() {
       <EditProjectModal
         open={!!editProject}
         project={editProject}
-        isLoading={updateMutation.isPending}
-        error={formError}
-        onClose={() => setEditProject(null)}
+        isLoading={isUpdating}
+        error={updateError}
+        onClose={closeEdit}
         onSubmit={handleUpdate}
       />
     </Box>

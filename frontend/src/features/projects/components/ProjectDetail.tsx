@@ -19,7 +19,8 @@ import { ReportList } from '@/features/reports/components/ReportList';
 import { CreateReportModal, EditReportModal } from '@/features/reports/components/ReportModals';
 import { AddMemberModal, EditRoleModal } from './MemberModals';
 import { useProject } from '@/features/projects/hooks/useProjects';
-import { useUpdateProject, useAddMember, useUpdateMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
+import { useAddMember, useUpdateMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
+import { useProjectEditController } from '@/features/projects/hooks/useProjectEditController';
 import { useTasks } from '@/features/tasks/hooks/useTasks';
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
 import { useIssues } from '@/features/issues/hooks/useIssues';
@@ -51,8 +52,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   // Project
   const { data: project, isLoading: projectLoading, isError: projectError, refetch: refetchProject } = useProject(projectId);
-  const [editProjectOpen, setEditProjectOpen] = useState(false);
-  const updateProjectMutation = useUpdateProject(projectId);
+  const { editProject, openEdit, closeEdit, handleUpdate: handleUpdateProject, isUpdating: isUpdatingProject, updateError } = useProjectEditController();
 
   // Tasks
   const { data: tasks, isLoading: tasksLoading, isError: tasksError, refetch: refetchTasks } = useTasks({ projectId });
@@ -85,12 +85,6 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const removeMemberMutation = useRemoveMember(projectId);
 
   // Handlers
-  const handleUpdateProject = async (values: any) => {
-    setFormError(null);
-    try { await updateProjectMutation.mutateAsync(values); setEditProjectOpen(false); }
-    catch (e: any) { setFormError(e?.response?.data?.message ?? 'Failed to update project'); }
-  };
-
   const handleCreateTask = async (values: any) => {
     setFormError(null);
     try { await createTaskMutation.mutateAsync({ ...values, projectId }); setCreateTaskOpen(false); }
@@ -160,7 +154,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2} spacing={2}>
         <Typography variant="h5" fontWeight={700}>{project.name}</Typography>
         {canEditProject && (
-          <AppButton variant="contained" startIcon={<EditIcon />} onClick={() => { setFormError(null); setEditProjectOpen(true); }}>
+          <AppButton variant="contained" startIcon={<EditIcon />} onClick={() => openEdit(project)}>
             Edit
           </AppButton>
         )}
@@ -324,7 +318,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       </TabPanel>
 
       {/* Modals */}
-      <EditProjectModal open={editProjectOpen} project={project} isLoading={updateProjectMutation.isPending} error={formError} onClose={() => setEditProjectOpen(false)} onSubmit={handleUpdateProject} />
+      <EditProjectModal open={!!editProject} project={editProject} isLoading={isUpdatingProject} error={updateError} onClose={closeEdit} onSubmit={handleUpdateProject} />
       <CreateTaskModal open={createTaskOpen} isLoading={createTaskMutation.isPending} error={formError} onClose={() => setCreateTaskOpen(false)} onSubmit={handleCreateTask} />
       <EditTaskModal open={!!editTask} task={editTask} isLoading={updateTaskMutation.isPending} error={formError} onClose={() => setEditTask(null)} onSubmit={handleUpdateTask} />
       <CreateIssueModal open={createIssueOpen} isLoading={createIssueMutation.isPending} error={formError} onClose={() => setCreateIssueOpen(false)} onSubmit={handleCreateIssue} />
