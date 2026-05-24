@@ -44,6 +44,7 @@ export function computeDateWindow(
   phases: Phase[],
   milestones: Milestone[],
   fallbackProject?: { startDate?: string | Date | null; endDate?: string | Date | null },
+  tasks?: { startDate?: string | Date | null; dueDate?: string | Date | null }[],
 ): DateWindow {
   const stamps: number[] = [];
   for (const p of phases) {
@@ -55,6 +56,12 @@ export function computeDateWindow(
   for (const m of milestones) {
     const t = toMs(m.targetDate);
     if (t !== null) stamps.push(t);
+  }
+  for (const t of tasks ?? []) {
+    const s = toMs(t.startDate ?? null);
+    const d = toMs(t.dueDate ?? null);
+    if (s !== null) stamps.push(s);
+    if (d !== null) stamps.push(d);
   }
   if (fallbackProject) {
     const ps = toMs(fallbackProject.startDate ?? null);

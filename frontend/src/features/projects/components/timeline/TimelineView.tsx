@@ -32,9 +32,14 @@ import {
   useMilestones,
   useUpdateMilestone,
 } from '@/features/projects/hooks/useMilestones';
+import { useRouter } from 'next/navigation';
+import { useTasks } from '@/features/tasks/hooks/useTasks';
+import { useUpdateTask } from '@/features/tasks/hooks/useTaskMutations';
 import { TimelineAxis } from './TimelineAxis';
 import { PhaseRow } from './PhaseRow';
 import { MilestonePin } from './MilestonePin';
+import { TaskRow, TASK_ROW_HEIGHT, TASK_ROW_GAP } from './TaskRow';
+import { DependencyLayer, type TaskGeom } from './DependencyLayer';
 import {
   CreatePhaseModal,
   EditPhaseModal,
@@ -46,9 +51,10 @@ import {
   type MilestoneFormValues,
 } from './MilestoneModal';
 import { ZoomControls } from './ZoomControls';
-import { computeDateWindow, type ZoomLevel } from './timeline.utils';
+import { computeDateWindow, dateToPercent, shiftDateByDays, type ZoomLevel } from './timeline.utils';
 import type { Phase } from '@/types/phase.types';
 import type { Milestone } from '@/types/milestone.types';
+import type { Task } from '@/types/task.types';
 
 const PHASE_ROW_HEIGHT = 44;
 const PHASE_ROW_GAP = 8;
@@ -76,6 +82,9 @@ export function TimelineView() {
   const createMilestone = useCreateMilestone(projectId);
   const updateMilestone = useUpdateMilestone(projectId);
   const deleteMilestone = useDeleteMilestone(projectId);
+  const tasksQuery = useTasks({ projectId: projectId || undefined });
+  const updateTask = useUpdateTask();
+  const router = useRouter();
 
   const phases = useMemo(() => {
     const list = phasesQuery.data ?? [];
@@ -88,11 +97,31 @@ export function TimelineView() {
   }, [phasesQuery.data]);
 
   const milestones = milestonesQuery.data ?? [];
+  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
 
   // Zoom = scrollable track-width multiplier; the percent-positioned bars scale with it.
   const [zoom, setZoom] = useState<ZoomLevel>(1);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const getTrackWidth = () => trackRef.current?.clientWidth ?? 0;
+
+  // Live pixel width of the (zoomed) track — drives the dependency-arrow geometry.
+  const [trackWidthPx, setTrackWidthPx] = useState(0);
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    setTrackWidthPx(el.clientWidth);
+    const ro = new ResizeObserver(() => setTrackWidthPx(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [zoom, projectId]);
+
+  const handleTaskDates = async (id: string, payload: { startDate?: string; dueDate?: string }) => {
+    try {
+      await updateTask.mutateAsync({ id, payload });
+    } catch {
+      enqueueSnackbar('Failed to update task dates', { variant: 'error' });
+    }
+  };
 
   // Commit drag/resize date changes for a phase bar.
   const handlePhaseDates = async (id: string, payload: { startDate?: string; endDate?: string }) => {
@@ -126,9 +155,48 @@ export function TimelineView() {
               endDate: (selectedProject as any).endDate ?? null,
             }
           : undefined,
+        tasks,
       ),
-    [phases, milestones, selectedProject],
+    [phases, milestones, selectedProject, tasks],
   );
+
+  // Tasks ordered by phase (phase order, then a trailing "no phase" group) and
+  // the per-task geometry the dependency arrows connect to (percent x + pixel cy).
+  const { orderedTasks, taskGeom } = useMemo(() => {
+    const byStart = (a: Task, b: Task) => {
+      const av = a.startDate ?? a.dueDate ?? '9999';
+      const bv = b.startDate ?? b.dueDate ?? '9999';
+      return av < bv ? -1 : av > bv ? 1 : 0;
+    };
+    const ordered: Task[] = [];
+    for (const p of phases) ordered.push(...tasks.filter((t) => t.phaseId === p.id).sort(byStart));
+    const phaseIds = new Set(phases.map((p) => p.id));
+    ordered.push(...tasks.filter((t) => !t.phaseId || !phaseIds.has(t.phaseId)).sort(byStart));
+
+    const geom = new Map<string, TaskGeom>();
+    ordered.forEach((t, i) => {
+      const cy = i * (TASK_ROW_HEIGHT + TASK_ROW_GAP) + TASK_ROW_HEIGHT / 2;
+      let leftPct: number;
+      let rightPct: number;
+      if (t.startDate && t.dueDate) {
+        leftPct = dateToPercent(t.startDate, window.startMs, window.endMs);
+        rightPct = dateToPercent(t.dueDate, window.startMs, window.endMs);
+      } else if (t.dueDate) {
+        rightPct = dateToPercent(t.dueDate, window.startMs, window.endMs);
+        leftPct = Math.max(rightPct - 1, 0);
+      } else {
+        leftPct = 0;
+        rightPct = 5;
+      }
+      geom.set(t.id, { leftPct, rightPct, cy });
+    });
+    return { orderedTasks: ordered, taskGeom: geom };
+  }, [phases, tasks, window]);
+
+  const taskLaneHeight =
+    orderedTasks.length === 0
+      ? 0
+      : orderedTasks.length * TASK_ROW_HEIGHT + (orderedTasks.length - 1) * TASK_ROW_GAP;
 
   // Modal state
   const [createPhaseOpen, setCreatePhaseOpen] = useState(false);
@@ -259,9 +327,11 @@ export function TimelineView() {
     phases.length === 0
       ? PHASE_ROW_HEIGHT
       : phases.length * PHASE_ROW_HEIGHT + (phases.length - 1) * PHASE_ROW_GAP;
-  const totalTimelineHeight = PIN_LANE_HEIGHT + AXIS_HEIGHT + phasesAreaHeight + 16;
-  const isLoading = phasesQuery.isLoading || milestonesQuery.isLoading;
-  const isEmpty = !isLoading && phases.length === 0 && milestones.length === 0;
+  const totalTimelineHeight =
+    PIN_LANE_HEIGHT + AXIS_HEIGHT + phasesAreaHeight + 16 + (taskLaneHeight ? taskLaneHeight + 32 : 0);
+  const isLoading = phasesQuery.isLoading || milestonesQuery.isLoading || tasksQuery.isLoading;
+  const isEmpty =
+    !isLoading && phases.length === 0 && milestones.length === 0 && orderedTasks.length === 0;
 
   return (
     <Stack gap={2}>
@@ -427,6 +497,36 @@ export function TimelineView() {
                 </Box>
               )}
             </Stack>
+
+            {/* Task lane — bars grouped by phase order + dependency arrows */}
+            {orderedTasks.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 700, letterSpacing: 0.6 }}>
+                  Tasks
+                </Typography>
+                <Box sx={{ position: 'relative', mt: 0.5, height: taskLaneHeight }}>
+                  <Stack gap={`${TASK_ROW_GAP}px`}>
+                    {orderedTasks.map((t) => (
+                      <TaskRow
+                        key={t.id}
+                        task={t}
+                        window={window}
+                        windowSpanMs={window.endMs - window.startMs}
+                        getTrackWidth={getTrackWidth}
+                        onOpen={(task) => router.push(`/pm/tasks/${task.id}`)}
+                        onCommitDates={handleTaskDates}
+                      />
+                    ))}
+                  </Stack>
+                  <DependencyLayer
+                    tasks={orderedTasks}
+                    geom={taskGeom}
+                    trackWidthPx={trackWidthPx}
+                    height={taskLaneHeight}
+                  />
+                </Box>
+              </Box>
+            )}
           </Box>
         )}
       </Paper>
