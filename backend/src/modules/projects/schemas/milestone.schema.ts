@@ -40,6 +40,16 @@ export class Milestone {
   @Prop({ type: Number, default: 0, min: 0, max: 100 })
   percentComplete: number;
 
+  // Flags a key milestone (e.g. Topping out, Handover) — rendered as a large
+  // diamond on the timeline. Defaults false so existing rows are unaffected.
+  @Prop({ type: Boolean, default: false })
+  isMajor: boolean;
+
+  // Milestones this milestone depends on (finish-to-start). Cycle prevention is
+  // application-level (client guard + renderer visited-set). Defaults [].
+  @Prop({ type: [String], ref: 'Milestone', default: [] })
+  dependsOnMilestoneIds: string[];
+
   createdAt: Date;
   updatedAt: Date;
 }

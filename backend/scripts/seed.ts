@@ -195,6 +195,7 @@ async function main() {
       'read:purchase_orders', 'approve:purchase_orders',
       'read:deliveries',
       'manage:documents',
+      'read:dashboard',
       'read:ai', 'use:ai',
     ],
     PROCUREMENT: [

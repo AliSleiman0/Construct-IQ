@@ -1,118 +1,87 @@
 'use client';
 
-import { Box, Paper, Typography, Stack } from '@mui/material';
+import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { TimelineView } from '@/features/projects/components/timeline/TimelineView';
 
-interface GanttBar {
-  label: string;
-  start: number;       // 0–100 (% of timeline)
-  duration: number;    // 0–100
-  color: string;
+function GuideLine({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Box>
+      <Typography component="span" variant="caption" fontWeight={700} sx={{ mr: 0.5 }}>
+        {label}:
+      </Typography>
+      <Typography component="span" variant="caption" sx={{ opacity: 0.9 }}>
+        {children}
+      </Typography>
+    </Box>
+  );
 }
 
-const PHASES: GanttBar[] = [
-  { label: 'Site preparation', start: 0, duration: 8, color: '#16a34a' },
-  { label: 'Foundation', start: 8, duration: 16, color: '#16a34a' },
-  { label: 'Structural frame', start: 18, duration: 28, color: '#16a34a' },
-  { label: 'Building envelope', start: 38, duration: 25, color: '#1976d2' },
-  { label: 'MEP rough-in', start: 50, duration: 30, color: '#1976d2' },
-  { label: 'Interior finishes', start: 70, duration: 22, color: '#94a3b8' },
-  { label: 'Common areas', start: 84, duration: 12, color: '#94a3b8' },
-  { label: 'Handover', start: 95, duration: 5, color: '#94a3b8' },
-];
-
-const MONTHS = [
-  'Sep', 'Nov', 'Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov', 'Jan', 'Mar',
-];
+function TimelineGuide() {
+  return (
+    <Box sx={{ maxWidth: 300 }}>
+      <Typography variant="subtitle2" fontWeight={700} mb={1}>
+        How to read this page
+      </Typography>
+      <Stack gap={0.75}>
+        <GuideLine label="Quarters">
+          The coloured bands at the top split the year into Q1, Q2, Q3 and Q4.
+        </GuideLine>
+        <GuideLine label="Phases">
+          Bars show stages of work and how long each one runs. Click a bar to edit.
+        </GuideLine>
+        <GuideLine label="Milestones">
+          Pins above the axis mark key dates such as approvals or hand-overs. Click a pin to edit.
+        </GuideLine>
+        <GuideLine label="Today">
+          The red vertical line shows today&apos;s date, so you can see where you are in the schedule.
+        </GuideLine>
+        <GuideLine label="Adding new items">
+          Use the Add Phase or Add Milestone buttons in the top-right.
+        </GuideLine>
+      </Stack>
+    </Box>
+  );
+}
 
 export default function PMSchedulePage() {
   return (
     <Box>
       <PageHeader
         title="Schedule"
-        subtitle="Tower Heights · Gantt view of phases & milestones."
+        subtitle="Gantt view of phases & milestones for the selected project."
+        actions={
+          <Tooltip
+            title={<TimelineGuide />}
+            arrow
+            placement="bottom-end"
+            enterDelay={150}
+            leaveDelay={120}
+            componentsProps={{
+              tooltip: {
+                sx: {
+                  maxWidth: 320,
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  boxShadow: 3,
+                  p: 1.5,
+                },
+              },
+              arrow: {
+                sx: { color: 'background.paper' },
+              },
+            }}
+          >
+            <IconButton size="small" aria-label="How this page works" sx={{ color: 'text.secondary' }}>
+              <HelpOutlineIcon />
+            </IconButton>
+          </Tooltip>
+        }
       />
-
-      <Paper
-        elevation={0}
-        sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
-      >
-        {/* Month headers */}
-        <Box display="flex" mb={2} pl={20}>
-          <Box flex={1} display="flex" justifyContent="space-between">
-            {MONTHS.map((m) => (
-              <Typography key={m} variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                {m}
-              </Typography>
-            ))}
-          </Box>
-        </Box>
-
-        <Stack gap={1.5}>
-          {PHASES.map((phase) => (
-            <Box key={phase.label} display="flex" alignItems="center" gap={2}>
-              <Typography
-                variant="body2"
-                fontWeight={500}
-                sx={{
-                  width: 160,
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {phase.label}
-              </Typography>
-              <Box
-                sx={{
-                  flex: 1,
-                  height: 24,
-                  position: 'relative',
-                  bgcolor: 'action.hover',
-                  borderRadius: 1,
-                }}
-              >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    left: `${phase.start}%`,
-                    width: `${phase.duration}%`,
-                    height: '100%',
-                    bgcolor: phase.color,
-                    borderRadius: 1,
-                    opacity: 0.85,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 600, fontSize: '0.65rem' }}>
-                    {phase.duration}wk
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-          ))}
-        </Stack>
-
-        <Box mt={3} display="flex" gap={3}>
-          <LegendDot color="#16a34a" label="Complete" />
-          <LegendDot color="#1976d2" label="In progress" />
-          <LegendDot color="#94a3b8" label="Upcoming" />
-        </Box>
-      </Paper>
-    </Box>
-  );
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <Box display="flex" alignItems="center" gap={1}>
-      <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: color }} />
-      <Typography variant="caption" color="text.secondary">
-        {label}
-      </Typography>
+      <TimelineView />
     </Box>
   );
 }

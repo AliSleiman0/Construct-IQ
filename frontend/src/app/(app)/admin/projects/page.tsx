@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -18,7 +18,6 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
 import { useProjects } from '@/features/projects/hooks/useProjects';
 import { useCreateProject } from '@/features/projects/hooks/useProjectMutations';
-import type { MockProject } from '@/mocks/projects.mock';
 import { useAuthStore } from '@/store/auth.store';
 
 const STATUS_OPTIONS = [
@@ -27,15 +26,9 @@ const STATUS_OPTIONS = [
   { value: 'ON_HOLD', label: 'On Hold' },
 ];
 
-function toMockStatus(s: string): MockProject['status'] {
-  if (s === 'ACTIVE') return 'IN_PROGRESS';
-  if (s === 'CANCELLED') return 'ON_HOLD';
-  return s as MockProject['status'];
-}
-
 export default function AdminProjectsPage() {
   const user = useAuthStore((s) => s.user);
-  const { data: rawProjects = [], isLoading } = useProjects();
+  const { data: projects = [], isLoading } = useProjects();
   const createProject = useCreateProject();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -43,25 +36,6 @@ export default function AdminProjectsPage() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [status, setStatus] = useState('PLANNING');
-
-  const projects: MockProject[] = useMemo(
-    () =>
-      rawProjects.map((p: any) => ({
-        id: p._id ?? p.id,
-        name: p.name,
-        code: p.code ?? '',
-        orgId: p.organizationId ?? '',
-        orgName: '',
-        managerName: '',
-        status: toMockStatus(p.status),
-        budgetUsd: p.totalBudget ?? 0,
-        spentUsd: 0,
-        startDate: p.startDate ?? '',
-        targetEndDate: p.endDate ?? '',
-        progressPct: 0,
-      })),
-    [rawProjects],
-  );
 
   function handleClose() {
     setOpen(false);
@@ -101,7 +75,7 @@ export default function AdminProjectsPage() {
           {[1, 2, 3].map((i) => <Skeleton key={i} variant="rounded" height={52} />)}
         </Box>
       ) : (
-        <ProjectsTable projects={projects} detailBasePath="/admin/projects" hideOrgColumn />
+        <ProjectsTable projects={projects} detailBasePath="/admin/projects" />
       )}
 
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">

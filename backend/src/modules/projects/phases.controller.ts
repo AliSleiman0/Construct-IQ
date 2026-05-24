@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../../common/constants/permissions';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { PhasesService } from './phases.service';
 import { CreatePhaseDto } from './dto/create-phase.dto';
+import { UpdatePhaseDto } from './dto/update-phase.dto';
 
 @Controller('projects/:projectId/phases')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -44,7 +45,7 @@ export class PhasesController {
     @Param('projectId') projectId: string,
     @Param('phaseId') phaseId: string,
     @CurrentUser() user: JwtPayload,
-    @Body() dto: CreatePhaseDto,
+    @Body() dto: UpdatePhaseDto,
   ): Promise<any> {
     return this.phasesService.update(phaseId, projectId, user.organizationId, dto, user.isSuperAdmin);
   }

@@ -1,25 +1,19 @@
 'use client';
 
 import { Box } from '@mui/material';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { ModulePreview } from '@/features/placeholders/components/ModulePreview';
+import { DeliveriesPanel } from '@/features/procurement/components/DeliveriesPanel';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function DeliveriesPage() {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const isSuperAdmin = !!useAuthStore((s) => s.user?.isSuperAdmin);
+  const canManage = isSuperAdmin || hasPermission('manage:deliveries');
+
   return (
     <Box>
       <PageHeader title="Deliveries" subtitle="Inbound shipments and acceptance status." />
-      <ModulePreview
-        title="Delivery tracking"
-        description="See expected delivery dates, dock availability, receipts, and discrepancy reports. Coming soon."
-        icon={LocalShippingIcon}
-        statCards={[
-          { label: 'In transit', value: '4' },
-          { label: 'Today', value: '2' },
-          { label: 'Discrepancies', value: '1' },
-        ]}
-        comingSoon="Phase 5 — Procurement"
-      />
+      <DeliveriesPanel canManage={canManage} />
     </Box>
   );
 }

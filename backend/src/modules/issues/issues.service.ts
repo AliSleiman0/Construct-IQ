@@ -9,7 +9,26 @@ import { Issue, IssueDocument } from './schemas/issue.schema';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { AddIssueCommentDto } from './dto/add-issue-comment.dto';
-import { IssueStatus } from '../../common/enums';
+import { BulkUpdateIssuesDto } from './dto/bulk-update-issues.dto';
+import { IssueStatus, IssueSeverity } from '../../common/enums';
+
+/** Issues open/in-progress older than this many days are "stale". */
+const STALE_DAYS = 7;
+
+export interface IssueListParams {
+  projectId?: string;
+  status?: IssueStatus;
+  severity?: string;
+  type?: string;
+  /** A userId, or the literal 'NONE' for unassigned. */
+  assignedToId?: string;
+  search?: string;
+  /** smart (default) | createdAt | severity | status | title */
+  sort?: string;
+  sortDir?: 'asc' | 'desc';
+  limit?: number;
+  skip?: number;
+}
 
 @Injectable()
 export class IssuesService {
@@ -17,29 +36,206 @@ export class IssuesService {
     @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
   ) {}
 
+  private static readonly POPULATE = [
+    { path: 'createdById', select: 'firstName lastName' },
+    { path: 'assignedToId', select: 'firstName lastName' },
+    { path: 'projectId', select: 'name' },
+    { path: 'comments.authorId', select: 'firstName lastName' },
+  ];
+
+  private flattenUser(
+    u: any,
+  ): { id: string; firstName: string; lastName: string } | null {
+    if (!u || typeof u !== 'object') return null;
+    return { id: u._id, firstName: u.firstName, lastName: u.lastName };
+  }
+
+  /**
+   * Flattens a populated, lean Issue doc into the shape the frontend expects:
+   * keeps the raw id fields, and adds `createdBy` / `assignedTo` / `project`
+   * objects plus `comments[].author`. Mongoose `populate` replaces the ref
+   * field with the joined doc, so we read the id back off `_id`.
+   */
+  private mapIssue(doc: any): any {
+    if (!doc) return doc;
+    const createdBy = this.flattenUser(doc.createdById);
+    const assignedTo = this.flattenUser(doc.assignedToId);
+    const project =
+      doc.projectId && typeof doc.projectId === 'object'
+        ? { id: doc.projectId._id, name: doc.projectId.name }
+        : null;
+
+    return {
+      ...doc,
+      id: doc._id,
+      createdById: createdBy?.id ?? (typeof doc.createdById === 'string' ? doc.createdById : null),
+      assignedToId: assignedTo?.id ?? (typeof doc.assignedToId === 'string' ? doc.assignedToId : null),
+      projectId: project?.id ?? (typeof doc.projectId === 'string' ? doc.projectId : doc.projectId),
+      createdBy,
+      assignedTo,
+      project,
+      comments: (doc.comments ?? []).map((c: any) => ({
+        ...c,
+        id: c._id,
+        authorId: this.flattenUser(c.authorId)?.id ?? (typeof c.authorId === 'string' ? c.authorId : null),
+        author: this.flattenUser(c.authorId),
+      })),
+    };
+  }
+
+  private escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /** Build the Mongo $match for the org-scoped, filtered issue query. */
+  private buildMatch(organizationId: string, isSuperAdmin: boolean, p: IssueListParams): Record<string, unknown> {
+    const match: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
+    if (p.projectId) match.projectId = p.projectId;
+    if (p.status) match.status = p.status;
+    if (p.severity) match.severity = p.severity;
+    if (p.type) match.type = p.type;
+    if (p.assignedToId) match.assignedToId = p.assignedToId === 'NONE' ? null : p.assignedToId;
+    if (p.search?.trim()) {
+      const rx = new RegExp(this.escapeRegex(p.search.trim()), 'i');
+      match.$or = [{ title: rx }, { location: rx }, { trade: rx }];
+    }
+    // aggregate() bypasses the soft-delete plugin's query hook — exclude deleted explicitly.
+    match.deletedAt = null;
+    return match;
+  }
+
+  /** Sort spec over computed ranks. Higher rank = more urgent (CRITICAL/OPEN). */
+  private buildSort(sort: string | undefined, dir: 1 | -1): Record<string, 1 | -1> {
+    switch (sort) {
+      case 'createdAt':
+        return { createdAt: dir };
+      case 'title':
+        return { title: dir };
+      case 'severity':
+        return { severityRank: dir, createdAt: 1 };
+      case 'status':
+        return { statusRank: dir, createdAt: 1 };
+      case 'smart':
+      default:
+        // Open first, then most-severe, then oldest — the triage default.
+        return { statusRank: -1, severityRank: -1, createdAt: 1 };
+    }
+  }
+
+  /**
+   * Paginated, filtered, smart-sorted issue list. Sorting needs computed
+   * severity/status ranks → use an aggregation to get the ordered page of ids,
+   * then re-fetch those ids with the existing populate + mapIssue (no duplicate
+   * flatten logic). Returns the audit-style { items, total, limit, skip } shape.
+   */
   async findAll(
     organizationId: string,
     isSuperAdmin: boolean,
-    projectId?: string,
-    status?: IssueStatus,
-    severity?: string,
-  ): Promise<any[]> {
-    const filter: Record<string, unknown> = isSuperAdmin
-      ? {}
-      : { organizationId };
+    params: IssueListParams = {},
+  ): Promise<{ items: any[]; total: number; limit: number; skip: number }> {
+    const match = this.buildMatch(organizationId, isSuperAdmin, params);
+    const limit = Math.min(params.limit ?? 25, 200);
+    const skip = params.skip ?? 0;
+    const dir: 1 | -1 = params.sortDir === 'asc' ? 1 : -1;
 
-    if (projectId) filter.projectId = projectId;
-    if (status) filter.status = status;
-    if (severity) filter.severity = severity;
+    const idDocs = await this.issueModel.aggregate([
+      { $match: match },
+      {
+        $addFields: {
+          severityRank: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$severity', IssueSeverity.CRITICAL] }, then: 3 },
+                { case: { $eq: ['$severity', IssueSeverity.HIGH] }, then: 2 },
+                { case: { $eq: ['$severity', IssueSeverity.MEDIUM] }, then: 1 },
+              ],
+              default: 0,
+            },
+          },
+          statusRank: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$status', IssueStatus.OPEN] }, then: 3 },
+                { case: { $eq: ['$status', IssueStatus.IN_PROGRESS] }, then: 2 },
+                { case: { $eq: ['$status', IssueStatus.RESOLVED] }, then: 1 },
+              ],
+              default: 0,
+            },
+          },
+        },
+      },
+      { $sort: this.buildSort(params.sort, dir) },
+      { $skip: skip },
+      { $limit: limit },
+      { $project: { _id: 1 } },
+    ]);
 
-    return this.issueModel.find(filter).sort({ createdAt: -1 }).lean();
+    const total = await this.issueModel.countDocuments(match);
+    const ids = idDocs.map((d: any) => d._id);
+    if (ids.length === 0) return { items: [], total, limit, skip };
+
+    const docs = await this.issueModel.find({ _id: { $in: ids } }).populate(IssuesService.POPULATE).lean();
+    const byId = new Map(docs.map((d: any) => [String(d._id), d]));
+    const items = ids
+      .map((id: any) => byId.get(String(id)))
+      .filter(Boolean)
+      .map((d: any) => this.mapIssue(d));
+    return { items, total, limit, skip };
+  }
+
+  /** Triage summary counts for the header chips / quick filters. */
+  async getSummary(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any> {
+    const base: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
+    if (projectId) base.projectId = projectId;
+    const active = { $in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] };
+    const staleBefore = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
+    const c = (extra: Record<string, unknown>) => this.issueModel.countDocuments({ ...base, ...extra });
+
+    const [total, open, inProgress, resolved, closed, critical, unassigned, stale] = await Promise.all([
+      c({}),
+      c({ status: IssueStatus.OPEN }),
+      c({ status: IssueStatus.IN_PROGRESS }),
+      c({ status: IssueStatus.RESOLVED }),
+      c({ status: IssueStatus.CLOSED }),
+      c({ severity: IssueSeverity.CRITICAL, status: active }),
+      c({ assignedToId: null, status: active }),
+      c({ status: active, createdAt: { $lt: staleBefore } }),
+    ]);
+    return { total, open, inProgress, resolved, closed, critical, unassigned, stale };
+  }
+
+  /** Bulk reassign and/or status-change. Org-scoped; stamps resolved/closed timestamps. */
+  async bulkUpdate(organizationId: string, isSuperAdmin: boolean, dto: BulkUpdateIssuesDto): Promise<{ modified: number }> {
+    if (!dto.ids?.length) return { modified: 0 };
+    const set: Record<string, unknown> = {};
+    if (dto.assignedToId !== undefined) set.assignedToId = dto.assignedToId || null;
+    if (dto.status !== undefined) {
+      set.status = dto.status;
+      if (dto.status === IssueStatus.RESOLVED) set.resolvedAt = new Date();
+      else if (dto.status === IssueStatus.CLOSED) set.closedAt = new Date();
+      else {
+        // Reopen (OPEN / IN_PROGRESS) clears the resolution timestamps.
+        set.resolvedAt = null;
+        set.closedAt = null;
+      }
+    }
+    if (Object.keys(set).length === 0) return { modified: 0 };
+
+    const filter = isSuperAdmin
+      ? { _id: { $in: dto.ids } }
+      : { _id: { $in: dto.ids }, organizationId };
+    const res = await this.issueModel.updateMany(filter, { $set: set });
+    return { modified: (res as any).modifiedCount ?? 0 };
   }
 
   async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
-    const issue = await this.issueModel.findOne(filter).lean();
+    const issue = await this.issueModel
+      .findOne(filter)
+      .populate(IssuesService.POPULATE)
+      .lean();
     if (!issue) throw new NotFoundException('Issue not found');
-    return issue;
+    return this.mapIssue(issue);
   }
 
   async create(
@@ -85,7 +281,7 @@ export class IssuesService {
       issue.resolvedAt = dto.resolvedAt ? new Date(dto.resolvedAt) : null;
 
     await issue.save();
-    return issue.toObject();
+    return this.findById(id, organizationId, isSuperAdmin);
   }
 
   async assign(
@@ -100,7 +296,7 @@ export class IssuesService {
 
     issue.assignedToId = assignedToId;
     await issue.save();
-    return issue.toObject();
+    return this.findById(id, organizationId, isSuperAdmin);
   }
 
   async addComment(

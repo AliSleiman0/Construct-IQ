@@ -62,6 +62,7 @@ const STANDARD_ROLES: Array<{
       'approve:purchase_orders',
       'read:deliveries',
       'manage:documents',
+      'read:dashboard',
       'read:ai',
       'use:ai',
     ],

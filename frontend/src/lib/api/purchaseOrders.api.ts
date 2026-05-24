@@ -1,41 +1,36 @@
 import apiClient from './client';
+import type { PurchaseOrder, CreatePurchaseOrderPayload } from '@/types/procurement.types';
+
+type Raw = Record<string, any>;
+function idify(d: Raw): PurchaseOrder {
+  const { _id, id, ...rest } = d;
+  return { ...(rest as PurchaseOrder), id: (id ?? _id) as string };
+}
 
 export const purchaseOrdersApi = {
-  list: async (params?: { projectId?: string }): Promise<any[]> => {
-    const res = await apiClient.get<any[]>('/purchase-orders', { params });
-    return res.data;
+  list: async (params?: { projectId?: string }): Promise<PurchaseOrder[]> => {
+    const res = await apiClient.get<Raw[]>('/purchase-orders', { params });
+    return (res.data ?? []).map(idify);
   },
 
-  getById: async (id: string): Promise<any> => {
-    const res = await apiClient.get<any>(`/purchase-orders/${id}`);
-    return res.data;
+  getById: async (id: string): Promise<PurchaseOrder> => {
+    const res = await apiClient.get<Raw>(`/purchase-orders/${id}`);
+    return idify(res.data);
   },
 
-  create: async (payload: {
-    projectId: string;
-    supplierId: string;
-    poNumber: string;
-    orderDate: string;
-    status?: string;
-    totalAmount?: number;
-    currency?: string;
-    budgetLineId?: string;
-    expectedDeliveryDate?: string;
-    notes?: string;
-    items?: Array<{ description: string; quantity: number; unitPrice: number; totalPrice: number; unit?: string; notes?: string }>;
-  }): Promise<any> => {
-    const res = await apiClient.post<any>('/purchase-orders', payload);
-    return res.data;
+  create: async (payload: CreatePurchaseOrderPayload): Promise<PurchaseOrder> => {
+    const res = await apiClient.post<Raw>('/purchase-orders', payload);
+    return idify(res.data);
   },
 
-  update: async (id: string, payload: Partial<any>): Promise<any> => {
-    const res = await apiClient.patch<any>(`/purchase-orders/${id}`, payload);
-    return res.data;
+  update: async (id: string, payload: Partial<CreatePurchaseOrderPayload>): Promise<PurchaseOrder> => {
+    const res = await apiClient.patch<Raw>(`/purchase-orders/${id}`, payload);
+    return idify(res.data);
   },
 
-  approve: async (id: string): Promise<any> => {
-    const res = await apiClient.post<any>(`/purchase-orders/${id}/approve`);
-    return res.data;
+  approve: async (id: string): Promise<PurchaseOrder> => {
+    const res = await apiClient.post<Raw>(`/purchase-orders/${id}/approve`);
+    return idify(res.data);
   },
 
   delete: async (id: string): Promise<void> => {

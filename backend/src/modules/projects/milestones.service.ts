@@ -3,9 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Milestone, MilestoneDocument } from './schemas/milestone.schema';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
-import { PartialType } from '@nestjs/mapped-types';
-
-class UpdateMilestoneDto extends PartialType(CreateMilestoneDto) {}
+import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 
 @Injectable()
 export class MilestonesService {
@@ -29,6 +27,8 @@ export class MilestonesService {
       targetDate: dto.targetDate ? new Date(dto.targetDate) : null,
       status: dto.status,
       percentComplete: dto.percentComplete ?? 0,
+      isMajor: dto.isMajor ?? false,
+      dependsOnMilestoneIds: dto.dependsOnMilestoneIds ?? [],
     });
   }
 
@@ -51,6 +51,9 @@ export class MilestonesService {
       milestone.targetDate = dto.targetDate ? new Date(dto.targetDate) : null;
     if (dto.status !== undefined) milestone.status = dto.status;
     if (dto.percentComplete !== undefined) milestone.percentComplete = dto.percentComplete;
+    if (dto.isMajor !== undefined) milestone.isMajor = dto.isMajor;
+    if (dto.dependsOnMilestoneIds !== undefined)
+      milestone.dependsOnMilestoneIds = dto.dependsOnMilestoneIds;
 
     if (dto.status === 'COMPLETED' && !milestone.completedDate) {
       milestone.completedDate = new Date();

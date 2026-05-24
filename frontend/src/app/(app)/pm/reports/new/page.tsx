@@ -2,7 +2,7 @@
 
 import { Box } from '@mui/material';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { ReportForm } from '@/features/site-reports/components/ReportForm';
+import { ReportFormView } from '@/features/reports/components/ReportFormView';
 
 export default function NewPMReportPage() {
   return (
@@ -11,7 +11,7 @@ export default function NewPMReportPage() {
         title="New daily report"
         breadcrumbs={[{ label: 'Daily Reports', href: '/pm/reports' }, { label: 'New' }]}
       />
-      <ReportForm successBasePath="/pm/reports" />
+      <ReportFormView successBasePath="/pm/reports" />
     </Box>
   );
 }

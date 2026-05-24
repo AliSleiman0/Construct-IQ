@@ -16,7 +16,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PERMISSIONS } from '../../common/constants/permissions';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { BudgetService } from './budget.service';
-import { CreateBudgetDto, CreateBudgetLineDto, CreateExpenseDto } from './dto/create-budget.dto';
+import { CreateBudgetDto, CreateBudgetLineDto, CreateExpenseDto, UpdateExpenseDto } from './dto/create-budget.dto';
 import { PartialType } from '@nestjs/mapped-types';
 
 class UpdateBudgetDto extends PartialType(CreateBudgetDto) {}
@@ -60,5 +60,32 @@ export class BudgetController {
   @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
   addExpense(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateExpenseDto): Promise<any> {
     return this.budgetService.addExpense(id, user.organizationId, dto, user.isSuperAdmin);
+  }
+
+  @Get(':id/expenses')
+  @RequirePermissions(PERMISSIONS.BUDGET.READ)
+  listExpenses(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any[]> {
+    return this.budgetService.listExpenses(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  @Patch(':id/expenses/:expenseId')
+  @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
+  updateExpense(
+    @Param('id') id: string,
+    @Param('expenseId') expenseId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateExpenseDto,
+  ): Promise<any> {
+    return this.budgetService.updateExpense(id, expenseId, user.organizationId, dto, user.isSuperAdmin);
+  }
+
+  @Delete(':id/expenses/:expenseId')
+  @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
+  removeExpense(
+    @Param('id') id: string,
+    @Param('expenseId') expenseId: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<any> {
+    return this.budgetService.removeExpense(id, expenseId, user.organizationId, user.isSuperAdmin);
   }
 }

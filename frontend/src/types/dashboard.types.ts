@@ -6,6 +6,18 @@ export interface DashboardStats {
   teamCount: number;
 }
 
+export interface PmDashboardData {
+  projectCount: number;
+  activeProjectCount: number;
+  openTaskCount: number;
+  tasksDueThisWeek: number;
+  openIssueCount: number;
+  escalatedIssueCount: number;
+  reportsThisWeek: number;
+  taskThroughput: { label: string; value: number }[];
+  openTasksByStatus: { label: string; value: number }[];
+}
+
 export interface OrgDashboardData {
   activeProjectCount: number;
   totalProjectCount: number;

@@ -18,7 +18,6 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import GroupsIcon from '@mui/icons-material/Groups';
 import ArticleIcon from '@mui/icons-material/Article';
 import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -80,7 +79,6 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Projects', href: '/pm/projects', icon: FolderOpenIcon },
     { label: 'Schedule', href: '/pm/schedule', icon: CalendarMonthIcon },
     { label: 'Tasks', href: '/pm/tasks', icon: TaskAltIcon },
-    { label: 'Project Team', href: '/pm/team', icon: GroupsIcon },
     { label: 'Daily Reports', href: '/pm/reports', icon: ArticleIcon },
     { label: 'Issues', href: '/pm/issues', icon: ReportProblemIcon },
     { label: 'Budget', href: '/pm/budget', icon: AccountBalanceWalletIcon },

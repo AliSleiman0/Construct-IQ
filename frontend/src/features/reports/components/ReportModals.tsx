@@ -12,7 +12,7 @@ import type { DailyReport } from '@/types/report.types';
 const reportSchema = z.object({
   reportDate: z.string().min(1, 'Report date is required'),
   weather: z.string().optional(),
-  achievements: z.string().optional(),
+  workCompleted: z.string().optional(),
   blockers: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -29,7 +29,7 @@ interface CreateReportModalProps {
 export function CreateReportModal({ open, isLoading, error, onClose, onSubmit }: CreateReportModalProps) {
   const { control, handleSubmit, reset } = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
-    defaultValues: { reportDate: new Date().toISOString().slice(0, 10), weather: '', achievements: '', blockers: '', notes: '' },
+    defaultValues: { reportDate: new Date().toISOString().slice(0, 10), weather: '', workCompleted: '', blockers: '', notes: '' },
   });
   useEffect(() => { if (!open) reset(); }, [open, reset]);
 
@@ -46,7 +46,7 @@ export function CreateReportModal({ open, isLoading, error, onClose, onSubmit }:
         {error && <Alert severity="error">{error}</Alert>}
         <FormTextField name="reportDate" control={control} label="Report Date" type="date" fullWidth required InputLabelProps={{ shrink: true }} />
         <FormTextField name="weather" control={control} label="Weather Conditions" fullWidth />
-        <FormTextField name="achievements" control={control} label="Achievements / Work Done" fullWidth multiline rows={3} />
+        <FormTextField name="workCompleted" control={control} label="Work Completed" fullWidth multiline rows={3} />
         <FormTextField name="blockers" control={control} label="Blockers / Issues" fullWidth multiline rows={2} />
         <FormTextField name="notes" control={control} label="Additional Notes" fullWidth multiline rows={2} />
       </Stack>
@@ -66,13 +66,13 @@ interface EditReportModalProps {
 export function EditReportModal({ open, report, isLoading, error, onClose, onSubmit }: EditReportModalProps) {
   const { control, handleSubmit, reset } = useForm<ReportFormValues>({
     resolver: zodResolver(reportSchema),
-    defaultValues: { reportDate: '', weather: '', achievements: '', blockers: '', notes: '' },
+    defaultValues: { reportDate: '', weather: '', workCompleted: '', blockers: '', notes: '' },
   });
   useEffect(() => {
     if (report) reset({
       reportDate: report.reportDate.slice(0, 10),
       weather: report.weather ?? '',
-      achievements: report.achievements ?? '',
+      workCompleted: report.workCompleted ?? '',
       blockers: report.blockers ?? '',
       notes: report.notes ?? '',
     });
@@ -91,7 +91,7 @@ export function EditReportModal({ open, report, isLoading, error, onClose, onSub
         {error && <Alert severity="error">{error}</Alert>}
         <FormTextField name="reportDate" control={control} label="Report Date" type="date" fullWidth required InputLabelProps={{ shrink: true }} />
         <FormTextField name="weather" control={control} label="Weather Conditions" fullWidth />
-        <FormTextField name="achievements" control={control} label="Achievements / Work Done" fullWidth multiline rows={3} />
+        <FormTextField name="workCompleted" control={control} label="Work Completed" fullWidth multiline rows={3} />
         <FormTextField name="blockers" control={control} label="Blockers / Issues" fullWidth multiline rows={2} />
         <FormTextField name="notes" control={control} label="Additional Notes" fullWidth multiline rows={2} />
       </Stack>

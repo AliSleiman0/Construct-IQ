@@ -1,4 +1,5 @@
 'use client';
+import { useMemo } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, Avatar, Typography, Stack, IconButton, Tooltip,
@@ -7,6 +8,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { TaskStatusChip } from './TaskStatusChip';
 import { TaskPriorityChip } from './TaskPriorityChip';
+import { useUsers } from '@/features/users/hooks/useUsers';
 import type { Task } from '@/types/task.types';
 
 interface TaskTableProps {
@@ -16,6 +18,14 @@ interface TaskTableProps {
 }
 
 export function TaskTable({ tasks, onEdit, onDelete }: TaskTableProps) {
+  // The task list is lean (no populated assignee) — resolve names client-side
+  // from assignedToId, mirroring TaskDetailView.
+  const { data: users } = useUsers();
+  const usersById = useMemo(
+    () => new Map((users ?? []).map((u) => [u.id, u])),
+    [users],
+  );
+
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
       <Table size="small">
@@ -30,7 +40,9 @@ export function TaskTable({ tasks, onEdit, onDelete }: TaskTableProps) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {tasks.map((task) => (
+          {tasks.map((task) => {
+            const assignee = task.assignedTo ?? (task.assignedToId ? usersById.get(task.assignedToId) : undefined);
+            return (
             <TableRow key={task.id} hover>
               <TableCell>
                 <Typography variant="body2" fontWeight={500}>{task.title}</Typography>
@@ -43,12 +55,12 @@ export function TaskTable({ tasks, onEdit, onDelete }: TaskTableProps) {
               <TableCell><TaskStatusChip status={task.status} /></TableCell>
               <TableCell><TaskPriorityChip priority={task.priority} /></TableCell>
               <TableCell>
-                {task.assignee ? (
+                {assignee ? (
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <Avatar src={task.assignee.avatarUrl ?? undefined} sx={{ width: 24, height: 24, fontSize: '0.7rem' }}>
-                      {task.assignee.firstName[0]}{task.assignee.lastName[0]}
+                    <Avatar src={assignee.avatarUrl ?? undefined} sx={{ width: 24, height: 24, fontSize: '0.7rem' }}>
+                      {assignee.firstName[0]}{assignee.lastName[0]}
                     </Avatar>
-                    <Typography variant="caption">{task.assignee.firstName} {task.assignee.lastName}</Typography>
+                    <Typography variant="caption">{assignee.firstName} {assignee.lastName}</Typography>
                   </Stack>
                 ) : (
                   <Typography variant="caption" color="text.secondary">Unassigned</Typography>
@@ -70,7 +82,8 @@ export function TaskTable({ tasks, onEdit, onDelete }: TaskTableProps) {
                 </Stack>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </TableContainer>

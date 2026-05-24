@@ -64,3 +64,7 @@ export interface AddMemberPayload {
   userId: string;
   role?: string;
 }
+
+export interface UpdateMemberPayload {
+  role?: string;
+}

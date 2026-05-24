@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
 import { Box, Button, Skeleton } from '@mui/material';
 import Link from 'next/link';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -17,7 +16,6 @@ import { MiniBarChart } from '@/components/shared/MiniBarChart';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
 import { useOrgDashboard } from '@/features/dashboard/hooks/useOrgDashboard';
 import { useProjects } from '@/features/projects/hooks/useProjects';
-import type { MockProject } from '@/mocks/projects.mock';
 
 function formatMillions(n: number): string {
   if (n === 0) return '$0';
@@ -26,29 +24,9 @@ function formatMillions(n: number): string {
 
 export default function AdminReportsPage() {
   const { data: dashboard, isLoading: dashLoading } = useOrgDashboard();
-  const { data: rawProjects = [], isLoading: projLoading } = useProjects();
+  const { data: projects = [], isLoading: projLoading } = useProjects();
 
   const isLoading = dashLoading || projLoading;
-
-  // Map API Project shape to MockProject shape for ProjectsTable
-  const projects: MockProject[] = useMemo(
-    () =>
-      rawProjects.map((p: any) => ({
-        id: p._id ?? p.id,
-        name: p.name,
-        code: p.code ?? '',
-        orgId: p.organizationId ?? '',
-        orgName: '',
-        managerName: '',
-        status: p.status === 'ACTIVE' ? 'IN_PROGRESS' : p.status,
-        budgetUsd: p.totalBudget ?? 0,
-        spentUsd: 0,
-        startDate: p.startDate ?? '',
-        targetEndDate: p.endDate ?? '',
-        progressPct: 0,
-      })),
-    [rawProjects],
-  );
 
   return (
     <Box>
@@ -147,7 +125,7 @@ export default function AdminReportsPage() {
           </Button>
         }
       >
-        <ProjectsTable projects={projects} detailBasePath="/admin/projects" hideOrgColumn />
+        <ProjectsTable projects={projects} detailBasePath="/admin/projects" />
       </DashboardPanel>
     </Box>
   );

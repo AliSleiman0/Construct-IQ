@@ -1,28 +1,60 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { issuesApi } from '@/lib/api/issues.api';
-import type { CreateIssuePayload, UpdateIssuePayload } from '@/types/issue.types';
+import type { CreateIssuePayload, UpdateIssuePayload, BulkUpdateIssuesPayload } from '@/types/issue.types';
+
+// Invalidate every issues query variant (project list, org-wide list, detail).
+function useInvalidateIssues() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['issues'] });
+}
 
 export function useCreateIssue(projectId: string) {
-  const queryClient = useQueryClient();
+  const invalidate = useInvalidateIssues();
   return useMutation({
-    mutationFn: (payload: CreateIssuePayload) => issuesApi.create(projectId, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['issues', projectId] }),
+    mutationFn: (payload: Omit<CreateIssuePayload, 'projectId'>) =>
+      issuesApi.create({ ...payload, projectId }),
+    onSuccess: invalidate,
   });
 }
 
-export function useUpdateIssue(projectId: string) {
-  const queryClient = useQueryClient();
+export function useUpdateIssue(_projectId?: string) {
+  const invalidate = useInvalidateIssues();
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: UpdateIssuePayload }) =>
       issuesApi.update(id, payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['issues', projectId] }),
+    onSuccess: invalidate,
   });
 }
 
-export function useDeleteIssue(projectId: string) {
-  const queryClient = useQueryClient();
+export function useDeleteIssue(_projectId?: string) {
+  const invalidate = useInvalidateIssues();
   return useMutation({
     mutationFn: (id: string) => issuesApi.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['issues', projectId] }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAddIssueComment() {
+  const invalidate = useInvalidateIssues();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) => issuesApi.addComment(id, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useAssignIssue() {
+  const invalidate = useInvalidateIssues();
+  return useMutation({
+    mutationFn: ({ id, assignedToId }: { id: string; assignedToId: string }) =>
+      issuesApi.assign(id, assignedToId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useBulkUpdateIssues() {
+  const invalidate = useInvalidateIssues();
+  return useMutation({
+    mutationFn: (payload: BulkUpdateIssuesPayload) => issuesApi.bulkUpdate(payload),
+    onSuccess: invalidate,
   });
 }

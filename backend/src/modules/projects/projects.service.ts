@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -13,6 +14,7 @@ import { Issue, IssueDocument } from '../issues/schemas/issue.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
+import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
 import { ProjectStatus } from '../../common/enums';
 
 export interface ProjectListResponse {
@@ -286,6 +288,47 @@ export class ProjectsService {
     };
   }
 
+  async updateMember(
+    projectId: string,
+    organizationId: string,
+    userId: string,
+    dto: UpdateProjectMemberDto,
+  ) {
+    const project = await this.projectModel.findOne({
+      _id: projectId,
+      organizationId,
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const idx = project.members.findIndex((m) => m.userId === userId);
+    if (idx === -1) {
+      throw new NotFoundException('User is not a member of this project');
+    }
+
+    project.members[idx].role = dto.role ?? null;
+    await project.save();
+
+    const member = project.members[idx];
+    const user = await this.userModel
+      .findOne({ _id: userId })
+      .select('firstName lastName email avatarUrl')
+      .lean();
+    return {
+      id: member.userId,
+      role: member.role,
+      joinedAt: member.joinedAt,
+      user: user
+        ? {
+            id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            avatarUrl: user.avatarUrl ?? null,
+          }
+        : null,
+    };
+  }
+
   async removeMember(
     projectId: string,
     organizationId: string,
@@ -300,6 +343,12 @@ export class ProjectsService {
     const idx = project.members.findIndex((m) => m.userId === userId);
     if (idx === -1) {
       throw new NotFoundException('User is not a member of this project');
+    }
+
+    if (project.members.length <= 1) {
+      throw new BadRequestException(
+        'Cannot remove the last member of a project',
+      );
     }
 
     project.members.splice(idx, 1);

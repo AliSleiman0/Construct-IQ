@@ -36,6 +36,12 @@ export class Phase {
   })
   status: ProjectStatus;
 
+  // Phases this phase depends on (finish-to-start). Cycle prevention is
+  // application-level (client guard + renderer visited-set). Defaults [] so
+  // existing rows are unaffected.
+  @Prop({ type: [String], ref: 'Phase', default: [] })
+  dependsOnPhaseIds: string[];
+
   createdAt: Date;
   updatedAt: Date;
 }

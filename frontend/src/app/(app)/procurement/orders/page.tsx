@@ -1,24 +1,22 @@
 'use client';
 
 import { Box } from '@mui/material';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { ModulePreview } from '@/features/placeholders/components/ModulePreview';
+import { PurchaseOrdersPanel } from '@/features/procurement/components/PurchaseOrdersPanel';
+import { useAuthStore } from '@/store/auth.store';
 
 export default function PurchaseOrdersPage() {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const isSuperAdmin = !!useAuthStore((s) => s.user?.isSuperAdmin);
+  const can = (p: string) => isSuperAdmin || hasPermission(p);
+
   return (
     <Box>
-      <PageHeader title="Purchase Orders" subtitle="Issued POs across all active projects." />
-      <ModulePreview
-        title="Purchase Order workflow"
-        description="Issue POs, route for approval, track delivery, and reconcile against supplier invoices. Coming soon."
-        icon={ShoppingCartIcon}
-        statCards={[
-          { label: 'Active POs', value: '18', hint: '$284k committed' },
-          { label: 'Awaiting approval', value: '4' },
-          { label: 'Closed (30d)', value: '23' },
-        ]}
-        comingSoon="Phase 5 — Procurement"
+      <PageHeader title="Purchase Orders" subtitle="Issue POs, route for approval, track delivery." />
+      <PurchaseOrdersPanel
+        canCreate={can('create:purchase_orders')}
+        canApprove={can('approve:purchase_orders')}
+        canManage={can('manage:purchase_orders')}
       />
     </Box>
   );

@@ -2,6 +2,7 @@
 
 import {
   Box,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -9,37 +10,51 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
-  Chip,
-  LinearProgress,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import Link from 'next/link';
 import dayjs from 'dayjs';
-import type { MockProject, ProjectStatus } from '@/mocks/projects.mock';
-
-const STATUS_COLOR: Record<ProjectStatus, 'default' | 'primary' | 'info' | 'success' | 'warning'> = {
-  PLANNING: 'info',
-  IN_PROGRESS: 'primary',
-  CLOSEOUT: 'warning',
-  COMPLETED: 'success',
-  ON_HOLD: 'default',
-};
-
-const STATUS_LABEL: Record<ProjectStatus, string> = {
-  PLANNING: 'Planning',
-  IN_PROGRESS: 'In progress',
-  CLOSEOUT: 'Closeout',
-  COMPLETED: 'Completed',
-  ON_HOLD: 'On hold',
-};
+import { ProjectStatusBadge } from './ProjectStatusBadge';
+import type { Project } from '@/types/project.types';
 
 interface ProjectsTableProps {
-  projects: MockProject[];
+  projects: Project[];
   detailBasePath: string;
-  hideOrgColumn?: boolean;
+  /** When provided, renders a per-row edit action. */
+  onEdit?: (project: Project) => void;
+  isEditing?: boolean;
+  /** When provided, renders a per-row delete action. */
+  onDelete?: (project: Project) => void;
+  isDeleting?: boolean;
 }
 
-export function ProjectsTable({ projects, detailBasePath, hideOrgColumn }: ProjectsTableProps) {
+function formatBudget(total?: number | null, currency?: string): string {
+  if (total == null) return '—';
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'USD',
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(total);
+  } catch {
+    return `${currency ?? ''} ${total.toLocaleString()}`.trim();
+  }
+}
+
+function formatDateRange(start?: string | null, end?: string | null): string {
+  const s = start ? dayjs(start).format("MMM 'YY") : null;
+  const e = end ? dayjs(end).format("MMM 'YY") : null;
+  if (!s && !e) return '—';
+  return `${s ?? '—'} – ${e ?? '—'}`;
+}
+
+export function ProjectsTable({ projects, detailBasePath, onEdit, isEditing, onDelete, isDeleting }: ProjectsTableProps) {
+  const hasActions = !!onEdit || !!onDelete;
+  const colSpan = hasActions ? 8 : 7;
   return (
     <TableContainer
       component={Paper}
@@ -52,17 +67,17 @@ export function ProjectsTable({ projects, detailBasePath, hideOrgColumn }: Proje
             <TableCell>Code</TableCell>
             <TableCell>Project</TableCell>
             <TableCell>Status</TableCell>
-            {!hideOrgColumn && <TableCell>Org</TableCell>}
-            <TableCell>Manager</TableCell>
-            <TableCell>Progress</TableCell>
+            <TableCell align="right">Members</TableCell>
+            <TableCell align="right">Tasks</TableCell>
             <TableCell>Budget</TableCell>
-            <TableCell>Target end</TableCell>
+            <TableCell>Dates</TableCell>
+            {hasActions && <TableCell align="right">Actions</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
           {projects.length === 0 && (
             <TableRow>
-              <TableCell colSpan={hideOrgColumn ? 7 : 8}>
+              <TableCell colSpan={colSpan}>
                 <Box textAlign="center" py={5}>
                   <Typography variant="body2" color="text.secondary">
                     No projects yet.
@@ -71,47 +86,56 @@ export function ProjectsTable({ projects, detailBasePath, hideOrgColumn }: Proje
               </TableCell>
             </TableRow>
           )}
-          {projects.map((p) => {
-            const burnPct = p.budgetUsd === 0 ? 0 : Math.round((p.spentUsd / p.budgetUsd) * 100);
-            return (
-              <TableRow key={p.id} hover sx={{ '& a': { color: 'inherit', textDecoration: 'none' } }}>
-                <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                  <Link href={`${detailBasePath}/${p.id}`}>{p.code}</Link>
+          {projects.map((p) => (
+            <TableRow key={p.id} hover sx={{ '& a': { color: 'inherit', textDecoration: 'none' } }}>
+              <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                <Link href={`${detailBasePath}/${p.id}`}>{p.code || '—'}</Link>
+              </TableCell>
+              <TableCell sx={{ fontWeight: 500 }}>
+                <Link href={`${detailBasePath}/${p.id}`}>{p.name}</Link>
+              </TableCell>
+              <TableCell>
+                <ProjectStatusBadge status={p.status} />
+              </TableCell>
+              <TableCell align="right">{p._count.members}</TableCell>
+              <TableCell align="right">{p._count.tasks}</TableCell>
+              <TableCell>
+                <Typography variant="body2">{formatBudget(p.totalBudget, p.currency)}</Typography>
+              </TableCell>
+              <TableCell>
+                <Typography variant="body2">{formatDateRange(p.startDate, p.endDate)}</Typography>
+              </TableCell>
+              {hasActions && (
+                <TableCell align="right">
+                  {onEdit && (
+                    <Tooltip title="Edit project">
+                      <IconButton
+                        size="small"
+                        aria-label={`Edit ${p.name}`}
+                        disabled={isEditing}
+                        onClick={() => onEdit(p)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {onDelete && (
+                    <Tooltip title="Delete project">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label={`Delete ${p.name}`}
+                        disabled={isDeleting}
+                        onClick={() => onDelete(p)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </TableCell>
-                <TableCell sx={{ fontWeight: 500 }}>
-                  <Link href={`${detailBasePath}/${p.id}`}>{p.name}</Link>
-                </TableCell>
-                <TableCell>
-                  <Chip label={STATUS_LABEL[p.status]} color={STATUS_COLOR[p.status]} size="small" sx={{ fontWeight: 600 }} />
-                </TableCell>
-                {!hideOrgColumn && <TableCell>{p.orgName}</TableCell>}
-                <TableCell>{p.managerName}</TableCell>
-                <TableCell sx={{ minWidth: 160 }}>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <LinearProgress
-                      variant="determinate"
-                      value={p.progressPct}
-                      sx={{ flex: 1, height: 6, borderRadius: 1 }}
-                    />
-                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 32 }}>
-                      {p.progressPct}%
-                    </Typography>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">
-                    ${(p.spentUsd / 1_000_000).toFixed(1)}M / ${(p.budgetUsd / 1_000_000).toFixed(1)}M
-                  </Typography>
-                  <Typography variant="caption" color={burnPct > 90 ? 'warning.main' : 'text.secondary'}>
-                    {burnPct}% burned
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">{dayjs(p.targetEndDate).format('MMM YYYY')}</Typography>
-                </TableCell>
-              </TableRow>
-            );
-          })}
+              )}
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </TableContainer>

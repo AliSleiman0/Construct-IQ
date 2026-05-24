@@ -23,6 +23,18 @@ const projectSchema = z.object({
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
 
+// The backend DTO validates startDate/endDate with @IsDateString() and @IsOptional() —
+// but @IsOptional() skips only null/undefined, NOT empty strings. The form's defaults are
+// '' for the optional fields, so submitting without dates would 400. Drop empty-string
+// optionals so the payload omits them entirely.
+function cleanValues(values: ProjectFormValues): ProjectFormValues {
+  const out: Record<string, unknown> = { ...values };
+  for (const key of ['description', 'code', 'location', 'startDate', 'endDate'] as const) {
+    if (out[key] === '' || out[key] == null) delete out[key];
+  }
+  return out as ProjectFormValues;
+}
+
 const STATUS_OPTIONS = [
   { label: 'Planning', value: 'PLANNING' },
   { label: 'Active', value: 'ACTIVE' },
@@ -60,7 +72,7 @@ export function CreateProjectModal({ open, isLoading, error, onClose, onSubmit }
       actions={
         <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
           <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
-          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(onSubmit)}>Create Project</AppButton>
+          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit((v) => onSubmit(cleanValues(v)))}>Create Project</AppButton>
         </Stack>
       }
     >
@@ -119,7 +131,7 @@ export function EditProjectModal({ open, project, isLoading, error, onClose, onS
       actions={
         <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
           <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
-          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(onSubmit)}>Save Changes</AppButton>
+          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit((v) => onSubmit(cleanValues(v)))}>Save Changes</AppButton>
         </Stack>
       }
     >

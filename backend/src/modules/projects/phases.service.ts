@@ -3,9 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Phase, PhaseDocument } from './schemas/phase.schema';
 import { CreatePhaseDto } from './dto/create-phase.dto';
-import { PartialType } from '@nestjs/mapped-types';
-
-class UpdatePhaseDto extends PartialType(CreatePhaseDto) {}
+import { UpdatePhaseDto } from './dto/update-phase.dto';
 
 @Injectable()
 export class PhasesService {
@@ -29,6 +27,7 @@ export class PhasesService {
       startDate: dto.startDate ? new Date(dto.startDate) : null,
       endDate: dto.endDate ? new Date(dto.endDate) : null,
       status: dto.status,
+      dependsOnPhaseIds: dto.dependsOnPhaseIds ?? [],
     });
   }
 
@@ -52,6 +51,7 @@ export class PhasesService {
     if (dto.endDate !== undefined)
       phase.endDate = dto.endDate ? new Date(dto.endDate) : null;
     if (dto.status !== undefined) phase.status = dto.status;
+    if (dto.dependsOnPhaseIds !== undefined) phase.dependsOnPhaseIds = dto.dependsOnPhaseIds;
 
     await phase.save();
     return phase.toObject();
