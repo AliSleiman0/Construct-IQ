@@ -8,6 +8,7 @@ import type {
   UpdateBudgetPayload,
   CreateBudgetLinePayload,
   CreateExpensePayload,
+  UpdateExpensePayload,
 } from '@/types/budget.types';
 
 type Raw = Record<string, any>;
@@ -64,6 +65,11 @@ export const budgetApi = {
   listExpenses: async (budgetId: string): Promise<Expense[]> => {
     const res = await apiClient.get<Raw[]>(`/budget/${budgetId}/expenses`);
     return Array.isArray(res.data) ? res.data.map((e) => idify<Expense>(e)) : [];
+  },
+
+  updateExpense: async (budgetId: string, expenseId: string, payload: UpdateExpensePayload): Promise<Expense> => {
+    const res = await apiClient.patch<Raw>(`/budget/${budgetId}/expenses/${expenseId}`, payload);
+    return idify<Expense>(res.data);
   },
 
   removeExpense: async (budgetId: string, expenseId: string): Promise<void> => {

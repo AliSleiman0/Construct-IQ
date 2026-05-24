@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import dayjs from 'dayjs';
 import { AppButton } from '@/components/ui/AppButton';
@@ -14,9 +15,10 @@ import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { useBudget, useExpenses } from '../hooks/useBudget';
 import {
-  useCreateBudget, useAddBudgetLine, useRemoveBudgetLine, useAddExpense, useRemoveExpense,
+  useCreateBudget, useAddBudgetLine, useRemoveBudgetLine, useAddExpense, useRemoveExpense, useUpdateExpense,
 } from '../hooks/useBudgetMutations';
-import { CreateBudgetModal, AddLineModal, AddExpenseModal } from './BudgetModals';
+import { CreateBudgetModal, AddLineModal, AddExpenseModal, EditExpenseModal } from './BudgetModals';
+import type { Expense } from '@/types/budget.types';
 
 function money(value: number, currency = 'USD'): string {
   try {
@@ -34,7 +36,9 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
   const removeLine = useRemoveBudgetLine(budget?.id ?? '');
   const addExpense = useAddExpense(budget?.id ?? '');
   const removeExpense = useRemoveExpense(budget?.id ?? '');
+  const updateExpense = useUpdateExpense(budget?.id ?? '');
   const { data: expenses } = useExpenses(budget?.id);
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [lineOpen, setLineOpen] = useState(false);
@@ -228,6 +232,15 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
                   <TableCell align="right">{money(e.amount, e.currency || currency)}</TableCell>
                   {canManage && (
                     <TableCell align="right">
+                      <Tooltip title="Edit expense">
+                        <IconButton
+                          size="small"
+                          aria-label={`Edit expense ${e.description}`}
+                          onClick={() => { setFormError(null); setEditExpense(e); }}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="Delete expense">
                         <span>
                           <IconButton
@@ -288,6 +301,34 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
             setExpenseOpen(false);
           } catch (e: any) {
             setFormError(e?.response?.data?.message ?? 'Failed to add expense');
+          }
+        }}
+      />
+      <EditExpenseModal
+        open={!!editExpense}
+        expense={editExpense}
+        lines={budget.lines}
+        isLoading={updateExpense.isPending}
+        error={formError}
+        onClose={() => setEditExpense(null)}
+        onSubmit={async (v) => {
+          if (!editExpense) return;
+          setFormError(null);
+          try {
+            await updateExpense.mutateAsync({
+              expenseId: editExpense.id,
+              payload: {
+                description: v.description,
+                amount: v.amount,
+                date: v.date,
+                // Send raw (incl. '' for Unassigned) so re-pointing — or clearing — the line persists.
+                budgetLineId: v.budgetLineId ?? '',
+                reference: v.reference || undefined,
+              },
+            });
+            setEditExpense(null);
+          } catch (e: any) {
+            setFormError(e?.response?.data?.message ?? 'Failed to update expense');
           }
         }}
       />

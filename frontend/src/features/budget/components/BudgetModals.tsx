@@ -9,7 +9,7 @@ import { AppModal } from '@/components/ui/AppModal';
 import { AppButton } from '@/components/ui/AppButton';
 import { FormTextField } from '@/components/form/FormTextField';
 import { FormSelectField } from '@/components/form/FormSelectField';
-import type { BudgetLine } from '@/types/budget.types';
+import type { BudgetLine, Expense } from '@/types/budget.types';
 
 const amount = z.coerce.number({ invalid_type_error: 'Enter a number' }).min(0, 'Must be ≥ 0');
 
@@ -137,6 +137,61 @@ export function AddExpenseModal({
         <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
           <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
           <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(onSubmit)}>Add expense</AppButton>
+        </Stack>
+      }
+    >
+      <Stack spacing={2.5} px={3} pb={1}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <FormTextField name="description" control={control} label="Description" fullWidth />
+        <FormTextField name="amount" control={control} label="Amount" type="number" fullWidth />
+        <FormTextField name="date" control={control} label="Date" type="date" fullWidth InputLabelProps={{ shrink: true }} />
+        <FormSelectField name="budgetLineId" control={control} label="Budget line" options={lineOptions} />
+        <FormTextField name="reference" control={control} label="Reference (optional)" fullWidth placeholder="Invoice / PO number" />
+      </Stack>
+    </AppModal>
+  );
+}
+
+// Edit an existing expense — same fields as Add; the Budget-line selector also
+// re-points attribution. Prefilled from `expense`.
+export function EditExpenseModal({
+  open, expense, lines, isLoading, error, onClose, onSubmit,
+}: {
+  open: boolean;
+  expense: Expense | null;
+  lines: BudgetLine[];
+  isLoading: boolean;
+  error?: string | null;
+  onClose: () => void;
+  onSubmit: (values: ExpenseFormValues) => void;
+}) {
+  const { control, handleSubmit, reset } = useForm<ExpenseFormValues>({
+    resolver: zodResolver(expenseSchema),
+    defaultValues: { description: '', amount: 0, date: '', budgetLineId: '', reference: '' },
+  });
+  useEffect(() => {
+    if (expense) {
+      reset({
+        description: expense.description,
+        amount: expense.amount,
+        date: expense.date ? expense.date.slice(0, 10) : '',
+        budgetLineId: expense.budgetLineId ?? '',
+        reference: expense.reference ?? '',
+      });
+    }
+  }, [expense, reset]);
+
+  const lineOptions = [
+    { label: 'Unassigned', value: '' },
+    ...lines.map((l) => ({ label: l.category, value: l.id })),
+  ];
+
+  return (
+    <AppModal open={open} onClose={onClose} title="Edit expense"
+      actions={
+        <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
+          <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
+          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(onSubmit)}>Save changes</AppButton>
         </Stack>
       }
     >

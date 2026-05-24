@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 import { Budget, BudgetDocument } from './schemas/budget.schema';
 import { BudgetLine, BudgetLineDocument } from './schemas/budget-line.schema';
 import { Expense, ExpenseDocument } from './schemas/expense.schema';
-import { CreateBudgetDto, CreateBudgetLineDto, CreateExpenseDto } from './dto/create-budget.dto';
+import { CreateBudgetDto, CreateBudgetLineDto, CreateExpenseDto, UpdateExpenseDto } from './dto/create-budget.dto';
 import { PartialType } from '@nestjs/mapped-types';
 
 class UpdateBudgetDto extends PartialType(CreateBudgetDto) {}
@@ -119,6 +119,37 @@ export class BudgetService {
     const expenseFilter: Record<string, unknown> = { budgetId };
     if (!isSuperAdmin) expenseFilter.organizationId = organizationId;
     return this.expenseModel.find(expenseFilter).sort({ date: -1, createdAt: -1 }).lean();
+  }
+
+  async updateExpense(
+    budgetId: string,
+    expenseId: string,
+    organizationId: string,
+    dto: UpdateExpenseDto,
+    isSuperAdmin: boolean,
+  ): Promise<any> {
+    const filter = isSuperAdmin ? { _id: budgetId } : { _id: budgetId, organizationId };
+    const budget = await this.budgetModel.findOne(filter).lean();
+    if (!budget) throw new NotFoundException('Budget not found');
+
+    const expenseFilter: Record<string, unknown> = { _id: expenseId, budgetId };
+    if (!isSuperAdmin) expenseFilter.organizationId = organizationId;
+    const expense = await this.expenseModel.findOne(expenseFilter);
+    if (!expense) throw new NotFoundException('Expense not found');
+
+    // Field-merge provided keys; re-pointing budgetLineId fixes attribution, and
+    // findByProject recomputes spend from the expenses, so no extra recompute here.
+    if (dto.description !== undefined) expense.description = dto.description;
+    if (dto.amount !== undefined) expense.amount = dto.amount;
+    if (dto.currency !== undefined) expense.currency = dto.currency ?? 'USD';
+    if (dto.date !== undefined) expense.date = new Date(dto.date);
+    // Empty string (the "Unassigned" option) clears the line attribution.
+    if (dto.budgetLineId !== undefined) expense.budgetLineId = dto.budgetLineId || null;
+    if (dto.reference !== undefined) expense.reference = dto.reference ?? null;
+    if (dto.notes !== undefined) expense.notes = dto.notes ?? null;
+
+    await expense.save();
+    return expense.toObject();
   }
 
   async removeExpense(budgetId: string, expenseId: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {

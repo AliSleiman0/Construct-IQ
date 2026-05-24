@@ -5,6 +5,7 @@ import type {
   UpdateBudgetPayload,
   CreateBudgetLinePayload,
   CreateExpensePayload,
+  UpdateExpensePayload,
 } from '@/types/budget.types';
 
 function useInvalidateBudget() {
@@ -57,6 +58,15 @@ export function useRemoveExpense(budgetId: string) {
   const invalidate = useInvalidateBudget();
   return useMutation({
     mutationFn: (expenseId: string) => budgetApi.removeExpense(budgetId, expenseId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateExpense(budgetId: string) {
+  const invalidate = useInvalidateBudget();
+  return useMutation({
+    mutationFn: ({ expenseId, payload }: { expenseId: string; payload: UpdateExpensePayload }) =>
+      budgetApi.updateExpense(budgetId, expenseId, payload),
     onSuccess: invalidate,
   });
 }

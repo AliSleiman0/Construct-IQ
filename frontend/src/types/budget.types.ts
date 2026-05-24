@@ -69,3 +69,5 @@ export interface CreateExpensePayload {
   reference?: string;
   notes?: string;
 }
+
+export type UpdateExpensePayload = Partial<CreateExpensePayload>;

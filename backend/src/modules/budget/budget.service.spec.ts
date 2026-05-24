@@ -23,7 +23,7 @@ describe('BudgetService', () => {
   beforeEach(async () => {
     budgetModel = { findOne: jest.fn() };
     lineModel = { find: jest.fn() };
-    expenseModel = { find: jest.fn(), findOneAndDelete: jest.fn() };
+    expenseModel = { find: jest.fn(), findOne: jest.fn(), findOneAndDelete: jest.fn() };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -79,6 +79,28 @@ describe('BudgetService', () => {
       expenseModel.find.mockReturnValue(sortLean([]));
       await service.listExpenses('b-1', 'org-1', true);
       expect(expenseModel.find).toHaveBeenCalledWith({ budgetId: 'b-1' });
+    });
+  });
+
+  describe('updateExpense', () => {
+    it('throws NotFound when the expense does not match (cross-budget/cross-org)', async () => {
+      budgetModel.findOne.mockReturnValue(leanOnce({ _id: 'b-1', organizationId: 'org-1' }));
+      expenseModel.findOne.mockResolvedValue(null);
+      await expect(
+        service.updateExpense('b-1', 'e-x', 'org-1', { amount: 1 }, false),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('field-merges provided keys (re-points line + amount) and saves', async () => {
+      budgetModel.findOne.mockReturnValue(leanOnce({ _id: 'b-1', organizationId: 'org-1' }));
+      const doc: any = { budgetLineId: null, amount: 100, save: jest.fn(), toObject: () => doc };
+      expenseModel.findOne.mockResolvedValue(doc);
+      await service.updateExpense('b-1', 'e-1', 'org-1', { amount: 250, budgetLineId: 'l-1' }, false);
+      expect(doc.amount).toBe(250);
+      expect(doc.budgetLineId).toBe('l-1');
+      expect(doc.save).toHaveBeenCalled();
+      // The expense lookup is budget + org scoped.
+      expect(expenseModel.findOne).toHaveBeenCalledWith({ _id: 'e-1', budgetId: 'b-1', organizationId: 'org-1' });
     });
   });
 
