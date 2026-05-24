@@ -14,6 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import Link from 'next/link';
 import dayjs from 'dayjs';
 import { ProjectStatusBadge } from './ProjectStatusBadge';
@@ -22,7 +23,10 @@ import type { Project } from '@/types/project.types';
 interface ProjectsTableProps {
   projects: Project[];
   detailBasePath: string;
-  /** When provided, renders a per-row delete action column. */
+  /** When provided, renders a per-row edit action. */
+  onEdit?: (project: Project) => void;
+  isEditing?: boolean;
+  /** When provided, renders a per-row delete action. */
   onDelete?: (project: Project) => void;
   isDeleting?: boolean;
 }
@@ -48,8 +52,9 @@ function formatDateRange(start?: string | null, end?: string | null): string {
   return `${s ?? '—'} – ${e ?? '—'}`;
 }
 
-export function ProjectsTable({ projects, detailBasePath, onDelete, isDeleting }: ProjectsTableProps) {
-  const colSpan = onDelete ? 8 : 7;
+export function ProjectsTable({ projects, detailBasePath, onEdit, isEditing, onDelete, isDeleting }: ProjectsTableProps) {
+  const hasActions = !!onEdit || !!onDelete;
+  const colSpan = hasActions ? 8 : 7;
   return (
     <TableContainer
       component={Paper}
@@ -66,7 +71,7 @@ export function ProjectsTable({ projects, detailBasePath, onDelete, isDeleting }
             <TableCell align="right">Tasks</TableCell>
             <TableCell>Budget</TableCell>
             <TableCell>Dates</TableCell>
-            {onDelete && <TableCell align="right">Actions</TableCell>}
+            {hasActions && <TableCell align="right">Actions</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -100,19 +105,33 @@ export function ProjectsTable({ projects, detailBasePath, onDelete, isDeleting }
               <TableCell>
                 <Typography variant="body2">{formatDateRange(p.startDate, p.endDate)}</Typography>
               </TableCell>
-              {onDelete && (
+              {hasActions && (
                 <TableCell align="right">
-                  <Tooltip title="Delete project">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      aria-label={`Delete ${p.name}`}
-                      disabled={isDeleting}
-                      onClick={() => onDelete(p)}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  {onEdit && (
+                    <Tooltip title="Edit project">
+                      <IconButton
+                        size="small"
+                        aria-label={`Edit ${p.name}`}
+                        disabled={isEditing}
+                        onClick={() => onEdit(p)}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {onDelete && (
+                    <Tooltip title="Delete project">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        aria-label={`Delete ${p.name}`}
+                        disabled={isDeleting}
+                        onClick={() => onDelete(p)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </TableCell>
               )}
             </TableRow>

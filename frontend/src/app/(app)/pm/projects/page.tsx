@@ -10,9 +10,9 @@ import { AppButton } from '@/components/ui/AppButton';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { ProjectsTable } from '@/features/projects/components/ProjectsTable';
-import { CreateProjectModal } from '@/features/projects/components/ProjectModals';
+import { CreateProjectModal, EditProjectModal } from '@/features/projects/components/ProjectModals';
 import { useProjects } from '@/features/projects/hooks/useProjects';
-import { useCreateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
+import { useCreateProject, useUpdateProject, useDeleteProject } from '@/features/projects/hooks/useProjectMutations';
 import { useAuthStore } from '@/store/auth.store';
 import type { Project, ProjectStatus } from '@/types/project.types';
 
@@ -24,6 +24,7 @@ export default function PMProjectsPage() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const isSuperAdmin = !!useAuthStore((s) => s.user?.isSuperAdmin);
   const canCreate = isSuperAdmin || hasPermission('create:projects');
+  const canUpdate = isSuperAdmin || hasPermission('update:projects');
   const canDelete = isSuperAdmin || hasPermission('delete:projects');
 
   const { data: projects, isLoading, isError, refetch } = useProjects();
@@ -33,9 +34,11 @@ export default function PMProjectsPage() {
   const [sortBy, setSortBy] = useState<SortKey>('updatedAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editProject, setEditProject] = useState<Project | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const createMutation = useCreateProject();
+  const updateMutation = useUpdateProject(editProject?.id ?? '');
   const deleteMutation = useDeleteProject();
 
   const handleDelete = async (project: Project) => {
@@ -90,6 +93,21 @@ export default function PMProjectsPage() {
     } catch (e: any) {
       setFormError(e?.response?.data?.message ?? 'Failed to create project');
     }
+  };
+
+  const handleUpdate = async (values: Parameters<typeof updateMutation.mutateAsync>[0]) => {
+    setFormError(null);
+    try {
+      await updateMutation.mutateAsync(values);
+      setEditProject(null);
+    } catch (e: any) {
+      setFormError(e?.response?.data?.message ?? 'Failed to update project');
+    }
+  };
+
+  const openEdit = (project: Project) => {
+    setFormError(null);
+    setEditProject(project);
   };
 
   return (
@@ -196,6 +214,8 @@ export default function PMProjectsPage() {
         <ProjectsTable
           projects={visible}
           detailBasePath="/pm/projects"
+          onEdit={canUpdate ? openEdit : undefined}
+          isEditing={updateMutation.isPending}
           onDelete={canDelete ? handleDelete : undefined}
           isDeleting={deleteMutation.isPending}
         />
@@ -207,6 +227,15 @@ export default function PMProjectsPage() {
         error={formError}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
+      />
+
+      <EditProjectModal
+        open={!!editProject}
+        project={editProject}
+        isLoading={updateMutation.isPending}
+        error={formError}
+        onClose={() => setEditProject(null)}
+        onSubmit={handleUpdate}
       />
     </Box>
   );
