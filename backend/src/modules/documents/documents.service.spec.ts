@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { DocumentsService } from './documents.service';
 import { DocumentEntity } from './schemas/document.schema';
+import { Project } from '../projects/schemas/project.schema';
 import { S3Service } from '../uploads/s3.service';
 import { DocumentType } from '../../common/enums';
 
@@ -13,9 +14,11 @@ import { DocumentType } from '../../common/enums';
 describe('DocumentsService', () => {
   let service: DocumentsService;
   let model: any;
+  let projectModel: any;
   let s3: { uploadFile: jest.Mock };
 
   const findChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
+  const projectFindChain = (result: any[]) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
   const file = (over: Partial<any> = {}) => ({
     buffer: Buffer.from('x'), originalname: 'plan.pdf', mimetype: 'application/pdf', size: 1024, ...over,
   });
@@ -28,10 +31,12 @@ describe('DocumentsService', () => {
       updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
     };
     s3 = { uploadFile: jest.fn().mockResolvedValue('http://minio/key') };
+    projectModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         DocumentsService,
         { provide: getModelToken(DocumentEntity.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: S3Service, useValue: s3 },
       ],
     }).compile();
@@ -46,6 +51,31 @@ describe('DocumentsService', () => {
     it('does NOT scope by org for super admins', async () => {
       await service.findAll('org-1', true);
       expect(model.find).toHaveBeenCalledWith({});
+    });
+
+    it('restricts a non-orgWide viewer to their member projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }, { _id: 'p2' }]));
+      await service.findAll('org-1', false, undefined, undefined, { userId: 'eng-1', orgWide: false });
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1', projectId: { $in: ['p1', 'p2'] } });
+    });
+
+    it('does NOT member-scope an orgWide viewer (manage:documents)', async () => {
+      await service.findAll('org-1', false, undefined, undefined, { userId: 'pm-1', orgWide: true });
+      expect(projectModel.find).not.toHaveBeenCalled();
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1' });
+    });
+
+    it('matches nothing when a non-orgWide viewer requests a non-member project', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }]));
+      await service.findAll('org-1', false, 'p9', undefined, { userId: 'eng-1', orgWide: false });
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1', projectId: { $in: [] } });
+    });
+
+    it('returns [] when the viewer belongs to no projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([]));
+      const res = await service.findAll('org-1', false, undefined, undefined, { userId: 'eng-1', orgWide: false });
+      expect(res).toEqual([]);
+      expect(model.find).not.toHaveBeenCalled();
     });
   });
 

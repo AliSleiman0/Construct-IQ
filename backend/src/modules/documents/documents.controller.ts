@@ -12,6 +12,7 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -21,7 +22,11 @@ export class DocumentsController {
   @Get()
   @RequirePermissions(PERMISSIONS.DOCUMENTS.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string, @Query('type') type?: string): Promise<any> {
-    return this.documentsService.findAll(user.organizationId, user.isSuperAdmin, projectId, type);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'documents');
+    return this.documentsService.findAll(user.organizationId, user.isSuperAdmin, projectId, type, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Post()
