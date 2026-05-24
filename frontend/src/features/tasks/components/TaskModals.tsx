@@ -18,6 +18,7 @@ const taskSchema = z.object({
   description: z.string().optional(),
   status: z.enum(['TODO', 'IN_PREPARATION', 'IN_PROGRESS', 'BLOCKED', 'REVIEW', 'DONE']).default('TODO'),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
+  startDate: z.string().optional(),
   dueDate: z.string().optional(),
   assignedToId: z.string().optional(),
   dependsOnTaskIds: z.array(z.string()).optional(),
@@ -82,6 +83,7 @@ export function CreateTaskModal({
       description: '',
       status: defaultStatus,
       priority: 'MEDIUM',
+      startDate: '',
       dueDate: '',
       assignedToId: UNASSIGNED_VALUE,
       dependsOnTaskIds: [],
@@ -95,6 +97,7 @@ export function CreateTaskModal({
         description: '',
         status: defaultStatus,
         priority: 'MEDIUM',
+        startDate: '',
         dueDate: '',
         assignedToId: UNASSIGNED_VALUE,
       });
@@ -149,14 +152,24 @@ export function CreateTaskModal({
           options={assigneeOptions}
           fullWidth
         />
-        <FormTextField
-          name="dueDate"
-          control={control}
-          label="Due Date"
-          type="date"
-          fullWidth
-          InputLabelProps={{ shrink: true }}
-        />
+        <Stack direction="row" spacing={2}>
+          <FormTextField
+            name="startDate"
+            control={control}
+            label="Start Date"
+            type="date"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <FormTextField
+            name="dueDate"
+            control={control}
+            label="Due Date"
+            type="date"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+        </Stack>
       </Stack>
     </AppModal>
   );
@@ -182,6 +195,7 @@ export function EditTaskModal({ open, task, isLoading, error, dependencyTasks, o
       description: '',
       status: 'TODO',
       priority: 'MEDIUM',
+      startDate: '',
       dueDate: '',
       assignedToId: UNASSIGNED_VALUE,
       dependsOnTaskIds: [],
@@ -200,6 +214,7 @@ export function EditTaskModal({ open, task, isLoading, error, dependencyTasks, o
         description: task.description ?? '',
         status: task.status,
         priority: task.priority,
+        startDate: task.startDate ? task.startDate.slice(0, 10) : '',
         dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
         assignedToId: task.assignedToId ?? UNASSIGNED_VALUE,
         dependsOnTaskIds: task.dependsOnTaskIds ?? [],
@@ -256,14 +271,24 @@ export function EditTaskModal({ open, task, isLoading, error, dependencyTasks, o
           options={assigneeOptions}
           fullWidth
         />
-        <FormTextField
-          name="dueDate"
-          control={control}
-          label="Due Date"
-          type="date"
-          fullWidth
-          InputLabelProps={{ shrink: true }}
-        />
+        <Stack direction="row" spacing={2}>
+          <FormTextField
+            name="startDate"
+            control={control}
+            label="Start Date"
+            type="date"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+          <FormTextField
+            name="dueDate"
+            control={control}
+            label="Due Date"
+            type="date"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+          />
+        </Stack>
         {dependencyTasks && dependencyTasks.length > 0 && (
           <Controller
             name="dependsOnTaskIds"
