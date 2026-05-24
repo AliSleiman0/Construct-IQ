@@ -5,6 +5,22 @@ import { TaskStatus, TaskPriority } from '../../../common/enums';
 
 export type TaskDocument = CuidHydratedDocument<Task>;
 
+@Schema({ _id: true, timestamps: true })
+export class TaskComment {
+  _id: string;
+
+  @Prop({ type: String, ref: 'User', required: true })
+  authorId: string;
+
+  @Prop({ type: String, required: true })
+  body: string;
+
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const TaskCommentSchema = SchemaFactory.createForClass(TaskComment);
+
 @Schema({ collection: 'tasks', timestamps: true })
 export class Task {
   _id: string;
@@ -72,6 +88,9 @@ export class Task {
   // Application-level cycle detection should run on write.
   @Prop({ type: [String], ref: 'Task', default: [] })
   dependsOnTaskIds: string[];
+
+  @Prop({ type: [TaskCommentSchema], default: [] })
+  comments: TaskComment[];
 
   deletedAt: Date | null;
   createdAt: Date;

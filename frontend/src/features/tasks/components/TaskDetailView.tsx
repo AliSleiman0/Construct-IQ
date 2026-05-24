@@ -2,20 +2,36 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Box, Paper, Typography, Chip, Divider, Stack, Button } from '@mui/material';
+import { Box, Paper, Typography, Chip, Divider, Stack, Button, TextField, Avatar } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SendIcon from '@mui/icons-material/Send';
 import dayjs from 'dayjs';
 import { AppLoader } from '@/components/ui/AppLoader';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { useTask } from '../hooks/useTasks';
-import { useUpdateTask, useDeleteTask } from '../hooks/useTaskMutations';
+import { useUpdateTask, useDeleteTask, useAddTaskComment } from '../hooks/useTaskMutations';
 import { EditTaskModal, type TaskFormValues } from './TaskModals';
 import { TaskStatusChip } from './TaskStatusChip';
 import { TaskPriorityChip } from './TaskPriorityChip';
 import { useUsers } from '@/features/users/hooks/useUsers';
 import { useProjects } from '@/features/projects/hooks/useProjects';
 import { useAuthStore } from '@/store/auth.store';
+import type { TaskUserRef } from '@/types/task.types';
+
+function userName(u?: TaskUserRef | null): string {
+  if (!u) return 'Unknown';
+  return `${u.firstName} ${u.lastName}`.trim() || 'Unknown';
+}
+
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .map((s) => s[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
 
 export function TaskDetailView({ taskId }: { taskId: string }) {
   const router = useRouter();
@@ -29,8 +45,10 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
 
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const addComment = useAddTaskComment();
   const [editOpen, setEditOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
 
   // GET /tasks/:id returns assignedToId/projectId without populate — resolve names client-side.
   const assigneeName = useMemo(() => {
@@ -70,6 +88,15 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
     router.push('/pm/tasks');
   };
 
+  const handleAddComment = async () => {
+    const body = draft.trim();
+    if (!body) return;
+    await addComment.mutateAsync({ id: task.id, body });
+    setDraft('');
+  };
+
+  const comments = task.comments ?? [];
+
   return (
     <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' } }}>
       <Stack gap={2.5}>
@@ -91,6 +118,60 @@ export function TaskDetailView({ taskId }: { taskId: string }) {
           <Typography variant="body1" color={task.description ? 'text.primary' : 'text.secondary'}>
             {task.description || 'No description.'}
           </Typography>
+        </Paper>
+
+        <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" fontWeight={600} mb={2}>
+            Comments ({comments.length})
+          </Typography>
+          {comments.length === 0 && (
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              No comments yet.
+            </Typography>
+          )}
+          <Stack gap={2}>
+            {comments.map((c) => {
+              const name = userName(c.author);
+              return (
+                <Box key={c.id} display="flex" gap={1.5}>
+                  <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem', bgcolor: 'primary.main' }}>
+                    {initials(name)}
+                  </Avatar>
+                  <Box flex={1}>
+                    <Box display="flex" alignItems="baseline" gap={1}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {dayjs(c.createdAt).format('MMM D, HH:mm')}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2">{c.body}</Typography>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Stack>
+          <Box display="flex" gap={1} mt={2.5}>
+            <TextField
+              size="small"
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Add a comment…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <Button
+              variant="contained"
+              startIcon={<SendIcon />}
+              disabled={!draft.trim() || addComment.isPending}
+              onClick={handleAddComment}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              Send
+            </Button>
+          </Box>
         </Paper>
       </Stack>
 

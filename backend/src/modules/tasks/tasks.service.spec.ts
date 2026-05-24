@@ -55,9 +55,31 @@ describe('TasksService', () => {
 
   describe('findById', () => {
     it('throws NotFound when the task is missing (or belongs to another org)', async () => {
-      model.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+      // findById chains .populate(...).lean()
+      model.findOne.mockReturnValue({ populate: () => ({ lean: () => Promise.resolve(null) }) });
       await expect(service.findById('t-1', 'org-1', false)).rejects.toBeInstanceOf(NotFoundException);
       expect(model.findOne).toHaveBeenCalledWith({ _id: 't-1', organizationId: 'org-1' });
+    });
+
+    it('flattens populated comment authors into a comments[].author object', async () => {
+      const doc = {
+        _id: 't-1',
+        title: 'Pour foundation',
+        comments: [
+          { _id: 'c-1', body: 'looks good', authorId: { _id: 'u-9', firstName: 'Ada', lastName: 'Lovelace' } },
+        ],
+      };
+      model.findOne.mockReturnValue({ populate: () => ({ lean: () => Promise.resolve(doc) }) });
+      const result = await service.findById('t-1', 'org-1', false);
+      expect(result.id).toBe('t-1');
+      expect(result.comments[0]).toEqual(
+        expect.objectContaining({
+          id: 'c-1',
+          body: 'looks good',
+          authorId: 'u-9',
+          author: { id: 'u-9', firstName: 'Ada', lastName: 'Lovelace' },
+        }),
+      );
     });
   });
 
@@ -138,6 +160,27 @@ describe('TasksService', () => {
         { _id: { $in: ['a', 'b'] }, organizationId: 'org-1' },
         { $set: { completedAt: null } },
       );
+    });
+  });
+
+  describe('addComment', () => {
+    it('throws NotFound (org-scoped) when the task is not found', async () => {
+      model.findOne.mockResolvedValue(null);
+      await expect(
+        service.addComment('t-1', 'org-1', 'u-1', { body: 'hi' } as any, false),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(model.findOne).toHaveBeenCalledWith({ _id: 't-1', organizationId: 'org-1' });
+    });
+
+    it('pushes the comment, saves, and returns the new comment', async () => {
+      const comments: any[] = [];
+      const doc: any = { comments, save: jest.fn() };
+      model.findOne.mockResolvedValue(doc);
+      const result = await service.addComment('t-1', 'org-1', 'u-9', { body: 'looks good' } as any, false);
+      expect(doc.comments).toHaveLength(1);
+      expect(doc.comments[0]).toEqual({ authorId: 'u-9', body: 'looks good' });
+      expect(doc.save).toHaveBeenCalled();
+      expect(result).toEqual({ authorId: 'u-9', body: 'looks good' });
     });
   });
 

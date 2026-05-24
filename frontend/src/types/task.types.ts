@@ -7,6 +7,22 @@ export type TaskStatus =
   | 'DONE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+export interface TaskUserRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string | null;
+}
+
+export interface TaskComment {
+  id: string;
+  authorId: string | null;
+  author?: TaskUserRef | null;
+  body: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -17,14 +33,10 @@ export interface Task {
   assignedToId?: string | null;
   dueDate?: string | null;
   position?: number;
+  comments?: TaskComment[];
   createdAt: string;
   updatedAt: string;
-  assignedTo?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    avatarUrl?: string | null;
-  } | null;
+  assignedTo?: TaskUserRef | null;
 }
 
 export interface CreateTaskPayload {

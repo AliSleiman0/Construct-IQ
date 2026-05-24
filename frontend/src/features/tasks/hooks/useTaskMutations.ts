@@ -41,3 +41,11 @@ export function useDeleteTask() {
     onSuccess: () => invalidate(),
   });
 }
+
+export function useAddTaskComment() {
+  const invalidate = useInvalidateTasks();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) => tasksApi.addComment(id, body),
+    onSuccess: () => invalidate(),
+  });
+}

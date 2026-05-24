@@ -19,6 +19,7 @@ import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { ReorderTasksDto } from './dto/reorder-tasks.dto';
+import { AddTaskCommentDto } from './dto/add-task-comment.dto';
 import { TaskStatus } from '../../common/enums';
 
 @Controller('tasks')
@@ -85,6 +86,16 @@ export class TasksController {
     @Body('assignedToId') assignedToId: string,
   ): Promise<any> {
     return this.tasksService.assign(id, user.organizationId, assignedToId, user.isSuperAdmin);
+  }
+
+  @Post(':id/comments')
+  @RequirePermissions(PERMISSIONS.TASKS.UPDATE)
+  addComment(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AddTaskCommentDto,
+  ): Promise<any> {
+    return this.tasksService.addComment(id, user.organizationId, user.sub, dto, user.isSuperAdmin);
   }
 
   @Delete(':id')

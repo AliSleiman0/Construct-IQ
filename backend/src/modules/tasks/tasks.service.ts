@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Task, TaskDocument } from '../projects/schemas/task.schema';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { AddTaskCommentDto } from './dto/add-task-comment.dto';
 import { TaskStatus } from '../../common/enums';
 
 @Injectable()
@@ -11,6 +12,34 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
   ) {}
+
+  private flattenUser(
+    u: any,
+  ): { id: string; firstName: string; lastName: string } | null {
+    if (!u || typeof u !== 'object') return null;
+    return { id: u._id, firstName: u.firstName, lastName: u.lastName };
+  }
+
+  /**
+   * Flattens a populated, lean Task doc: keeps the raw id fields and adds a
+   * `comments[].author` object (mirrors IssuesService.mapIssue). Only the
+   * detail endpoint populates comment authors, so the list stays lean.
+   */
+  private mapTask(doc: any): any {
+    if (!doc) return doc;
+    return {
+      ...doc,
+      id: doc._id,
+      comments: (doc.comments ?? []).map((c: any) => ({
+        ...c,
+        id: c._id,
+        authorId:
+          this.flattenUser(c.authorId)?.id ??
+          (typeof c.authorId === 'string' ? c.authorId : null),
+        author: this.flattenUser(c.authorId),
+      })),
+    };
+  }
 
   async findAll(
     organizationId: string,
@@ -28,9 +57,12 @@ export class TasksService {
 
   async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
-    const task = await this.taskModel.findOne(filter).lean();
+    const task = await this.taskModel
+      .findOne(filter)
+      .populate({ path: 'comments.authorId', select: 'firstName lastName' })
+      .lean();
     if (!task) throw new NotFoundException('Task not found');
-    return task;
+    return this.mapTask(task);
   }
 
   async create(
@@ -140,6 +172,23 @@ export class TasksService {
     task.assignedToId = assignedToId;
     await task.save();
     return task.toObject();
+  }
+
+  async addComment(
+    id: string,
+    organizationId: string,
+    authorId: string,
+    dto: AddTaskCommentDto,
+    isSuperAdmin: boolean,
+  ): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const task = await this.taskModel.findOne(filter);
+    if (!task) throw new NotFoundException('Task not found');
+
+    task.comments.push({ authorId, body: dto.body } as any);
+    await task.save();
+
+    return task.comments[task.comments.length - 1];
   }
 
   async softDelete(
