@@ -52,6 +52,11 @@ export class PermissionsGuard implements CanActivate {
 
     const permissionNames = roles.flatMap((r) => r.permissionKeys ?? []);
 
+    // Expose the resolved permissions on the request so controllers/services can
+    // make scoping decisions (e.g. member-scoped vs org-wide list queries)
+    // without re-querying. The JWT itself does not carry permissions.
+    (user as { permissions?: string[] }).permissions = permissionNames;
+
     // Super Admin with manage:all bypasses every permission check
     if (permissionNames.includes('manage:all')) {
       return true;

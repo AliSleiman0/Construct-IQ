@@ -6,6 +6,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Issue, IssueDocument } from './schemas/issue.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { AddIssueCommentDto } from './dto/add-issue-comment.dto';
@@ -30,11 +31,30 @@ export interface IssueListParams {
   skip?: number;
 }
 
+/**
+ * Who is asking. When `orgWide` is false the caller only sees issues for the
+ * projects they belong to (field roles); when true they see the whole org.
+ */
+export interface IssueViewer {
+  userId: string;
+  orgWide: boolean;
+}
+
 @Injectable()
 export class IssuesService {
   constructor(
     @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
+
+  /** Project ids the user is a member of, within their org. */
+  private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    return projects.map((p: any) => String(p._id));
+  }
 
   private static readonly POPULATE = [
     { path: 'createdById', select: 'firstName lastName' },
@@ -87,8 +107,33 @@ export class IssuesService {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  /**
+   * Constrain a filter to the caller's accessible projects. `restrictIds`:
+   *   null  → org-wide (privileged caller), no extra constraint.
+   *   []    → no accessible projects → match nothing.
+   *   [...] → intersect with any explicit projectId filter.
+   */
+  private applyProjectScope(
+    match: Record<string, unknown>,
+    projectId: string | undefined,
+    restrictIds: string[] | null,
+  ): void {
+    if (restrictIds === null) return;
+    if (projectId) {
+      // Honour the explicit project filter only if the caller is a member.
+      match.projectId = restrictIds.includes(projectId) ? projectId : { $in: [] };
+    } else {
+      match.projectId = { $in: restrictIds };
+    }
+  }
+
   /** Build the Mongo $match for the org-scoped, filtered issue query. */
-  private buildMatch(organizationId: string, isSuperAdmin: boolean, p: IssueListParams): Record<string, unknown> {
+  private buildMatch(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    p: IssueListParams,
+    restrictIds: string[] | null = null,
+  ): Record<string, unknown> {
     const match: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (p.projectId) match.projectId = p.projectId;
     if (p.status) match.status = p.status;
@@ -99,6 +144,7 @@ export class IssuesService {
       const rx = new RegExp(this.escapeRegex(p.search.trim()), 'i');
       match.$or = [{ title: rx }, { location: rx }, { trade: rx }];
     }
+    this.applyProjectScope(match, p.projectId, restrictIds);
     // aggregate() bypasses the soft-delete plugin's query hook — exclude deleted explicitly.
     match.deletedAt = null;
     return match;
@@ -132,11 +178,20 @@ export class IssuesService {
     organizationId: string,
     isSuperAdmin: boolean,
     params: IssueListParams = {},
+    viewer?: IssueViewer,
   ): Promise<{ items: any[]; total: number; limit: number; skip: number }> {
-    const match = this.buildMatch(organizationId, isSuperAdmin, params);
     const limit = Math.min(params.limit ?? 25, 200);
     const skip = params.skip ?? 0;
     const dir: 1 | -1 = params.sortDir === 'asc' ? 1 : -1;
+
+    const restrictIds =
+      viewer && !viewer.orgWide && !isSuperAdmin
+        ? await this.memberProjectIds(organizationId, viewer.userId)
+        : null;
+    if (restrictIds && restrictIds.length === 0) {
+      return { items: [], total: 0, limit, skip };
+    }
+    const match = this.buildMatch(organizationId, isSuperAdmin, params, restrictIds);
 
     const idDocs = await this.issueModel.aggregate([
       { $match: match },
@@ -184,9 +239,23 @@ export class IssuesService {
   }
 
   /** Triage summary counts for the header chips / quick filters. */
-  async getSummary(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any> {
+  async getSummary(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    projectId?: string,
+    viewer?: IssueViewer,
+  ): Promise<any> {
     const base: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) base.projectId = projectId;
+
+    if (viewer && !viewer.orgWide && !isSuperAdmin) {
+      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      if (restrictIds.length === 0) {
+        return { total: 0, open: 0, inProgress: 0, resolved: 0, closed: 0, critical: 0, unassigned: 0, stale: 0 };
+      }
+      this.applyProjectScope(base, projectId, restrictIds);
+    }
+
     const active = { $in: [IssueStatus.OPEN, IssueStatus.IN_PROGRESS] };
     const staleBefore = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
     const c = (extra: Record<string, unknown>) => this.issueModel.countDocuments({ ...base, ...extra });

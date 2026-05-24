@@ -449,6 +449,23 @@ async function main() {
     );
   }
 
+  // Field roles are project-membership-scoped: list endpoints (issues/reports/
+  // tasks) only return data for projects the caller belongs to. Add the demo
+  // Site Engineer and Quantity Surveyor to all Company A projects so their
+  // sections have data to work with.
+  for (const [roleKey, memberRole] of [
+    ['SITE_ENG', 'Site Engineer'],
+    ['SURVEYOR', 'Quantity Surveyor'],
+  ] as const) {
+    if (userMap[roleKey]) {
+      const memberId = userMap[roleKey]._id.toString();
+      await Project.updateMany(
+        { organizationId: orgA._id, 'members.userId': { $ne: memberId } },
+        { $addToSet: { members: { userId: memberId, role: memberRole, joinedAt: new Date() } } },
+      );
+    }
+  }
+
   // ── Org Settings ────────────────────────────────────────────────────────
   const OrgSettingsModel = mongoose.model('OrgSettings', OrgSettingsSchema);
 
