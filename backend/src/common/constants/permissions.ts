@@ -81,6 +81,14 @@ export const PERMISSIONS = {
     MANAGE: 'manage:issues',
   },
 
+  // ── Inspections ───────────────────────────────────────────
+  INSPECTIONS: {
+    READ: 'read:inspections',
+    CREATE: 'create:inspections',
+    UPDATE: 'update:inspections',
+    MANAGE: 'manage:inspections',
+  },
+
   // ── Budget ────────────────────────────────────────────────
   BUDGET: {
     READ: 'read:budget',
