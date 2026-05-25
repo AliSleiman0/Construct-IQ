@@ -10,6 +10,7 @@ import { useReport } from '@/features/reports/hooks/useReports';
 import { useSummarizeReport } from '@/features/reports/hooks/useReportMutations';
 import { useAiFeatures } from '@/features/org-features/hooks/useAiFeatures';
 import { AI_FEATURE_KEYS } from '@/constants/ai-feature-keys';
+import { ReportPhotos } from './ReportPhotos';
 import type { UserRef } from '@/types/report.types';
 
 function authorName(u?: UserRef | null): string {
@@ -113,6 +114,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
             )}
           </Paper>
         )}
+
+        <ReportPhotos reportId={report.id} projectId={report.projectId} />
 
         <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
           <Typography variant="subtitle2" fontWeight={600} mb={1.5}>

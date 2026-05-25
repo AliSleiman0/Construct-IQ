@@ -77,6 +77,21 @@ describe('DocumentsService', () => {
       expect(res).toEqual([]);
       expect(model.find).not.toHaveBeenCalled();
     });
+
+    it('filters by dailyReportId (SE-5 report photos)', async () => {
+      await service.findAll('org-1', false, undefined, undefined, undefined, 'rep-1');
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1', dailyReportId: 'rep-1' });
+    });
+
+    it('still member-scopes when filtering by dailyReportId', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }]));
+      await service.findAll('org-1', false, undefined, undefined, { userId: 'eng-1', orgWide: false }, 'rep-1');
+      expect(model.find).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        dailyReportId: 'rep-1',
+        projectId: { $in: ['p1'] },
+      });
+    });
   });
 
   describe('softDelete', () => {
@@ -112,6 +127,33 @@ describe('DocumentsService', () => {
         organizationId: 'org-1', uploadedById: 'u-9', projectId: 'proj-1',
         type: DocumentType.DRAWING, name: 'plan.pdf', fileUrl: 'http://minio/key',
         mimeType: 'application/pdf', sizeBytes: 1024,
+      }));
+    });
+
+    it('persists dailyReportId and defaults an image upload to IMAGE (SE-5)', async () => {
+      await service.uploadAndCreate('org-1', 'eng-1', file({ originalname: 'site.jpg', mimetype: 'image/jpeg' }), {
+        projectId: 'proj-1',
+        dailyReportId: 'rep-1',
+      });
+      expect(model.create).toHaveBeenCalledWith(expect.objectContaining({
+        dailyReportId: 'rep-1',
+        type: DocumentType.IMAGE,
+        mimeType: 'image/jpeg',
+      }));
+    });
+
+    it('honours an explicit type over the image default', async () => {
+      await service.uploadAndCreate('org-1', 'eng-1', file({ originalname: 'site.jpg', mimetype: 'image/jpeg' }), {
+        type: DocumentType.TECHNICAL_FILE,
+      });
+      expect(model.create).toHaveBeenCalledWith(expect.objectContaining({ type: DocumentType.TECHNICAL_FILE }));
+    });
+
+    it('defaults a non-image upload with no type to OTHER and dailyReportId null', async () => {
+      await service.uploadAndCreate('org-1', 'eng-1', file(), {});
+      expect(model.create).toHaveBeenCalledWith(expect.objectContaining({
+        type: DocumentType.OTHER,
+        dailyReportId: null,
       }));
     });
   });

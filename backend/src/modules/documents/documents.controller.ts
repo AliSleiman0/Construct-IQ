@@ -21,12 +21,21 @@ export class DocumentsController {
 
   @Get()
   @RequirePermissions(PERMISSIONS.DOCUMENTS.READ)
-  findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string, @Query('type') type?: string): Promise<any> {
+  findAll(
+    @CurrentUser() user: JwtPayload,
+    @Query('projectId') projectId?: string,
+    @Query('type') type?: string,
+    @Query('dailyReportId') dailyReportId?: string,
+  ): Promise<any> {
     const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'documents');
-    return this.documentsService.findAll(user.organizationId, user.isSuperAdmin, projectId, type, {
-      userId: user.sub,
-      orgWide,
-    });
+    return this.documentsService.findAll(
+      user.organizationId,
+      user.isSuperAdmin,
+      projectId,
+      type,
+      { userId: user.sub, orgWide },
+      dailyReportId,
+    );
   }
 
   @Post()

@@ -52,10 +52,12 @@ export class DocumentsService {
     projectId?: string,
     type?: string,
     viewer?: DocumentViewer,
+    dailyReportId?: string,
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
     if (type) filter.type = type;
+    if (dailyReportId) filter.dailyReportId = dailyReportId;
 
     if (viewer && !viewer.orgWide && !isSuperAdmin) {
       const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
@@ -120,11 +122,18 @@ export class DocumentsService {
     const key = `org/${organizationId}/project/${scope}/${Date.now()}-${safeName}`;
     const fileUrl = await this.s3.uploadFile(file.buffer, key, file.mimetype);
 
+    // Photos attached to a daily report land as IMAGE without the client having
+    // to set the type explicitly; non-image uploads keep their explicit/OTHER type.
+    const defaultType = file.mimetype.startsWith('image/')
+      ? DocumentType.IMAGE
+      : DocumentType.OTHER;
+
     return this.documentModel.create({
       organizationId,
       uploadedById,
       projectId: dto.projectId ?? null,
-      type: dto.type ?? DocumentType.OTHER,
+      dailyReportId: dto.dailyReportId ?? null,
+      type: dto.type ?? defaultType,
       name: dto.name?.trim() || file.originalname,
       description: dto.description ?? null,
       fileKey: key,
