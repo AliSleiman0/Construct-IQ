@@ -13,6 +13,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import EventIcon from '@mui/icons-material/Event';
+import Link from 'next/link';
 import dayjs from 'dayjs';
 import { useSnackbar } from 'notistack';
 import { AppButton } from '@/components/ui/AppButton';
@@ -162,7 +163,14 @@ export function InspectionListView() {
                 <Chip label={insp.type} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
                 <Chip label={INSPECTION_STATUS_LABEL[insp.status]} size="small" color={STATUS_COLOR[insp.status]} sx={{ fontWeight: 600 }} />
               </Box>
-              <Typography variant="subtitle1" fontWeight={600} mb={0.5}>
+              <Typography
+                variant="subtitle1"
+                fontWeight={600}
+                mb={0.5}
+                component={Link}
+                href={`/site-eng/inspections/${insp.id}`}
+                sx={{ color: 'inherit', textDecoration: 'none', '&:hover': { color: 'primary.main' } }}
+              >
                 {insp.title}
               </Typography>
               <Box display="flex" gap={2} flexWrap="wrap" alignItems="center" mb={1.5}>

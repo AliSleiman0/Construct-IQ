@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SendIcon from '@mui/icons-material/Send';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useSnackbar } from 'notistack';
 import dayjs from 'dayjs';
@@ -37,7 +38,7 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-export function IssueDetailView({ issueId }: { issueId: string }) {
+export function IssueDetailView({ issueId, inspectionBasePath }: { issueId: string; inspectionBasePath?: string }) {
   const { enqueueSnackbar } = useSnackbar();
   const { data: issue, isLoading, isError, refetch } = useIssue(issueId);
   const updateIssue = useUpdateIssue();
@@ -169,7 +170,25 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
             {issue.location && <KV label="Location" value={issue.location} />}
             <KV label="Reporter" value={userName(issue.createdBy)} />
             <KV label="Assignee" value={issue.assignedTo ? userName(issue.assignedTo) : 'Unassigned'} />
-            {issue.inspection && <KV label="From inspection" value={issue.inspection.title} />}
+            {issue.inspection && (
+              <KV
+                label="From inspection"
+                value={
+                  inspectionBasePath ? (
+                    <Typography
+                      variant="body2"
+                      component={Link}
+                      href={`${inspectionBasePath}/${issue.inspectionId}`}
+                      sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+                    >
+                      {issue.inspection.title}
+                    </Typography>
+                  ) : (
+                    issue.inspection.title
+                  )
+                }
+              />
+            )}
             <KV label="Created" value={dayjs(issue.createdAt).format('MMM D, YYYY HH:mm')} />
             {issue.resolvedAt && (
               <KV label="Resolved" value={dayjs(issue.resolvedAt).format('MMM D, YYYY HH:mm')} />

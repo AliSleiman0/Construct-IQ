@@ -33,6 +33,7 @@ export class IssuesController {
   findAll(
     @CurrentUser() user: JwtPayload,
     @Query('projectId') projectId?: string,
+    @Query('inspectionId') inspectionId?: string,
     @Query('status') status?: IssueStatus,
     @Query('severity') severity?: string,
     @Query('type') type?: string,
@@ -49,6 +50,7 @@ export class IssuesController {
       user.isSuperAdmin,
       {
         projectId,
+        inspectionId,
         status,
         severity,
         type,

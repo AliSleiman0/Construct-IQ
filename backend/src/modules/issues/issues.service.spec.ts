@@ -104,6 +104,11 @@ describe('IssuesService', () => {
       expect(match.type).toBe('SAFETY');
     });
 
+    it('applies the inspectionId filter (issues raised from an inspection)', async () => {
+      await service.findAll('org-1', false, { inspectionId: 'insp-1' });
+      expect(model.aggregate.mock.calls[0][0][0].$match.inspectionId).toBe('insp-1');
+    });
+
     it('flattens populated refs into id + name objects', async () => {
       model.aggregate.mockResolvedValue([{ _id: 'iss-1' }]);
       model.countDocuments.mockResolvedValue(1);

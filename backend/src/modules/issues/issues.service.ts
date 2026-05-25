@@ -18,6 +18,7 @@ const STALE_DAYS = 7;
 
 export interface IssueListParams {
   projectId?: string;
+  inspectionId?: string;
   status?: IssueStatus;
   severity?: string;
   type?: string;
@@ -143,6 +144,7 @@ export class IssuesService {
   ): Record<string, unknown> {
     const match: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (p.projectId) match.projectId = p.projectId;
+    if (p.inspectionId) match.inspectionId = p.inspectionId;
     if (p.status) match.status = p.status;
     if (p.severity) match.severity = p.severity;
     if (p.type) match.type = p.type;

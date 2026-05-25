@@ -61,6 +61,7 @@ export type UpdateIssuePayload = Partial<Omit<CreateIssuePayload, 'projectId'>> 
 /** Query params for the paginated org-wide triage list. */
 export interface IssueListParams {
   projectId?: string;
+  inspectionId?: string;
   status?: IssueStatus;
   severity?: IssueSeverity;
   type?: IssueType;

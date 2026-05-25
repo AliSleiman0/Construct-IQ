@@ -5,24 +5,24 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { IssueDetailView } from '@/features/issues/components/IssueDetailView';
+import { InspectionDetailView } from '@/features/inspections/components/InspectionDetailView';
 
-export default function SiteEngIssueDetailPage() {
+export default function SiteEngInspectionDetailPage() {
   const params = useParams();
   const id = String(params?.id ?? '');
 
   return (
     <Box>
       <PageHeader
-        title="Issue detail"
-        breadcrumbs={[{ label: 'Issues', href: '/site-eng/issues' }, { label: id }]}
+        title="Inspection detail"
+        breadcrumbs={[{ label: 'Inspections', href: '/site-eng/inspections' }, { label: id }]}
         actions={
-          <Button component={Link} href="/site-eng/issues" startIcon={<ArrowBackIcon />} variant="text">
+          <Button component={Link} href="/site-eng/inspections" startIcon={<ArrowBackIcon />} variant="text">
             Back
           </Button>
         }
       />
-      <IssueDetailView issueId={id} inspectionBasePath="/site-eng/inspections" />
+      <InspectionDetailView inspectionId={id} />
     </Box>
   );
 }
