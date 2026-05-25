@@ -4,7 +4,7 @@ import { ConflictException, BadRequestException, NotFoundException } from '@nest
 import { SurveyorService } from './surveyor.service';
 import { BoqItem } from './schemas/boq-item.schema';
 import { Variation, VariationStatus } from './schemas/variation.schema';
-import { Valuation } from './schemas/valuation.schema';
+import { Valuation, ValuationStatus } from './schemas/valuation.schema';
 import { Project } from '../projects/schemas/project.schema';
 
 /**
@@ -38,7 +38,11 @@ describe('SurveyorService', () => {
       create: jest.fn(),
       updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
     };
-    valuationModel = { find: jest.fn().mockReturnValue(listChain([])) };
+    valuationModel = {
+      find: jest.fn().mockReturnValue(listChain([])),
+      findOne: jest.fn(),
+      create: jest.fn(),
+    };
     projectModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
 
     const moduleRef = await Test.createTestingModule({
@@ -189,6 +193,63 @@ describe('SurveyorService', () => {
       variationModel.findOne.mockResolvedValue(null);
       await expect(service.approveVariation('v-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(NotFoundException);
       expect(variationModel.findOne).toHaveBeenCalledWith({ _id: 'v-1', organizationId: 'org-1' });
+    });
+  });
+
+  describe('createValuation', () => {
+    it('defaults status to DRAFT with no certifier', async () => {
+      valuationModel.findOne.mockResolvedValue(null);
+      valuationModel.create.mockResolvedValue({ _id: 'val-1' });
+      await service.createValuation('org-1', { projectId: 'p1', period: 'April 2026', amountUsd: 1000, retentionUsd: 50 } as any);
+      expect(valuationModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org-1', projectId: 'p1', period: 'April 2026', amountUsd: 1000, retentionUsd: 50,
+          status: ValuationStatus.DRAFT, certifiedById: null, certifiedAt: null,
+        }),
+      );
+    });
+
+    it('defaults retentionUsd to 0 when omitted', async () => {
+      valuationModel.findOne.mockResolvedValue(null);
+      valuationModel.create.mockResolvedValue({ _id: 'val-1' });
+      await service.createValuation('org-1', { projectId: 'p1', period: 'May 2026', amountUsd: 1000 } as any);
+      expect(valuationModel.create).toHaveBeenCalledWith(expect.objectContaining({ retentionUsd: 0 }));
+    });
+
+    it('rejects a duplicate period within the same project (409)', async () => {
+      valuationModel.findOne.mockResolvedValue({ _id: 'existing' });
+      await expect(
+        service.createValuation('org-1', { projectId: 'p1', period: 'April 2026', amountUsd: 1000 } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(valuationModel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('certifyValuation', () => {
+    it('certifies a SUBMITTED valuation: stamps certifier + CERTIFIED', async () => {
+      const doc: any = { status: ValuationStatus.SUBMITTED, save: jest.fn(), toObject: () => ({ _id: 'val-1' }) };
+      valuationModel.findOne.mockResolvedValue(doc);
+      await service.certifyValuation('val-1', 'org-1', 'qs-1', false);
+      expect(doc.status).toBe(ValuationStatus.CERTIFIED);
+      expect(doc.certifiedById).toBe('qs-1');
+      expect(doc.certifiedAt).toBeInstanceOf(Date);
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('rejects certifying a DRAFT valuation — must be submitted first (400)', async () => {
+      valuationModel.findOne.mockResolvedValue({ status: ValuationStatus.DRAFT });
+      await expect(service.certifyValuation('val-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects re-certifying an already-CERTIFIED valuation (400)', async () => {
+      valuationModel.findOne.mockResolvedValue({ status: ValuationStatus.CERTIFIED });
+      await expect(service.certifyValuation('val-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws NotFound (org-scoped) when missing', async () => {
+      valuationModel.findOne.mockResolvedValue(null);
+      await expect(service.certifyValuation('val-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(valuationModel.findOne).toHaveBeenCalledWith({ _id: 'val-1', organizationId: 'org-1' });
     });
   });
 });
