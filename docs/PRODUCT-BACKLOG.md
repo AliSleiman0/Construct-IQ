@@ -16,7 +16,7 @@ _Site Engineer gap review — 2026-05-24 (after the section was made real, PR #1
 | # | Item | Value | Effort | Notes / decision |
 |---|------|-------|--------|------------------|
 | SE-1 | ✅ **Member-scope `documents` + `progress-photos`** | P0 | S | Same leak class as Cycle 1 (org-scoped, not member-scoped). **DONE** — `documents.service.findAll` + `units.service.findPhotos` now take a viewer; resource=`'documents'` keeps PM org-wide. |
-| SE-2 | **Issues "assigned to me / raised by me" filter** | P1 | S | Server already supports `assignedToId` (incl. `'NONE'`); pure FE toggle in `IssueListView`. |
+| SE-2 | ✅ **Issues "assigned to me / raised by me" filter** | P1 | S | **DONE** — client-side "Show" filter in `IssueListView` (All / Assigned to me / Raised by me), keyed off the current user id. |
 | SE-3 | **Failed inspection → "Raise issue" + `inspectionId` link** | P1 | M | Closes the QA loop. **Decide artifact: Issue+`inspectionId` (thin, rec) vs formal NCR** — SME-VALIDATE. |
 | SE-4 | **Inspection detail/edit page** | P2 | M | PATCH already supports reschedule/inspector/notes; FE only flips status today. |
 | SE-5 | **Daily-report photos** via existing progress-photos API | P2 | M | Depends on SE-1. |
