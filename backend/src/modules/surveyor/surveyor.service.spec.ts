@@ -3,7 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { SurveyorService } from './surveyor.service';
 import { BoqItem } from './schemas/boq-item.schema';
-import { Variation } from './schemas/variation.schema';
+import { Variation, VariationStatus } from './schemas/variation.schema';
 import { Valuation } from './schemas/valuation.schema';
 import { Project } from '../projects/schemas/project.schema';
 
@@ -32,7 +32,12 @@ describe('SurveyorService', () => {
       create: jest.fn(),
       updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
     };
-    variationModel = { find: jest.fn().mockReturnValue(listChain([])) };
+    variationModel = {
+      find: jest.fn().mockReturnValue(listChain([])),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      updateOne: jest.fn().mockResolvedValue({ acknowledged: true }),
+    };
     valuationModel = { find: jest.fn().mockReturnValue(listChain([])) };
     projectModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
 
@@ -148,6 +153,42 @@ describe('SurveyorService', () => {
       boqModel.findOne.mockResolvedValue(null);
       await expect(service.updateBoqItem('b-1', 'org-1', {} as any, false)).rejects.toBeInstanceOf(NotFoundException);
       expect(boqModel.findOne).toHaveBeenCalledWith({ _id: 'b-1', organizationId: 'org-1' });
+    });
+  });
+
+  describe('createVariation', () => {
+    it('defaults status to PENDING with no approver', async () => {
+      variationModel.create.mockResolvedValue({ _id: 'v-1' });
+      await service.createVariation('org-1', { projectId: 'p1', title: 'Extra slab', impactAmount: 1500 } as any);
+      expect(variationModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: 'org-1', projectId: 'p1', title: 'Extra slab', impactAmount: 1500,
+          status: VariationStatus.PENDING, approvedById: null, approvedAt: null,
+        }),
+      );
+    });
+  });
+
+  describe('approveVariation', () => {
+    it('approves a PENDING variation: stamps approver + APPROVED', async () => {
+      const doc: any = { status: VariationStatus.PENDING, save: jest.fn(), toObject: () => ({ _id: 'v-1' }) };
+      variationModel.findOne.mockResolvedValue(doc);
+      await service.approveVariation('v-1', 'org-1', 'qs-1', false);
+      expect(doc.status).toBe(VariationStatus.APPROVED);
+      expect(doc.approvedById).toBe('qs-1');
+      expect(doc.approvedAt).toBeInstanceOf(Date);
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('rejects approving a non-PENDING variation (400)', async () => {
+      variationModel.findOne.mockResolvedValue({ status: VariationStatus.APPROVED });
+      await expect(service.approveVariation('v-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws NotFound (org-scoped) when missing', async () => {
+      variationModel.findOne.mockResolvedValue(null);
+      await expect(service.approveVariation('v-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(variationModel.findOne).toHaveBeenCalledWith({ _id: 'v-1', organizationId: 'org-1' });
     });
   });
 });
