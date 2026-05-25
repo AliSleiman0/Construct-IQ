@@ -36,6 +36,13 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Closed',
 };
 
+type IssueScope = 'ALL' | 'ASSIGNED_ME' | 'RAISED_ME';
+const SCOPE_OPTIONS: { value: IssueScope; label: string }[] = [
+  { value: 'ALL', label: 'All issues' },
+  { value: 'ASSIGNED_ME', label: 'Assigned to me' },
+  { value: 'RAISED_ME', label: 'Raised by me' },
+];
+
 /**
  * Project-scoped issue list for a field role (Site Engineer): pick one of your
  * assigned projects → see its issues → report/read/update. Deliberately NOT the
@@ -54,16 +61,20 @@ export function IssueListView({ detailBasePath }: IssueListViewProps) {
 
   const isSuperAdmin = useAuthStore((s) => s.user?.isSuperAdmin ?? false);
   const hasPermission = useAuthStore((s) => s.hasPermission);
+  const meId = useAuthStore((s) => s.user?.id ?? '');
   const canCreate = isSuperAdmin || hasPermission('create:issues');
 
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<'ALL' | IssueSeverity>('ALL');
   const [status, setStatus] = useState<'ALL' | IssueStatus>('ALL');
+  const [scope, setScope] = useState<IssueScope>('ALL');
   const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (issues ?? []).filter((i: Issue) => {
+      if (scope === 'ASSIGNED_ME' && i.assignedToId !== meId) return false;
+      if (scope === 'RAISED_ME' && i.createdById !== meId) return false;
       if (severity !== 'ALL' && i.severity !== severity) return false;
       if (status !== 'ALL' && i.status !== status) return false;
       if (!q) return true;
@@ -73,7 +84,7 @@ export function IssueListView({ detailBasePath }: IssueListViewProps) {
         (i.trade ?? '').toLowerCase().includes(q)
       );
     });
-  }, [issues, search, severity, status]);
+  }, [issues, search, severity, status, scope, meId]);
 
   if (!projectsLoading && (projects ?? []).length === 0) {
     return (
@@ -125,6 +136,19 @@ export function IssueListView({ detailBasePath }: IssueListViewProps) {
         <TextField select size="small" label="Status" value={status} onChange={(e) => setStatus(e.target.value as 'ALL' | IssueStatus)} sx={{ minWidth: 140 }}>
           {STATUSES.map((s) => (
             <MenuItem key={s} value={s}>{STATUS_LABEL[s]}</MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Show"
+          value={scope}
+          onChange={(e) => setScope(e.target.value as IssueScope)}
+          data-testid="issue-scope"
+          sx={{ minWidth: 150 }}
+        >
+          {SCOPE_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
           ))}
         </TextField>
         {canCreate && (
