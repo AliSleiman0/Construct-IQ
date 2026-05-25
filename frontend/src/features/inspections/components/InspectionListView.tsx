@@ -25,6 +25,8 @@ import {
   useUpdateInspection,
 } from '@/features/inspections/hooks/useInspections';
 import { ScheduleInspectionModal } from '@/features/inspections/components/InspectionModals';
+import { useCreateIssue } from '@/features/issues/hooks/useIssueMutations';
+import { CreateIssueModal } from '@/features/issues/components/IssueModals';
 import { useAuthStore } from '@/store/auth.store';
 import {
   INSPECTION_STATUSES,
@@ -61,9 +63,13 @@ export function InspectionListView() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canCreate = isSuperAdmin || hasPermission('create:inspections');
   const canUpdate = isSuperAdmin || hasPermission('update:inspections');
+  const canRaiseIssue = isSuperAdmin || hasPermission('create:issues');
 
+  const createIssue = useCreateIssue(effectiveProjectId);
   const [statusFilter, setStatusFilter] = useState<'ALL' | InspectionStatus>('ALL');
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  // The failed inspection a deficiency issue is being raised against (SE-3).
+  const [raiseFor, setRaiseFor] = useState<Inspection | null>(null);
 
   const filtered = useMemo(() => {
     return (inspections ?? []).filter(
@@ -195,6 +201,18 @@ export function InspectionListView() {
                   ))}
                 </TextField>
               )}
+              {insp.status === 'FAILED' && canRaiseIssue && (
+                <AppButton
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  fullWidth
+                  sx={{ mt: 1 }}
+                  onClick={() => setRaiseFor(insp)}
+                >
+                  Raise issue
+                </AppButton>
+              )}
             </Paper>
           ))}
         </Box>
@@ -213,6 +231,27 @@ export function InspectionListView() {
               enqueueSnackbar('Inspection scheduled.', { variant: 'success' });
             },
           })
+        }
+      />
+
+      {/* SE-3: raise a QUALITY issue linked back to the failed inspection. */}
+      <CreateIssueModal
+        open={!!raiseFor}
+        isLoading={createIssue.isPending}
+        error={createIssue.isError ? 'Could not raise the issue. Try again.' : null}
+        defaults={raiseFor ? { type: 'QUALITY', title: `Deficiency: ${raiseFor.title}` } : undefined}
+        onClose={() => setRaiseFor(null)}
+        onSubmit={(values) =>
+          createIssue.mutate(
+            { ...values, inspectionId: raiseFor?.id },
+            {
+              onSuccess: () => {
+                setRaiseFor(null);
+                enqueueSnackbar('Issue raised from inspection.', { variant: 'success' });
+              },
+              onError: () => enqueueSnackbar('Could not raise the issue.', { variant: 'error' }),
+            },
+          )
         }
       />
     </Box>

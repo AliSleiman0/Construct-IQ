@@ -33,6 +33,8 @@ export interface Issue {
   assignedTo?: UserRef | null;
   createdById?: string | null;
   createdBy?: UserRef | null;
+  inspectionId?: string | null;
+  inspection?: { id: string; title: string } | null;
   resolvedAt?: string | null;
   comments?: IssueComment[];
   createdAt: string;
@@ -48,6 +50,7 @@ export interface CreateIssuePayload {
   location?: string;
   trade?: string;
   assignedToId?: string;
+  inspectionId?: string;
 }
 
 export type UpdateIssuePayload = Partial<Omit<CreateIssuePayload, 'projectId'>> & {

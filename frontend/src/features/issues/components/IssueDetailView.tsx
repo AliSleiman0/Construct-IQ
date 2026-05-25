@@ -169,6 +169,7 @@ export function IssueDetailView({ issueId }: { issueId: string }) {
             {issue.location && <KV label="Location" value={issue.location} />}
             <KV label="Reporter" value={userName(issue.createdBy)} />
             <KV label="Assignee" value={issue.assignedTo ? userName(issue.assignedTo) : 'Unassigned'} />
+            {issue.inspection && <KV label="From inspection" value={issue.inspection.title} />}
             <KV label="Created" value={dayjs(issue.createdAt).format('MMM D, YYYY HH:mm')} />
             {issue.resolvedAt && (
               <KV label="Resolved" value={dayjs(issue.resolvedAt).format('MMM D, YYYY HH:mm')} />

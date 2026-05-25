@@ -48,16 +48,23 @@ interface CreateIssueModalProps {
   open: boolean;
   isLoading: boolean;
   error?: string | null;
+  /** Prefill the form (e.g. raising a QUALITY issue from a failed inspection). */
+  defaults?: Partial<CreateIssueFormValues>;
   onClose: () => void;
   onSubmit: (values: CreateIssueFormValues) => void;
 }
 
-export function CreateIssueModal({ open, isLoading, error, onClose, onSubmit }: CreateIssueModalProps) {
+const BASE_ISSUE_DEFAULTS: CreateIssueFormValues = { title: '', description: '', type: 'GENERAL', severity: 'MEDIUM' };
+
+export function CreateIssueModal({ open, isLoading, error, defaults, onClose, onSubmit }: CreateIssueModalProps) {
   const { control, handleSubmit, reset } = useForm<CreateIssueFormValues>({
     resolver: zodResolver(createIssueSchema),
-    defaultValues: { title: '', description: '', type: 'GENERAL', severity: 'MEDIUM' },
+    defaultValues: { ...BASE_ISSUE_DEFAULTS, ...defaults },
   });
-  useEffect(() => { if (!open) reset(); }, [open, reset]);
+  // Reset to the (possibly prefilled) defaults each time the modal opens.
+  useEffect(() => {
+    if (open) reset({ ...BASE_ISSUE_DEFAULTS, ...defaults });
+  }, [open, defaults, reset]);
 
   return (
     <AppModal open={open} onClose={onClose} title="Report Issue"

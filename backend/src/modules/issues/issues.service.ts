@@ -60,6 +60,7 @@ export class IssuesService {
     { path: 'createdById', select: 'firstName lastName' },
     { path: 'assignedToId', select: 'firstName lastName' },
     { path: 'projectId', select: 'name' },
+    { path: 'inspectionId', select: 'title' },
     { path: 'comments.authorId', select: 'firstName lastName' },
   ];
 
@@ -84,6 +85,10 @@ export class IssuesService {
       doc.projectId && typeof doc.projectId === 'object'
         ? { id: doc.projectId._id, name: doc.projectId.name }
         : null;
+    const inspection =
+      doc.inspectionId && typeof doc.inspectionId === 'object'
+        ? { id: doc.inspectionId._id, title: doc.inspectionId.title }
+        : null;
 
     return {
       ...doc,
@@ -91,9 +96,11 @@ export class IssuesService {
       createdById: createdBy?.id ?? (typeof doc.createdById === 'string' ? doc.createdById : null),
       assignedToId: assignedTo?.id ?? (typeof doc.assignedToId === 'string' ? doc.assignedToId : null),
       projectId: project?.id ?? (typeof doc.projectId === 'string' ? doc.projectId : doc.projectId),
+      inspectionId: inspection?.id ?? (typeof doc.inspectionId === 'string' ? doc.inspectionId : null),
       createdBy,
       assignedTo,
       project,
+      inspection,
       comments: (doc.comments ?? []).map((c: any) => ({
         ...c,
         id: c._id,
@@ -324,6 +331,7 @@ export class IssuesService {
       location: dto.location ?? null,
       trade: dto.trade ?? null,
       assignedToId: dto.assignedToId ?? null,
+      inspectionId: dto.inspectionId ?? null,
       comments: [],
     });
   }

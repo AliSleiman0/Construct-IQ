@@ -72,6 +72,10 @@ export class Issue {
   @Prop({ type: String, ref: 'User', default: null })
   createdById: string | null;
 
+  // Optional link back to the inspection whose failure raised this issue (SE-3).
+  @Prop({ type: String, ref: 'Inspection', default: null, index: true })
+  inspectionId: string | null;
+
   @Prop({ type: Date, default: null })
   resolvedAt: Date | null;
 

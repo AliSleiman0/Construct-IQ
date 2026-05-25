@@ -37,6 +37,7 @@ describe('IssuesService', () => {
     severity: IssueSeverity.HIGH,
     status: IssueStatus.OPEN,
     projectId: { _id: 'proj-1', name: 'Tower Heights' },
+    inspectionId: { _id: 'insp-1', title: 'Rebar inspection' },
     createdById: { _id: 'u-1', firstName: 'Pete', lastName: 'Williams' },
     assignedToId: { _id: 'u-2', firstName: 'Sara', lastName: 'Diaz' },
     comments: [
@@ -206,6 +207,9 @@ describe('IssuesService', () => {
       const issue = await service.findById('iss-1', 'org-1', false);
       expect(issue.id).toBe('iss-1');
       expect(issue.assignedTo).toEqual({ id: 'u-2', firstName: 'Sara', lastName: 'Diaz' });
+      // SE-3: a populated inspection link flattens to { id, title }.
+      expect(issue.inspection).toEqual({ id: 'insp-1', title: 'Rebar inspection' });
+      expect(issue.inspectionId).toBe('insp-1');
     });
   });
 
@@ -224,6 +228,18 @@ describe('IssuesService', () => {
           projectId: 'proj-1',
           status: IssueStatus.OPEN,
         }),
+      );
+    });
+
+    it('persists the inspectionId link when raised from an inspection (SE-3)', async () => {
+      model.create.mockResolvedValue({ _id: 'iss-2' });
+      await service.create('org-1', 'u-1', {
+        projectId: 'proj-1',
+        title: 'Deficiency: Rebar inspection',
+        inspectionId: 'insp-1',
+      } as any);
+      expect(model.create).toHaveBeenCalledWith(
+        expect.objectContaining({ inspectionId: 'insp-1' }),
       );
     });
   });
