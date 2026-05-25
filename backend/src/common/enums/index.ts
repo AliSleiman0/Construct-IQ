@@ -72,6 +72,13 @@ export enum DeliveryStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum MaterialRequestStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  CONVERTED = 'CONVERTED',
+}
+
 export enum DocumentType {
   DRAWING = 'DRAWING',
   REPORT = 'REPORT',

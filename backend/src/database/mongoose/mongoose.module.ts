@@ -67,6 +67,10 @@ import {
   DeliverySchema,
 } from '../../modules/procurement/schemas/delivery.schema';
 import {
+  MaterialRequest,
+  MaterialRequestSchema,
+} from '../../modules/procurement/schemas/material-request.schema';
+import {
   Budget,
   BudgetSchema,
 } from '../../modules/budget/schemas/budget.schema';
@@ -150,6 +154,7 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: Supplier.name, schema: SupplierSchema },
   { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
   { name: Delivery.name, schema: DeliverySchema },
+  { name: MaterialRequest.name, schema: MaterialRequestSchema },
   { name: Budget.name, schema: BudgetSchema },
   { name: BudgetLine.name, schema: BudgetLineSchema },
   { name: Expense.name, schema: ExpenseSchema },

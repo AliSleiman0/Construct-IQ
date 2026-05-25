@@ -41,3 +41,12 @@ export function useDeleteSupplier() {
     onSuccess: invalidate,
   });
 }
+
+export function useSupplierPerformance(supplierId: string | null) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['supplier-performance', supplierId],
+    queryFn: () => suppliersApi.getPerformance(supplierId!),
+    enabled: isAuthenticated && !!supplierId,
+  });
+}

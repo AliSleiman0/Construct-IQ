@@ -33,6 +33,14 @@ export function useApprovePO() {
   });
 }
 
+export function useRejectPO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => purchaseOrdersApi.reject(id, reason),
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeletePO() {
   const invalidate = useInvalidate();
   return useMutation({

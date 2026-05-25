@@ -1,6 +1,17 @@
 import apiClient from './client';
 import type { Supplier, CreateSupplierPayload } from '@/types/procurement.types';
 
+export interface SupplierPerformance {
+  supplierId: string;
+  supplierName: string;
+  totalOrders: number;
+  totalValue: number;
+  deliveredOrders: number;
+  deliveriesTracked: number;
+  onTimeDeliveries: number;
+  onTimeRate: number | null;
+}
+
 type Raw = Record<string, any>;
 function idify(d: Raw): Supplier {
   const { _id, id, ...rest } = d;
@@ -30,5 +41,10 @@ export const suppliersApi = {
 
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/suppliers/${id}`);
+  },
+
+  getPerformance: async (id: string): Promise<SupplierPerformance> => {
+    const res = await apiClient.get<SupplierPerformance>(`/suppliers/${id}/performance`);
+    return res.data;
   },
 };

@@ -21,6 +21,10 @@ export class PurchaseOrderItemDto {
   @IsOptional() @IsString() notes?: string;
 }
 
+export class RejectPurchaseOrderDto {
+  @IsOptional() @IsString() reason?: string;
+}
+
 export class CreatePurchaseOrderDto {
   @IsString() projectId!: string;
   @IsString() supplierId!: string;

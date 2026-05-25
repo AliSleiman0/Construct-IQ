@@ -11,6 +11,15 @@ export function useBudget(projectId?: string) {
   });
 }
 
+export function useBudgetSummary(projectId?: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['budget-summary', projectId],
+    queryFn: () => budgetApi.getSummary(projectId!),
+    enabled: isAuthenticated && !!projectId,
+  });
+}
+
 export function useExpenses(budgetId?: string) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({

@@ -33,6 +33,11 @@ export const purchaseOrdersApi = {
     return idify(res.data);
   },
 
+  reject: async (id: string, reason?: string): Promise<PurchaseOrder> => {
+    const res = await apiClient.post<Raw>(`/purchase-orders/${id}/reject`, { reason });
+    return idify(res.data);
+  },
+
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/purchase-orders/${id}`);
   },

@@ -15,7 +15,7 @@ import { FormTextField } from '@/components/form/FormTextField';
 import { FormSelectField } from '@/components/form/FormSelectField';
 import type {
   Supplier, PurchaseOrder, Delivery, PurchaseOrderStatus, DeliveryStatus,
-  CreateSupplierPayload, CreatePurchaseOrderPayload,
+  CreateSupplierPayload, CreatePurchaseOrderPayload, CreateMaterialRequestPayload,
 } from '@/types/procurement.types';
 
 const num = z.coerce.number({ invalid_type_error: 'Number' }).min(0, '≥ 0');
@@ -195,6 +195,71 @@ export function CreatePOModal({
         <Typography variant="body2" color="text.secondary" align="right">
           Total: {total.toLocaleString()}
         </Typography>
+      </Stack>
+    </AppModal>
+  );
+}
+
+// ── Material Request ──────────────────────────────────────────────────────────
+const mrSchema = z.object({
+  projectId: z.string().min(1, 'Select a project'),
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  estimatedCost: z.coerce.number({ invalid_type_error: 'Number' }).min(0).optional().or(z.literal('')),
+  currency: z.string().optional(),
+  neededByDate: z.string().optional(),
+});
+type MRFormValues = z.infer<typeof mrSchema>;
+
+export function CreateMaterialRequestModal({
+  open, projects, isLoading, error, onClose, onSubmit,
+}: {
+  open: boolean;
+  projects: { id: string; name: string }[];
+  isLoading: boolean;
+  error?: string | null;
+  onClose: () => void;
+  onSubmit: (values: CreateMaterialRequestPayload) => void;
+}) {
+  const { control, handleSubmit, reset } = useForm<MRFormValues>({
+    resolver: zodResolver(mrSchema),
+    defaultValues: { projectId: '', title: '', description: '', category: '', estimatedCost: '', currency: 'USD', neededByDate: '' },
+  });
+  useEffect(() => { if (open) reset({ projectId: '', title: '', description: '', category: '', estimatedCost: '', currency: 'USD', neededByDate: '' }); }, [open, reset]);
+
+  const submit = (v: MRFormValues) => {
+    const payload: CreateMaterialRequestPayload = {
+      projectId: v.projectId,
+      title: v.title,
+    };
+    if (v.description) payload.description = v.description;
+    if (v.category) payload.category = v.category;
+    if (v.estimatedCost !== '' && v.estimatedCost != null) payload.estimatedCost = Number(v.estimatedCost);
+    if (v.currency) payload.currency = v.currency;
+    if (v.neededByDate) payload.neededByDate = v.neededByDate;
+    onSubmit(payload);
+  };
+
+  return (
+    <AppModal open={open} onClose={onClose} title="New material request"
+      actions={
+        <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
+          <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
+          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(submit)}>Submit request</AppButton>
+        </Stack>
+      }
+    >
+      <Stack spacing={2.5} px={3} pb={1}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <FormSelectField name="projectId" control={control} label="Project" options={projects.map((p) => ({ label: p.name, value: p.id }))} />
+        <FormTextField name="title" control={control} label="Title" fullWidth />
+        <FormTextField name="description" control={control} label="Description (optional)" fullWidth multiline minRows={2} />
+        <Stack direction="row" spacing={2}>
+          <FormTextField name="category" control={control} label="Category (optional)" fullWidth />
+          <FormTextField name="estimatedCost" control={control} label="Est. cost" type="number" fullWidth />
+        </Stack>
+        <FormTextField name="neededByDate" control={control} label="Needed by (optional)" type="date" fullWidth InputLabelProps={{ shrink: true }} />
       </Stack>
     </AppModal>
   );

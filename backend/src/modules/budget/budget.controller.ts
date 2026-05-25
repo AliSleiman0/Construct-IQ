@@ -32,6 +32,12 @@ export class BudgetController {
     return this.budgetService.findByProject(projectId, user.organizationId, user.isSuperAdmin);
   }
 
+  @Get('summary')
+  @RequirePermissions(PERMISSIONS.BUDGET.READ)
+  getSummary(@CurrentUser() user: JwtPayload, @Query('projectId') projectId: string): Promise<any> {
+    return this.budgetService.getBudgetSummaryWithCommitted(projectId, user.organizationId, user.isSuperAdmin);
+  }
+
   @Post()
   @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateBudgetDto): Promise<any> {

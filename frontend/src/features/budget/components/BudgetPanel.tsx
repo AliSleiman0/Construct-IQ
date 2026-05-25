@@ -13,7 +13,7 @@ import dayjs from 'dayjs';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
-import { useBudget, useExpenses } from '../hooks/useBudget';
+import { useBudgetSummary, useExpenses } from '../hooks/useBudget';
 import {
   useCreateBudget, useAddBudgetLine, useRemoveBudgetLine, useAddExpense, useRemoveExpense, useUpdateExpense,
 } from '../hooks/useBudgetMutations';
@@ -29,7 +29,7 @@ function money(value: number, currency = 'USD'): string {
 }
 
 export function BudgetPanel({ projectId, canManage }: { projectId: string; canManage: boolean }) {
-  const { data: budget, isLoading, isError, refetch } = useBudget(projectId);
+  const { data: budget, isLoading, isError, refetch } = useBudgetSummary(projectId);
 
   const createBudget = useCreateBudget();
   const addLine = useAddBudgetLine(budget?.id ?? '');
@@ -96,17 +96,19 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
   const lineCategory = new Map(budget.lines.map((l) => [l.id, l.category]));
   const allocated = budget.lines.reduce((s, l) => s + l.plannedAmount, 0);
   const spent = budget.totalSpent ?? 0;
-  const remaining = budget.totalAmount - spent;
-  const pctUsed = budget.totalAmount > 0 ? Math.min(100, Math.round((spent / budget.totalAmount) * 100)) : 0;
+  const committed = budget.totalCommitted ?? 0;
+  const remaining = budget.totalAmount - spent - committed;
+  const pctUsed = budget.totalAmount > 0 ? Math.min(100, Math.round(((spent + committed) / budget.totalAmount) * 100)) : 0;
 
   return (
     <Stack gap={2.5}>
       {/* Summary */}
       <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' } }}>
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(5, 1fr)' } }}>
           <Metric label="Total budget" value={money(budget.totalAmount, currency)} />
           <Metric label="Allocated" value={money(allocated, currency)} hint="Sum of line items" />
           <Metric label="Spent" value={money(spent, currency)} />
+          <Metric label="Committed" value={money(committed, currency)} hint="Pending POs" color="warning.main" />
           <Metric label="Remaining" value={money(remaining, currency)} color={remaining < 0 ? 'error.main' : 'success.main'} />
         </Box>
         <Box mt={2.5}>
@@ -147,6 +149,7 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
               <TableRow>
                 <TableCell>Category</TableCell>
                 <TableCell align="right">Planned</TableCell>
+                <TableCell align="right">Committed</TableCell>
                 <TableCell align="right">Spent</TableCell>
                 <TableCell align="right">Remaining</TableCell>
                 {canManage && <TableCell align="right">Actions</TableCell>}
@@ -155,7 +158,8 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
             <TableBody>
               {budget.lines.map((l) => {
                 const lineSpent = l.spentAmount ?? 0;
-                const lineRemaining = l.plannedAmount - lineSpent;
+                const lineCommitted = l.committedAmount ?? 0;
+                const lineRemaining = l.plannedAmount - lineSpent - lineCommitted;
                 return (
                   <TableRow key={l.id} hover>
                     <TableCell>
@@ -165,6 +169,9 @@ export function BudgetPanel({ projectId, canManage }: { projectId: string; canMa
                       )}
                     </TableCell>
                     <TableCell align="right">{money(l.plannedAmount, currency)}</TableCell>
+                    <TableCell align="right" sx={{ color: lineCommitted > 0 ? 'warning.main' : 'text.secondary' }}>
+                      {money(lineCommitted, currency)}
+                    </TableCell>
                     <TableCell align="right">{money(lineSpent, currency)}</TableCell>
                     <TableCell align="right" sx={{ color: lineRemaining < 0 ? 'error.main' : 'text.primary' }}>
                       {money(lineRemaining, currency)}

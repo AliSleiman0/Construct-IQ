@@ -9,11 +9,13 @@ import { Model } from 'mongoose';
 import { Supplier, SupplierDocument } from './schemas/supplier.schema';
 import { PurchaseOrder, PurchaseOrderDocument } from './schemas/purchase-order.schema';
 import { Delivery, DeliveryDocument } from './schemas/delivery.schema';
+import { MaterialRequest, MaterialRequestDocument } from './schemas/material-request.schema';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { CreateDeliveryDto, UpdateDeliveryDto } from './dto/create-delivery.dto';
+import { CreateMaterialRequestDto, ReviewMaterialRequestDto, ConvertMaterialRequestDto } from './dto/create-material-request.dto';
 import { PartialType } from '@nestjs/mapped-types';
-import { PurchaseOrderStatus } from '../../common/enums';
+import { PurchaseOrderStatus, MaterialRequestStatus } from '../../common/enums';
 
 class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
@@ -24,6 +26,7 @@ export class ProcurementService {
     @InjectModel(Supplier.name) private supplierModel: Model<SupplierDocument>,
     @InjectModel(PurchaseOrder.name) private poModel: Model<PurchaseOrderDocument>,
     @InjectModel(Delivery.name) private deliveryModel: Model<DeliveryDocument>,
+    @InjectModel(MaterialRequest.name) private materialRequestModel: Model<MaterialRequestDocument>,
   ) {}
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
@@ -138,6 +141,22 @@ export class ProcurementService {
     return po.toObject();
   }
 
+  async rejectPO(id: string, organizationId: string, rejectedById: string, reason: string, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const po = await this.poModel.findOne(filter);
+    if (!po) throw new NotFoundException('Purchase order not found');
+    if (po.status !== PurchaseOrderStatus.SUBMITTED) {
+      throw new BadRequestException('Only SUBMITTED purchase orders can be rejected');
+    }
+
+    po.status = PurchaseOrderStatus.REJECTED;
+    po.rejectedById = rejectedById;
+    po.rejectedAt = new Date();
+    po.rejectionReason = reason ?? null;
+    await po.save();
+    return po.toObject();
+  }
+
   async deletePO(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const po = await this.poModel.findOne(filter);
@@ -183,5 +202,311 @@ export class ProcurementService {
 
     await delivery.save();
     return delivery.toObject();
+  }
+
+  // ── Material Requests ──────────────────────────────────────────────────────
+
+  async findAllMaterialRequests(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any[]> {
+    const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
+    if (projectId) filter.projectId = projectId;
+    return this.materialRequestModel.find(filter).sort({ createdAt: -1 }).lean();
+  }
+
+  async findMaterialRequestById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const mr = await this.materialRequestModel.findOne(filter).lean();
+    if (!mr) throw new NotFoundException('Material request not found');
+    return mr;
+  }
+
+  async createMaterialRequest(organizationId: string, requestedById: string, dto: CreateMaterialRequestDto): Promise<any> {
+    return this.materialRequestModel.create({
+      organizationId,
+      requestedById,
+      projectId: dto.projectId,
+      title: dto.title,
+      description: dto.description ?? null,
+      category: dto.category ?? null,
+      estimatedCost: dto.estimatedCost ?? null,
+      currency: dto.currency ?? 'USD',
+      neededByDate: dto.neededByDate ? new Date(dto.neededByDate) : null,
+      status: MaterialRequestStatus.PENDING,
+    });
+  }
+
+  async updateMaterialRequest(id: string, organizationId: string, dto: Partial<CreateMaterialRequestDto>, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const mr = await this.materialRequestModel.findOne(filter);
+    if (!mr) throw new NotFoundException('Material request not found');
+    if (mr.status !== MaterialRequestStatus.PENDING) {
+      throw new BadRequestException('Only PENDING material requests can be edited');
+    }
+
+    if (dto.title !== undefined) mr.title = dto.title;
+    if (dto.description !== undefined) mr.description = dto.description ?? null;
+    if (dto.category !== undefined) mr.category = dto.category ?? null;
+    if (dto.estimatedCost !== undefined) mr.estimatedCost = dto.estimatedCost ?? null;
+    if (dto.currency !== undefined) mr.currency = dto.currency ?? 'USD';
+    if (dto.neededByDate !== undefined) mr.neededByDate = dto.neededByDate ? new Date(dto.neededByDate) : null;
+
+    await mr.save();
+    return mr.toObject();
+  }
+
+  async approveMaterialRequest(id: string, organizationId: string, reviewedById: string, dto: ReviewMaterialRequestDto, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const mr = await this.materialRequestModel.findOne(filter);
+    if (!mr) throw new NotFoundException('Material request not found');
+    if (mr.status !== MaterialRequestStatus.PENDING) {
+      throw new BadRequestException('Only PENDING material requests can be approved');
+    }
+
+    mr.status = MaterialRequestStatus.APPROVED;
+    mr.reviewedById = reviewedById;
+    mr.reviewedAt = new Date();
+    mr.reviewNote = dto.reviewNote ?? null;
+    await mr.save();
+    return mr.toObject();
+  }
+
+  async rejectMaterialRequest(id: string, organizationId: string, reviewedById: string, dto: ReviewMaterialRequestDto, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const mr = await this.materialRequestModel.findOne(filter);
+    if (!mr) throw new NotFoundException('Material request not found');
+    if (mr.status !== MaterialRequestStatus.PENDING) {
+      throw new BadRequestException('Only PENDING material requests can be rejected');
+    }
+
+    mr.status = MaterialRequestStatus.REJECTED;
+    mr.reviewedById = reviewedById;
+    mr.reviewedAt = new Date();
+    mr.reviewNote = dto.reviewNote ?? null;
+    await mr.save();
+    return mr.toObject();
+  }
+
+  async convertMaterialRequestToPO(id: string, organizationId: string, dto: ConvertMaterialRequestDto, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const mr = await this.materialRequestModel.findOne(filter);
+    if (!mr) throw new NotFoundException('Material request not found');
+    if (mr.status !== MaterialRequestStatus.APPROVED) {
+      throw new BadRequestException('Only APPROVED material requests can be converted to a PO');
+    }
+
+    const po = await this.poModel.findOne(isSuperAdmin ? { _id: dto.poId } : { _id: dto.poId, organizationId }).lean();
+    if (!po) throw new NotFoundException('Purchase order not found');
+
+    mr.status = MaterialRequestStatus.CONVERTED;
+    mr.convertedToPOId = dto.poId;
+    await mr.save();
+    return mr.toObject();
+  }
+
+  async deleteMaterialRequest(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const mr = await this.materialRequestModel.findOne(filter);
+    if (!mr) throw new NotFoundException('Material request not found');
+    await this.materialRequestModel.deleteOne({ _id: id });
+    return { message: 'Material request deleted successfully' };
+  }
+
+  // ── Supplier Performance ──────────────────────────────────────────────────
+
+  async getSupplierPerformance(supplierId: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const supplierFilter = isSuperAdmin ? { _id: supplierId } : { _id: supplierId, organizationId };
+    const supplier = await this.supplierModel.findOne(supplierFilter).lean();
+    if (!supplier) throw new NotFoundException('Supplier not found');
+
+    const orgFilter = isSuperAdmin ? { supplierId } : { supplierId, organizationId };
+
+    const [poStats, deliveryStats] = await Promise.all([
+      this.poModel.aggregate([
+        { $match: { ...orgFilter, deletedAt: null } },
+        {
+          $group: {
+            _id: null,
+            totalOrders: { $sum: 1 },
+            totalValue: { $sum: '$totalAmount' },
+            deliveredCount: {
+              $sum: { $cond: [{ $eq: ['$status', PurchaseOrderStatus.DELIVERED] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+
+      // On-time: deliveries where deliveryDate <= PO.expectedDeliveryDate
+      this.deliveryModel.aggregate([
+        { $match: { ...orgFilter, status: 'DELIVERED' } },
+        {
+          $lookup: {
+            from: 'purchase_orders',
+            localField: 'purchaseOrderId',
+            foreignField: '_id',
+            as: 'po',
+          },
+        },
+        { $unwind: '$po' },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            onTime: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $eq: ['$po.expectedDeliveryDate', null] },
+                      { $lte: ['$deliveryDate', '$po.expectedDeliveryDate'] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const po = poStats[0] ?? { totalOrders: 0, totalValue: 0, deliveredCount: 0 };
+    const dl = deliveryStats[0] ?? { total: 0, onTime: 0 };
+    const onTimeRate = dl.total > 0 ? Math.round((dl.onTime / dl.total) * 100) : null;
+
+    return {
+      supplierId,
+      supplierName: (supplier as any).name,
+      totalOrders: po.totalOrders,
+      totalValue: po.totalValue ?? 0,
+      deliveredOrders: po.deliveredCount,
+      deliveriesTracked: dl.total,
+      onTimeDeliveries: dl.onTime,
+      onTimeRate,
+    };
+  }
+
+  // ── Procurement Dashboard ──────────────────────────────────────────────────
+
+  async getProcurementDashboard(organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const orgFilter = isSuperAdmin ? {} : { organizationId };
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Start of current week (Monday)
+    const dayOfWeek = now.getDay();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const [
+      activeSuppliers,
+      poStatusCounts,
+      monthlySpend,
+      pendingDeliveries,
+      materialRequestCounts,
+      spendByCategory,
+      weeklyDeliveries,
+    ] = await Promise.all([
+      // Active (non-deleted) suppliers
+      this.supplierModel.countDocuments({ ...orgFilter, isActive: true, deletedAt: null }),
+
+      // POs grouped by status
+      this.poModel.aggregate([
+        { $match: { ...orgFilter, deletedAt: null } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+
+      // Total spend this month (APPROVED + DELIVERED POs)
+      this.poModel.aggregate([
+        {
+          $match: {
+            ...orgFilter,
+            deletedAt: null,
+            status: { $in: [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.DELIVERED] },
+            orderDate: { $gte: startOfMonth },
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+      ]),
+
+      // Pending deliveries
+      this.deliveryModel.countDocuments({ ...orgFilter, status: 'PENDING' }),
+
+      // Material requests grouped by status
+      this.materialRequestModel.aggregate([
+        { $match: orgFilter },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+
+      // Spend by item category (last 30 days, from PO line items)
+      this.poModel.aggregate([
+        {
+          $match: {
+            ...orgFilter,
+            deletedAt: null,
+            status: { $in: [PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.DELIVERED] },
+            orderDate: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+          },
+        },
+        { $unwind: { path: '$items', preserveNullAndEmptyArrays: false } },
+        {
+          $group: {
+            _id: '$items.description',
+            total: { $sum: '$items.totalPrice' },
+          },
+        },
+        { $sort: { total: -1 } },
+        { $limit: 6 },
+        { $project: { _id: 0, label: '$_id', value: '$total' } },
+      ]),
+
+      // Deliveries per day this week
+      this.deliveryModel.aggregate([
+        {
+          $match: {
+            ...orgFilter,
+            status: 'DELIVERED',
+            deliveryDate: { $gte: startOfWeek },
+          },
+        },
+        {
+          $group: {
+            _id: { $dayOfWeek: '$deliveryDate' },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    // Reshape status counts to a keyed map
+    const poByStatus: Record<string, number> = {};
+    for (const row of poStatusCounts) poByStatus[row._id] = row.count;
+
+    const mrByStatus: Record<string, number> = {};
+    for (const row of materialRequestCounts) mrByStatus[row._id] = row.count;
+
+    // Map Sunday=1…Saturday=7 → Mon-Sun labels
+    const DAY_LABELS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+    const delivMap: Record<number, number> = {};
+    for (const row of weeklyDeliveries) delivMap[row._id] = row.count;
+    const deliveriesThisWeek = DAY_LABELS.map((label, i) => ({
+      label,
+      value: delivMap[(i + 2) % 7 === 0 ? 7 : (i + 2) % 7] ?? 0,
+    }));
+
+    return {
+      activeSuppliers,
+      activePOs: (poByStatus['SUBMITTED'] ?? 0) + (poByStatus['APPROVED'] ?? 0),
+      poByStatus,
+      monthlySpend: monthlySpend[0]?.total ?? 0,
+      pendingDeliveries,
+      materialRequests: {
+        pending: mrByStatus['PENDING'] ?? 0,
+        approved: mrByStatus['APPROVED'] ?? 0,
+      },
+      spendByCategory: spendByCategory.length ? spendByCategory : [],
+      deliveriesThisWeek,
+    };
   }
 }

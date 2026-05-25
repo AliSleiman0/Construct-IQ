@@ -6,6 +6,8 @@ export interface BudgetLine {
   plannedAmount: number;
   /** Sum of expenses attributed to this line — computed by the backend. */
   spentAmount?: number;
+  /** Sum of SUBMITTED + APPROVED PO amounts linked to this line — from /budget/summary. */
+  committedAmount?: number;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -22,6 +24,8 @@ export interface Budget {
   lines: BudgetLine[];
   /** Sum of all expenses against the budget — computed by the backend. */
   totalSpent: number;
+  /** Sum of SUBMITTED + APPROVED POs — from /budget/summary. */
+  totalCommitted?: number;
   createdAt: string;
   updatedAt: string;
 }

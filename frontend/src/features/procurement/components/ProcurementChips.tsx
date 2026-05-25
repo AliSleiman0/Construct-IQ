@@ -1,7 +1,7 @@
 'use client';
 
 import { Chip } from '@mui/material';
-import type { PurchaseOrderStatus, DeliveryStatus } from '@/types/procurement.types';
+import type { PurchaseOrderStatus, DeliveryStatus, MaterialRequestStatus } from '@/types/procurement.types';
 
 type Color = 'default' | 'info' | 'primary' | 'success' | 'warning' | 'error';
 
@@ -32,4 +32,15 @@ export function POStatusChip({ status }: { status: PurchaseOrderStatus }) {
 
 export function DeliveryStatusChip({ status }: { status: DeliveryStatus }) {
   return <Chip size="small" label={label(status)} color={DELIVERY_COLOR[status] ?? 'default'} variant="outlined" />;
+}
+
+const MR_COLOR: Record<MaterialRequestStatus, Color> = {
+  PENDING: 'warning',
+  APPROVED: 'success',
+  REJECTED: 'error',
+  CONVERTED: 'primary',
+};
+
+export function MRStatusChip({ status }: { status: MaterialRequestStatus }) {
+  return <Chip size="small" label={label(status)} color={MR_COLOR[status] ?? 'default'} variant="outlined" />;
 }
