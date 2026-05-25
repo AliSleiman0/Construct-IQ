@@ -15,6 +15,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PERMISSIONS } from '../../common/constants/permissions';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 import { SurveyorService } from './surveyor.service';
 import {
   CreateBoqItemDto,
@@ -35,7 +36,11 @@ export class BoqController {
   @Get()
   @RequirePermissions(PERMISSIONS.BUDGET.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string): Promise<any> {
-    return this.surveyorService.findAllBoq(user.organizationId, user.isSuperAdmin, projectId);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'budget');
+    return this.surveyorService.findAllBoq(user.organizationId, user.isSuperAdmin, projectId, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Post()
@@ -65,7 +70,11 @@ export class VariationsController {
   @Get()
   @RequirePermissions(PERMISSIONS.BUDGET.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string): Promise<any> {
-    return this.surveyorService.findAllVariations(user.organizationId, user.isSuperAdmin, projectId);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'budget');
+    return this.surveyorService.findAllVariations(user.organizationId, user.isSuperAdmin, projectId, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Post()
@@ -101,7 +110,11 @@ export class ValuationsController {
   @Get()
   @RequirePermissions(PERMISSIONS.BUDGET.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string): Promise<any> {
-    return this.surveyorService.findAllValuations(user.organizationId, user.isSuperAdmin, projectId);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'budget');
+    return this.surveyorService.findAllValuations(user.organizationId, user.isSuperAdmin, projectId, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Post()

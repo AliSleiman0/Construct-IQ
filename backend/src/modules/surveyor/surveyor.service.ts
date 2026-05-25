@@ -9,6 +9,7 @@ import { Model } from 'mongoose';
 import { BoqItem, BoqItemDocument } from './schemas/boq-item.schema';
 import { Variation, VariationDocument, VariationStatus } from './schemas/variation.schema';
 import { Valuation, ValuationDocument, ValuationStatus } from './schemas/valuation.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import {
   CreateBoqItemDto,
   CreateVariationDto,
@@ -20,17 +21,83 @@ import { PartialType } from '@nestjs/mapped-types';
 
 class UpdateBoqItemDto extends PartialType(CreateBoqItemDto) {}
 
+/**
+ * Who is asking. When `orgWide` is false the caller only sees cost rows for the
+ * projects they belong to (field roles, read-only budget viewers); when true
+ * they see the whole org. Mirrors the issues/reports/tasks viewer pattern.
+ */
+export interface SurveyorViewer {
+  userId: string;
+  orgWide: boolean;
+}
+
 @Injectable()
 export class SurveyorService {
   constructor(
     @InjectModel(BoqItem.name) private boqModel: Model<BoqItemDocument>,
     @InjectModel(Variation.name) private variationModel: Model<VariationDocument>,
     @InjectModel(Valuation.name) private valuationModel: Model<ValuationDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
 
-  async findAllBoq(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any[]> {
+  /** Project ids the user is a member of, within their org. */
+  private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    return projects.map((p: any) => String(p._id));
+  }
+
+  /**
+   * Constrain a list filter to the caller's member projects.
+   *   - orgWide / super-admin → no extra constraint (returns null sentinel handled by caller).
+   *   - no member projects     → caller passes [] which we translate to match-nothing.
+   *   - explicit projectId     → honoured only if the caller is a member, else match nothing.
+   */
+  private applyProjectScope(
+    filter: Record<string, unknown>,
+    projectId: string | undefined,
+    restrictIds: string[],
+  ): void {
+    if (projectId) {
+      filter.projectId = restrictIds.includes(projectId) ? projectId : { $in: [] };
+    } else {
+      filter.projectId = { $in: restrictIds };
+    }
+  }
+
+  /**
+   * Build the org-scoped list filter, applying member-scoping when the viewer
+   * is not org-wide. Returns null when the caller has no accessible projects
+   * (→ the caller should short-circuit to an empty list).
+   */
+  private async buildListFilter(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    projectId: string | undefined,
+    viewer: SurveyorViewer | undefined,
+  ): Promise<Record<string, unknown> | null> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
-    if (projectId) filter.projectId = projectId;
+
+    if (viewer && !viewer.orgWide && !isSuperAdmin) {
+      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      if (restrictIds.length === 0) return null;
+      this.applyProjectScope(filter, projectId, restrictIds);
+    } else if (projectId) {
+      filter.projectId = projectId;
+    }
+    return filter;
+  }
+
+  async findAllBoq(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    projectId?: string,
+    viewer?: SurveyorViewer,
+  ): Promise<any[]> {
+    const filter = await this.buildListFilter(organizationId, isSuperAdmin, projectId, viewer);
+    if (filter === null) return [];
     return this.boqModel.find(filter).sort({ code: 1 }).lean();
   }
 
@@ -77,9 +144,14 @@ export class SurveyorService {
     return { message: 'BOQ item deleted successfully' };
   }
 
-  async findAllVariations(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any[]> {
-    const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
-    if (projectId) filter.projectId = projectId;
+  async findAllVariations(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    projectId?: string,
+    viewer?: SurveyorViewer,
+  ): Promise<any[]> {
+    const filter = await this.buildListFilter(organizationId, isSuperAdmin, projectId, viewer);
+    if (filter === null) return [];
     return this.variationModel.find(filter).sort({ createdAt: -1 }).lean();
   }
 
@@ -129,9 +201,14 @@ export class SurveyorService {
     return { message: 'Variation deleted successfully' };
   }
 
-  async findAllValuations(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any[]> {
-    const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
-    if (projectId) filter.projectId = projectId;
+  async findAllValuations(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    projectId?: string,
+    viewer?: SurveyorViewer,
+  ): Promise<any[]> {
+    const filter = await this.buildListFilter(organizationId, isSuperAdmin, projectId, viewer);
+    if (filter === null) return [];
     return this.valuationModel.find(filter).sort({ createdAt: -1 }).lean();
   }
 
