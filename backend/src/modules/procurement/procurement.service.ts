@@ -3,20 +3,34 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Supplier, SupplierDocument } from './schemas/supplier.schema';
 import { PurchaseOrder, PurchaseOrderDocument } from './schemas/purchase-order.schema';
 import { Delivery, DeliveryDocument } from './schemas/delivery.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
-import { CreateDeliveryDto, UpdateDeliveryDto } from './dto/create-delivery.dto';
+import {
+  CreateDeliveryDto,
+  UpdateDeliveryDto,
+  ConfirmDeliveryDto,
+} from './dto/create-delivery.dto';
 import { PartialType } from '@nestjs/mapped-types';
-import { PurchaseOrderStatus } from '../../common/enums';
+import { PurchaseOrderStatus, DeliveryStatus } from '../../common/enums';
+import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
+
+/** Who is asking — when orgWide is false, results are limited to member projects. */
+export interface DeliveryViewer {
+  userId: string;
+  orgWide: boolean;
+}
 
 @Injectable()
 export class ProcurementService {
@@ -24,7 +38,42 @@ export class ProcurementService {
     @InjectModel(Supplier.name) private supplierModel: Model<SupplierDocument>,
     @InjectModel(PurchaseOrder.name) private poModel: Model<PurchaseOrderDocument>,
     @InjectModel(Delivery.name) private deliveryModel: Model<DeliveryDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
+
+  /** Project ids the user is a member of, within their org. */
+  private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    return projects.map((p: any) => String(p._id));
+  }
+
+  /** PO ids belonging to the given org-scoped project ids. */
+  private async poIdsForProjects(organizationId: string, projectIds: string[]): Promise<string[]> {
+    const pos = await this.poModel
+      .find({ organizationId, projectId: { $in: projectIds } })
+      .select('_id')
+      .lean();
+    return pos.map((p: any) => String(p._id));
+  }
+
+  /**
+   * Attach each delivery's PO number + projectId so consumers can identify and
+   * project-filter deliveries WITHOUT holding read:purchase_orders (site engineers
+   * have read:deliveries only). The join comes through the authorized endpoint.
+   */
+  private async enrichDeliveriesWithPo(deliveries: any[]): Promise<any[]> {
+    if (deliveries.length === 0) return deliveries;
+    const poIds = [...new Set(deliveries.map((d) => String(d.purchaseOrderId)))];
+    const pos = await this.poModel.find({ _id: { $in: poIds } }).select('poNumber projectId').lean();
+    const byId = new Map(pos.map((p: any) => [String(p._id), p]));
+    return deliveries.map((d) => {
+      const po = byId.get(String(d.purchaseOrderId));
+      return { ...d, poNumber: po?.poNumber ?? null, projectId: po?.projectId ?? null };
+    });
+  }
 
   // ── Suppliers ──────────────────────────────────────────────────────────────
 
@@ -148,9 +197,25 @@ export class ProcurementService {
 
   // ── Deliveries ─────────────────────────────────────────────────────────────
 
-  async findAllDeliveries(organizationId: string, isSuperAdmin: boolean): Promise<any[]> {
-    const filter = isSuperAdmin ? {} : { organizationId };
-    return this.deliveryModel.find(filter).sort({ createdAt: -1 }).lean();
+  async findAllDeliveries(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    viewer?: DeliveryViewer,
+  ): Promise<any[]> {
+    const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
+
+    // Field roles (no manage:deliveries) only see deliveries for POs on their
+    // member projects — deliveries have no direct projectId, so resolve via PO.
+    if (viewer && !viewer.orgWide && !isSuperAdmin) {
+      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      if (restrictIds.length === 0) return [];
+      const poIds = await this.poIdsForProjects(organizationId, restrictIds);
+      if (poIds.length === 0) return [];
+      filter.purchaseOrderId = { $in: poIds };
+    }
+
+    const deliveries = await this.deliveryModel.find(filter).sort({ createdAt: -1 }).lean();
+    return this.enrichDeliveriesWithPo(deliveries);
   }
 
   async findDeliveryById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
@@ -179,6 +244,38 @@ export class ProcurementService {
       delivery.deliveryDate = dto.deliveryDate ? new Date(dto.deliveryDate) : null;
     if (dto.status !== undefined) delivery.status = dto.status;
     if (dto.receivedById !== undefined) delivery.receivedById = dto.receivedById ?? null;
+    if (dto.notes !== undefined) delivery.notes = dto.notes ?? null;
+
+    await delivery.save();
+    return delivery.toObject();
+  }
+
+  /**
+   * Goods-received confirmation (SE-7). Narrow, least-privilege action: forces
+   * status=DELIVERED and receivedById=current user. Field roles may only confirm
+   * deliveries for POs on a project they're a member of (member-gate), so a
+   * guessed id on another project is rejected even with confirm:deliveries.
+   */
+  async confirmDelivery(id: string, user: JwtPayload, dto: ConfirmDeliveryDto): Promise<any> {
+    const filter = user.isSuperAdmin ? { _id: id } : { _id: id, organizationId: user.organizationId };
+    const delivery = await this.deliveryModel.findOne(filter);
+    if (!delivery) throw new NotFoundException('Delivery not found');
+
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'deliveries');
+    if (!orgWide && !user.isSuperAdmin) {
+      const po = await this.poModel
+        .findOne({ _id: delivery.purchaseOrderId, organizationId: user.organizationId })
+        .select('projectId')
+        .lean();
+      const memberIds = await this.memberProjectIds(user.organizationId, user.sub);
+      if (!po || !memberIds.includes(String((po as any).projectId))) {
+        throw new ForbiddenException('You can only confirm deliveries on your own projects');
+      }
+    }
+
+    delivery.status = DeliveryStatus.DELIVERED;
+    delivery.receivedById = user.sub;
+    delivery.deliveryDate = dto.deliveryDate ? new Date(dto.deliveryDate) : (delivery.deliveryDate ?? new Date());
     if (dto.notes !== undefined) delivery.notes = dto.notes ?? null;
 
     await delivery.save();

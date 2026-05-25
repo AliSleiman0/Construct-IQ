@@ -114,6 +114,7 @@ export const PERMISSIONS = {
   DELIVERIES: {
     READ: 'read:deliveries',
     UPDATE: 'update:deliveries',
+    CONFIRM: 'confirm:deliveries',
     MANAGE: 'manage:deliveries',
   },
 

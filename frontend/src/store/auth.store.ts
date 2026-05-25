@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (perms.includes(permission)) return true;
     // Hierarchical check, mirroring the backend PermissionsGuard:
     // manage:<resource> satisfies action:<resource> for the granular actions.
-    const match = permission.match(/^(?:read|create|update|delete|assign|approve|upload|use):(.+)$/);
+    const match = permission.match(/^(?:read|create|update|delete|assign|approve|confirm|upload|use):(.+)$/);
     return match ? perms.includes(`manage:${match[1]}`) : false;
   },
 

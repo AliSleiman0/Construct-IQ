@@ -109,6 +109,7 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Daily Reports', href: '/site-eng/reports', icon: ArticleIcon },
     { label: 'Issues', href: '/site-eng/issues', icon: ReportProblemIcon },
     { label: 'Inspections', href: '/site-eng/inspections', icon: FactCheckIcon },
+    { label: 'Deliveries', href: '/site-eng/deliveries', icon: LocalShippingIcon },
     { label: 'Documents', href: '/site-eng/documents', icon: FolderIcon },
   ],
 

@@ -95,6 +95,8 @@ const STANDARD_ROLES: Array<{
       'update:inspections',
       'read:phases',
       'read:milestones',
+      'read:deliveries',
+      'confirm:deliveries',
       'read:documents',
       'upload:documents',
       'read:ai',

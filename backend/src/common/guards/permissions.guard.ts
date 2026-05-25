@@ -72,7 +72,7 @@ export class PermissionsGuard implements CanActivate {
     const satisfies = (required: string): boolean => {
       if (permissionNames.includes(required)) return true;
       const match = required.match(
-        /^(?:read|create|update|delete|assign|approve|upload|use):(.+)$/,
+        /^(?:read|create|update|delete|assign|approve|confirm|upload|use):(.+)$/,
       );
       if (match) return permissionNames.includes(`manage:${match[1]}`);
       return false;

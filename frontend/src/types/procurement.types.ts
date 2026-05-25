@@ -57,6 +57,9 @@ export interface Delivery {
   id: string;
   organizationId: string;
   purchaseOrderId: string;
+  /** Joined from the PO server-side (SE-7) so consumers without read:purchase_orders can still identify + project-filter. */
+  poNumber?: string | null;
+  projectId?: string | null;
   deliveryDate?: string | null;
   status: DeliveryStatus;
   receivedById?: string | null;
@@ -99,5 +102,11 @@ export interface CreateDeliveryPayload {
 export interface UpdateDeliveryPayload {
   deliveryDate?: string;
   status?: DeliveryStatus;
+  notes?: string;
+}
+
+/** Goods-received confirmation (SE-7) — status + receiver are forced server-side. */
+export interface ConfirmDeliveryPayload {
+  deliveryDate?: string;
   notes?: string;
 }
