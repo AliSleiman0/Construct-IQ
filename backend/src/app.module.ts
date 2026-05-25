@@ -17,6 +17,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { AiModule } from './modules/ai/ai.module';
 import { IssuesModule } from './modules/issues/issues.module';
 import { InspectionsModule } from './modules/inspections/inspections.module';
+import { RfisModule } from './modules/rfis/rfis.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -63,6 +64,7 @@ import { SupportTicketsModule } from './modules/support-tickets/support-tickets.
     AiModule,
     IssuesModule,
     InspectionsModule,
+    RfisModule,
     ReportsModule,
     TasksModule,
     AuditModule,

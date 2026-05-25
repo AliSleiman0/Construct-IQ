@@ -78,6 +78,25 @@ export enum InspectionStatus {
   CANCELLED = 'CANCELLED',
 }
 
+// Thin v1 RFI lifecycle: a question (OPEN) gets a formal answer (ANSWERED) and is
+// then closed out (CLOSED). No approval/distribution/impact tracking in v1.
+export enum RfiStatus {
+  OPEN = 'OPEN',
+  ANSWERED = 'ANSWERED',
+  CLOSED = 'CLOSED',
+}
+
+// SME-VALIDATE placeholder taxonomy (mirrors InspectionType) — not authoritative.
+export enum RfiDiscipline {
+  ARCHITECTURAL = 'ARCHITECTURAL',
+  STRUCTURAL = 'STRUCTURAL',
+  MECHANICAL = 'MECHANICAL',
+  ELECTRICAL = 'ELECTRICAL',
+  PLUMBING = 'PLUMBING',
+  CIVIL = 'CIVIL',
+  GENERAL = 'GENERAL',
+}
+
 export enum PurchaseOrderStatus {
   DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',

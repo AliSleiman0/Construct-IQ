@@ -89,6 +89,14 @@ export const PERMISSIONS = {
     MANAGE: 'manage:inspections',
   },
 
+  // ── RFIs (Requests For Information) ───────────────────────
+  RFIS: {
+    READ: 'read:rfis',
+    CREATE: 'create:rfis',
+    UPDATE: 'update:rfis',
+    MANAGE: 'manage:rfis',
+  },
+
   // ── Budget ────────────────────────────────────────────────
   BUDGET: {
     READ: 'read:budget',
