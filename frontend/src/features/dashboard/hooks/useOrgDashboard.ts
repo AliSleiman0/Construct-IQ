@@ -28,3 +28,12 @@ export function useSiteEngDashboard() {
     enabled: isAuthenticated,
   });
 }
+
+export function useSurveyorDashboard() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['dashboard', 'surveyor'],
+    queryFn: dashboardApi.getSurveyorDashboard,
+    enabled: isAuthenticated,
+  });
+}

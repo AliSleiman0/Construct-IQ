@@ -7,7 +7,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useSnackbar } from 'notistack';
 import { AppButton } from '@/components/ui/AppButton';
 import { useAuthStore } from '@/store/auth.store';
-import { useReportPhotos, useUploadDocument, useDeleteDocument } from '@/features/documents/hooks/useDocuments';
+import { useReportDocuments, useUploadDocument, useDeleteDocument } from '@/features/documents/hooks/useDocuments';
 import type { ProjectDocument } from '@/types/document.types';
 
 /**
@@ -22,7 +22,7 @@ export function ReportPhotos({ reportId, projectId }: { reportId: string; projec
   const canUpload = isSuperAdmin || hasPermission('upload:documents');
   const canDelete = isSuperAdmin || hasPermission('delete:documents');
 
-  const { data: docs, isLoading } = useReportPhotos(reportId);
+  const { data: docs, isLoading } = useReportDocuments(reportId);
   const upload = useUploadDocument();
   const deletePhoto = useDeleteDocument();
   const [lightbox, setLightbox] = useState<ProjectDocument | null>(null);

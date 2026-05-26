@@ -1,30 +1,33 @@
 import apiClient from './client';
+import type { Variation, CreateVariationPayload, UpdateVariationPayload } from '@/types/variation.types';
+
+type Raw = Record<string, any>;
+
+// Variation docs are returned lean with `_id` (no `id` normalise in the service).
+function idify(d: Raw): Variation {
+  const { _id, id, ...rest } = d;
+  return { ...(rest as Variation), id: (id ?? _id) as string };
+}
 
 export const variationsApi = {
-  list: async (params?: { projectId?: string }): Promise<any[]> => {
-    const res = await apiClient.get<any[]>('/variations', { params });
-    return res.data;
+  list: async (params?: { projectId?: string }): Promise<Variation[]> => {
+    const res = await apiClient.get<Raw[]>('/variations', { params });
+    return Array.isArray(res.data) ? res.data.map(idify) : [];
   },
 
-  create: async (payload: {
-    projectId: string;
-    title: string;
-    impactAmount: number;
-    description?: string;
-    currency?: string;
-  }): Promise<any> => {
-    const res = await apiClient.post<any>('/variations', payload);
-    return res.data;
+  create: async (payload: CreateVariationPayload): Promise<Variation> => {
+    const res = await apiClient.post<Raw>('/variations', payload);
+    return idify(res.data);
   },
 
-  update: async (id: string, payload: { title?: string; description?: string; impactAmount?: number; status?: string }): Promise<any> => {
-    const res = await apiClient.patch<any>(`/variations/${id}`, payload);
-    return res.data;
+  update: async (id: string, payload: UpdateVariationPayload): Promise<Variation> => {
+    const res = await apiClient.patch<Raw>(`/variations/${id}`, payload);
+    return idify(res.data);
   },
 
-  approve: async (id: string): Promise<any> => {
-    const res = await apiClient.post<any>(`/variations/${id}/approve`);
-    return res.data;
+  approve: async (id: string): Promise<Variation> => {
+    const res = await apiClient.post<Raw>(`/variations/${id}/approve`);
+    return idify(res.data);
   },
 
   delete: async (id: string): Promise<void> => {

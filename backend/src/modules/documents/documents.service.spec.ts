@@ -94,6 +94,56 @@ describe('DocumentsService', () => {
     });
   });
 
+  describe('update', () => {
+    const doc = (over: Partial<any> = {}) => {
+      const d: any = { _id: 'd-1', dailyReportId: null, ...over };
+      d.save = jest.fn().mockResolvedValue(d);
+      d.toObject = jest.fn().mockReturnValue({ ...d });
+      return d;
+    };
+
+    it('throws NotFound when missing and never writes', async () => {
+      model.findOne.mockResolvedValue(null);
+      await expect(service.update('d-1', 'org-1', false, { dailyReportId: 'rep-1' }))
+        .rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('scopes the lookup by organizationId for non-super-admins', async () => {
+      model.findOne.mockResolvedValue(doc());
+      await service.update('d-1', 'org-1', false, { dailyReportId: 'rep-1' });
+      expect(model.findOne).toHaveBeenCalledWith({ _id: 'd-1', organizationId: 'org-1' });
+    });
+
+    it('does NOT org-scope the lookup for super admins', async () => {
+      model.findOne.mockResolvedValue(doc());
+      await service.update('d-1', 'org-1', true, { dailyReportId: 'rep-1' });
+      expect(model.findOne).toHaveBeenCalledWith({ _id: 'd-1' });
+    });
+
+    it('attaches the document to a report', async () => {
+      const d = doc();
+      model.findOne.mockResolvedValue(d);
+      await service.update('d-1', 'org-1', false, { dailyReportId: 'rep-1' });
+      expect(d.dailyReportId).toBe('rep-1');
+      expect(d.save).toHaveBeenCalled();
+    });
+
+    it('unlinks when dailyReportId is null', async () => {
+      const d = doc({ dailyReportId: 'rep-1' });
+      model.findOne.mockResolvedValue(d);
+      await service.update('d-1', 'org-1', false, { dailyReportId: null });
+      expect(d.dailyReportId).toBeNull();
+      expect(d.save).toHaveBeenCalled();
+    });
+
+    it('leaves dailyReportId untouched when the field is absent', async () => {
+      const d = doc({ dailyReportId: 'rep-1' });
+      model.findOne.mockResolvedValue(d);
+      await service.update('d-1', 'org-1', false, {});
+      expect(d.dailyReportId).toBe('rep-1');
+    });
+  });
+
   describe('softDelete', () => {
     it('throws NotFound when missing and never writes', async () => {
       model.findOne.mockResolvedValue(null);

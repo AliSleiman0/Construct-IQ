@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Delete, Body, Param, Query, UseGuards,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards,
   UseInterceptors, UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -12,6 +12,7 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { DocumentsService } from './documents.service';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
+import { UpdateDocumentDto } from './dto/update-document.dto';
 import { seesAllProjects } from '../../common/util/project-scope.util';
 
 @Controller('documents')
@@ -61,6 +62,17 @@ export class DocumentsController {
   @RequirePermissions(PERMISSIONS.DOCUMENTS.READ)
   findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
     return this.documentsService.findById(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  // Attach an existing document to a daily report (or unlink with dailyReportId: null).
+  @Patch(':id')
+  @RequirePermissions(PERMISSIONS.DOCUMENTS.UPLOAD)
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateDocumentDto,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<any> {
+    return this.documentsService.update(id, user.organizationId, user.isSuperAdmin, dto);
   }
 
   @Delete(':id')

@@ -36,6 +36,12 @@ export const documentsApi = {
     return idify(res.data);
   },
 
+  // Attach/unlink an existing document to a daily report (dailyReportId: null unlinks).
+  update: async (id: string, body: { dailyReportId?: string | null }): Promise<ProjectDocument> => {
+    const res = await apiClient.patch<Raw>(`/documents/${id}`, body);
+    return idify(res.data);
+  },
+
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/documents/${id}`);
   },

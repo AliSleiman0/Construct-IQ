@@ -214,7 +214,7 @@ async function main() {
       'read:projects', 'read:users', 'read:tasks',
       'read:phases', 'read:milestones', 'read:reports', 'read:issues',
       'manage:budget', 'read:purchase_orders', 'read:deliveries', 'read:suppliers',
-      'read:documents', 'read:ai',
+      'read:documents', 'read:dashboard', 'read:ai',
     ],
     SITE_ENG: [
       'read:projects', 'read:users',
