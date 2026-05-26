@@ -153,7 +153,12 @@ async function main() {
     { name: 'manage:purchase_orders', resource: 'purchase_orders', action: 'manage', description: 'Full purchase order management' },
     { name: 'read:deliveries', resource: 'deliveries', action: 'read', description: 'View deliveries' },
     { name: 'update:deliveries', resource: 'deliveries', action: 'update', description: 'Update delivery status' },
+    { name: 'confirm:deliveries', resource: 'deliveries', action: 'confirm', description: 'Confirm goods received on site' },
     { name: 'manage:deliveries', resource: 'deliveries', action: 'manage', description: 'Full delivery management' },
+    { name: 'read:rfis', resource: 'rfis', action: 'read', description: 'View RFIs' },
+    { name: 'create:rfis', resource: 'rfis', action: 'create', description: 'Raise RFIs' },
+    { name: 'update:rfis', resource: 'rfis', action: 'update', description: 'Edit RFIs' },
+    { name: 'manage:rfis', resource: 'rfis', action: 'manage', description: 'Full RFI management incl. answering' },
     { name: 'read:documents', resource: 'documents', action: 'read', description: 'View documents' },
     { name: 'upload:documents', resource: 'documents', action: 'upload', description: 'Upload documents' },
     { name: 'delete:documents', resource: 'documents', action: 'delete', description: 'Delete documents' },
@@ -190,6 +195,8 @@ async function main() {
       'manage:tasks', 'assign:tasks',
       'manage:reports',
       'manage:issues', 'assign:issues',
+      'manage:inspections',
+      'manage:rfis',
       'read:budget', 'update:projects',
       'read:suppliers',
       'read:purchase_orders', 'approve:purchase_orders',
@@ -214,8 +221,12 @@ async function main() {
       'read:tasks', 'update:tasks',
       'create:reports', 'read:reports', 'update:reports',
       'create:issues', 'read:issues', 'update:issues',
+      'create:inspections', 'read:inspections', 'update:inspections',
+      'create:rfis', 'read:rfis', 'update:rfis',
       'read:phases', 'read:milestones',
+      'read:deliveries', 'confirm:deliveries',
       'read:documents', 'upload:documents', 'read:ai',
+      'read:dashboard',
     ],
     CLIENT: ['read:projects', 'read:milestones', 'read:issues', 'read:reports', 'read:documents'],
   };
@@ -447,6 +458,23 @@ async function main() {
       { organizationId: orgA._id, 'members.userId': { $ne: orgAdminId } },
       { $addToSet: { members: { userId: orgAdminId, role: 'Admin', joinedAt: new Date() } } },
     );
+  }
+
+  // Field roles are project-membership-scoped: list endpoints (issues/reports/
+  // tasks) only return data for projects the caller belongs to. Add the demo
+  // Site Engineer and Quantity Surveyor to all Company A projects so their
+  // sections have data to work with.
+  for (const [roleKey, memberRole] of [
+    ['SITE_ENG', 'Site Engineer'],
+    ['SURVEYOR', 'Quantity Surveyor'],
+  ] as const) {
+    if (userMap[roleKey]) {
+      const memberId = userMap[roleKey]._id.toString();
+      await Project.updateMany(
+        { organizationId: orgA._id, 'members.userId': { $ne: memberId } },
+        { $addToSet: { members: { userId: memberId, role: memberRole, joinedAt: new Date() } } },
+      );
+    }
   }
 
   // ── Org Settings ────────────────────────────────────────────────────────

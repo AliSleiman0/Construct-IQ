@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { NotFoundException, ConflictException } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { DailyReport } from './schemas/daily-report.schema';
+import { Project } from '../projects/schemas/project.schema';
 
 /**
  * Unit tests for ReportsService — org scoping, the populate/flatten mapping
@@ -12,11 +13,14 @@ import { DailyReport } from './schemas/daily-report.schema';
 describe('ReportsService', () => {
   let service: ReportsService;
   let model: any;
+  let projectModel: any;
 
   // find(...).sort(...).populate(...).lean()
   const findChain = (result: any[]) => ({
     sort: () => ({ populate: () => ({ lean: () => Promise.resolve(result) }) }),
   });
+  // projectModel.find(...).select(...).lean() — member-project lookup
+  const projectFindChain = (result: any[]) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
   // findOne(...).populate(...).lean()
   const findOneChain = (result: any) => ({
     populate: () => ({ lean: () => Promise.resolve(result) }),
@@ -40,8 +44,15 @@ describe('ReportsService', () => {
       findOne: jest.fn(),
       create: jest.fn(),
     };
+    projectModel = {
+      find: jest.fn().mockReturnValue(projectFindChain([])),
+    };
     const moduleRef = await Test.createTestingModule({
-      providers: [ReportsService, { provide: getModelToken(DailyReport.name), useValue: model }],
+      providers: [
+        ReportsService,
+        { provide: getModelToken(DailyReport.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: projectModel },
+      ],
     }).compile();
     service = moduleRef.get(ReportsService);
   });
@@ -60,6 +71,28 @@ describe('ReportsService', () => {
     it('adds the projectId filter when provided', async () => {
       await service.findAll('org-1', false, 'proj-1');
       expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1', projectId: 'proj-1' });
+    });
+
+    it('restricts a non-orgWide viewer to their member projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }, { _id: 'p2' }]));
+      await service.findAll('org-1', false, undefined, { userId: 'eng-1', orgWide: false });
+      expect(model.find).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        projectId: { $in: ['p1', 'p2'] },
+      });
+    });
+
+    it('does NOT member-scope an orgWide viewer', async () => {
+      await service.findAll('org-1', false, undefined, { userId: 'pm-1', orgWide: true });
+      expect(projectModel.find).not.toHaveBeenCalled();
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1' });
+    });
+
+    it('returns [] when the viewer belongs to no projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([]));
+      const res = await service.findAll('org-1', false, undefined, { userId: 'eng-1', orgWide: false });
+      expect(res).toEqual([]);
+      expect(model.find).not.toHaveBeenCalled();
     });
 
     it('flattens populated createdBy + project into id + name objects', async () => {

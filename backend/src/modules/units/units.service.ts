@@ -4,9 +4,16 @@ import { Model } from 'mongoose';
 import { Unit, UnitDocument } from './schemas/unit.schema';
 import { Payment, PaymentDocument } from './schemas/payment.schema';
 import { ProgressPhoto, ProgressPhotoDocument } from './schemas/progress-photo.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto } from './dto/create-unit.dto';
 import { UnitStatus, PaymentStatus } from '../../common/enums';
 import { PartialType } from '@nestjs/mapped-types';
+
+/** Who is asking — when orgWide is false, results are limited to member projects. */
+export interface PhotoViewer {
+  userId: string;
+  orgWide: boolean;
+}
 
 class UpdateUnitDto extends PartialType(CreateUnitDto) {}
 class UpdatePaymentDto extends PartialType(CreatePaymentDto) {}
@@ -17,7 +24,17 @@ export class UnitsService {
     @InjectModel(Unit.name) private unitModel: Model<UnitDocument>,
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
     @InjectModel(ProgressPhoto.name) private photoModel: Model<ProgressPhotoDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
+
+  /** Project ids the user is a member of, within their org. */
+  private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    return projects.map((p: any) => String(p._id));
+  }
 
   async findAllUnits(
     organizationId: string,
@@ -120,9 +137,27 @@ export class UnitsService {
     return payment.toObject();
   }
 
-  async findPhotos(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any[]> {
+  async findPhotos(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    projectId?: string,
+    viewer?: PhotoViewer,
+  ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
+
+    if (viewer && !viewer.orgWide && !isSuperAdmin) {
+      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      if (restrictIds.length === 0) return [];
+      // Honour an explicit project filter only if the caller is a member.
+      filter.projectId =
+        projectId && restrictIds.includes(projectId)
+          ? projectId
+          : projectId
+            ? { $in: [] }
+            : { $in: restrictIds };
+    }
+
     return this.photoModel.find(filter).sort({ takenAt: -1 }).lean();
   }
 

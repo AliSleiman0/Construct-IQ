@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { NotFoundException } from '@nestjs/common';
 import { TasksService } from './tasks.service';
 import { Task } from '../projects/schemas/task.schema';
+import { Project } from '../projects/schemas/project.schema';
 import { TaskStatus, TaskPriority } from '../../common/enums';
 
 /**
@@ -12,9 +13,12 @@ import { TaskStatus, TaskPriority } from '../../common/enums';
 describe('TasksService', () => {
   let service: TasksService;
   let model: any;
+  let projectModel: any;
 
   // find(...).sort(...).lean() chain
   const findChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
+  // projectModel.find(...).select(...).lean() — member-project lookup
+  const projectFindChain = (result: any[]) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
 
   beforeEach(async () => {
     model = {
@@ -25,8 +29,15 @@ describe('TasksService', () => {
       updateMany: jest.fn().mockResolvedValue({ acknowledged: true }),
       bulkWrite: jest.fn().mockResolvedValue({ modifiedCount: 3 }),
     };
+    projectModel = {
+      find: jest.fn().mockReturnValue(projectFindChain([])),
+    };
     const moduleRef = await Test.createTestingModule({
-      providers: [TasksService, { provide: getModelToken(Task.name), useValue: model }],
+      providers: [
+        TasksService,
+        { provide: getModelToken(Task.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: projectModel },
+      ],
     }).compile();
     service = moduleRef.get(TasksService);
   });
@@ -50,6 +61,37 @@ describe('TasksService', () => {
         assignedToId: 'user-9',
         status: TaskStatus.IN_PROGRESS,
       });
+    });
+
+    it('restricts a non-orgWide viewer to their member projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }, { _id: 'p2' }]));
+      await service.findAll('org-1', false, undefined, undefined, undefined, {
+        userId: 'eng-1',
+        orgWide: false,
+      });
+      expect(model.find).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        projectId: { $in: ['p1', 'p2'] },
+      });
+    });
+
+    it('does NOT member-scope an orgWide viewer', async () => {
+      await service.findAll('org-1', false, undefined, undefined, undefined, {
+        userId: 'pm-1',
+        orgWide: true,
+      });
+      expect(projectModel.find).not.toHaveBeenCalled();
+      expect(model.find).toHaveBeenCalledWith({ organizationId: 'org-1' });
+    });
+
+    it('returns [] when the viewer belongs to no projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([]));
+      const res = await service.findAll('org-1', false, undefined, undefined, undefined, {
+        userId: 'eng-1',
+        orgWide: false,
+      });
+      expect(res).toEqual([]);
+      expect(model.find).not.toHaveBeenCalled();
     });
   });
 

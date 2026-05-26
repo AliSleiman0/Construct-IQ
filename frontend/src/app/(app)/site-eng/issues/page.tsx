@@ -2,16 +2,16 @@
 
 import { Box } from '@mui/material';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { IssueList } from '@/features/site-issues/components/IssueList';
+import { IssueListView } from '@/features/issues/components/IssueListView';
 
 export default function SiteEngIssuesPage() {
   return (
     <Box>
       <PageHeader
         title="Issues"
-        subtitle="Open issues across Tower Heights — filter by severity or status."
+        subtitle="Report and track issues on your assigned projects."
       />
-      <IssueList detailBasePath="/site-eng/issues" />
+      <IssueListView detailBasePath="/site-eng/issues" />
     </Box>
   );
 }

@@ -99,3 +99,77 @@ describe('DashboardService — getPmDashboard', () => {
     expect(res.taskThroughput.reduce((s, b) => s + b.value, 0)).toBe(2);
   });
 });
+
+describe('DashboardService — getSiteEngDashboard', () => {
+  let service: DashboardService;
+  let projectModel: any;
+  let taskModel: any;
+  let issueModel: any;
+  let dailyReportModel: any;
+
+  const selectLean = (result: any) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
+
+  beforeEach(async () => {
+    projectModel = { find: jest.fn() };
+    taskModel = { countDocuments: jest.fn(), aggregate: jest.fn(), find: jest.fn() };
+    issueModel = { aggregate: jest.fn() };
+    dailyReportModel = { countDocuments: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        DashboardService,
+        { provide: getModelToken(Project.name), useValue: projectModel },
+        { provide: getModelToken(Task.name), useValue: taskModel },
+        { provide: getModelToken(User.name), useValue: {} },
+        { provide: getModelToken(Issue.name), useValue: issueModel },
+        { provide: getModelToken(DailyReport.name), useValue: dailyReportModel },
+        { provide: getModelToken(AuditLog.name), useValue: {} },
+        { provide: getModelToken(Expense.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(DashboardService);
+  });
+
+  it('scopes projects to the caller via members.userId', async () => {
+    projectModel.find.mockReturnValue(selectLean([]));
+    await service.getSiteEngDashboard('org-1', 'eng-1');
+    expect(projectModel.find).toHaveBeenCalledWith({ organizationId: 'org-1', 'members.userId': 'eng-1' });
+  });
+
+  it('returns a zeroed "my work" shape when the engineer has no projects', async () => {
+    projectModel.find.mockReturnValue(selectLean([]));
+    const res = await service.getSiteEngDashboard('org-1', 'eng-1');
+    expect(res.projectCount).toBe(0);
+    expect(res.myOpenTaskCount).toBe(0);
+    expect(res.myReportsThisWeek).toBe(0);
+    expect(res.taskThroughput).toHaveLength(7);
+    expect(res.myOpenTasksByStatus.map((s) => s.label)).toEqual(['To Do', 'Prep', 'In Progress', 'Blocked', 'Review']);
+    expect(taskModel.countDocuments).not.toHaveBeenCalled();
+  });
+
+  it('narrows task metrics to assignedToId=me and reports to createdById=me', async () => {
+    projectModel.find.mockReturnValue(selectLean([{ _id: 'p1' }, { _id: 'p2' }]));
+    taskModel.countDocuments.mockResolvedValueOnce(4).mockResolvedValueOnce(1);
+    taskModel.aggregate.mockResolvedValue([{ _id: 'IN_PROGRESS', count: 2 }]);
+    taskModel.find.mockReturnValue(selectLean([{ completedAt: new Date() }]));
+    issueModel.aggregate.mockResolvedValue([{ _id: 'CRITICAL', count: 1 }, { _id: 'LOW', count: 2 }]);
+    dailyReportModel.countDocuments.mockResolvedValue(3);
+
+    const res = await service.getSiteEngDashboard('org-1', 'eng-1');
+
+    // Task queries are assignee-scoped to the caller.
+    expect(taskModel.countDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({ assignedToId: 'eng-1', projectId: { $in: ['p1', 'p2'] } }),
+    );
+    // Reports are scoped to the engineer's own filings.
+    expect(dailyReportModel.countDocuments).toHaveBeenCalledWith(
+      expect.objectContaining({ createdById: 'eng-1', projectId: { $in: ['p1', 'p2'] } }),
+    );
+    expect(res.myOpenTaskCount).toBe(4);
+    expect(res.myTasksDueThisWeek).toBe(1);
+    expect(res.openIssueCount).toBe(3);
+    expect(res.escalatedIssueCount).toBe(1);
+    expect(res.myReportsThisWeek).toBe(3);
+    expect(res.myOpenTasksByStatus.find((s) => s.label === 'In Progress')?.value).toBe(2);
+  });
+});

@@ -37,4 +37,8 @@ export class CreateIssueDto {
   @IsOptional()
   @IsString()
   assignedToId?: string;
+
+  @IsOptional()
+  @IsString()
+  inspectionId?: string;
 }

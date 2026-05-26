@@ -21,6 +21,7 @@ import { UpdateIssueDto } from './dto/update-issue.dto';
 import { AddIssueCommentDto } from './dto/add-issue-comment.dto';
 import { BulkUpdateIssuesDto } from './dto/bulk-update-issues.dto';
 import { IssueStatus } from '../../common/enums';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 @Controller('issues')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -32,6 +33,7 @@ export class IssuesController {
   findAll(
     @CurrentUser() user: JwtPayload,
     @Query('projectId') projectId?: string,
+    @Query('inspectionId') inspectionId?: string,
     @Query('status') status?: IssueStatus,
     @Query('severity') severity?: string,
     @Query('type') type?: string,
@@ -42,25 +44,36 @@ export class IssuesController {
     @Query('limit') limit?: string,
     @Query('skip') skip?: string,
   ): Promise<any> {
-    return this.issuesService.findAll(user.organizationId, user.isSuperAdmin, {
-      projectId,
-      status,
-      severity,
-      type,
-      assignedToId,
-      search,
-      sort,
-      sortDir,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      skip: skip ? parseInt(skip, 10) : undefined,
-    });
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'issues');
+    return this.issuesService.findAll(
+      user.organizationId,
+      user.isSuperAdmin,
+      {
+        projectId,
+        inspectionId,
+        status,
+        severity,
+        type,
+        assignedToId,
+        search,
+        sort,
+        sortDir,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        skip: skip ? parseInt(skip, 10) : undefined,
+      },
+      { userId: user.sub, orgWide },
+    );
   }
 
   // Literal routes must precede the `:id` capture.
   @Get('summary')
   @RequirePermissions(PERMISSIONS.ISSUES.READ)
   summary(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string): Promise<any> {
-    return this.issuesService.getSummary(user.organizationId, user.isSuperAdmin, projectId);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'issues');
+    return this.issuesService.getSummary(user.organizationId, user.isSuperAdmin, projectId, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Patch('bulk')

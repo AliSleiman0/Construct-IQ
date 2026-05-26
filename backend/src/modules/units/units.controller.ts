@@ -19,6 +19,7 @@ import { UnitsService } from './units.service';
 import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto } from './dto/create-unit.dto';
 import { UnitStatus } from '../../common/enums';
 import { PartialType } from '@nestjs/mapped-types';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 class UpdateUnitDto extends PartialType(CreateUnitDto) {}
 class UpdatePaymentDto extends PartialType(CreatePaymentDto) {}
@@ -91,7 +92,11 @@ export class ProgressPhotosController {
   @Get()
   @RequirePermissions(PERMISSIONS.PROJECTS.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string): Promise<any> {
-    return this.unitsService.findPhotos(user.organizationId, user.isSuperAdmin, projectId);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'documents');
+    return this.unitsService.findPhotos(user.organizationId, user.isSuperAdmin, projectId, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Post()

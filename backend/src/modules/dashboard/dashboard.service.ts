@@ -261,6 +261,108 @@ export class DashboardService {
     };
   }
 
+  /**
+   * Dashboard for a Site Engineer — scoped to the projects they belong to, with
+   * task metrics narrowed to tasks assigned to THEM and reports they filed
+   * (a field role's "my work" view). Open-issue counts cover their projects so
+   * they see what needs attention on site. Mirrors getPmDashboard's shape.
+   */
+  async getSiteEngDashboard(organizationId: string, userId: string) {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    const projectIds = projects.map((p: any) => p._id);
+
+    const TASK_STATUSES: { id: string; label: string }[] = [
+      { id: 'TODO', label: 'To Do' },
+      { id: 'IN_PREPARATION', label: 'Prep' },
+      { id: 'IN_PROGRESS', label: 'In Progress' },
+      { id: 'BLOCKED', label: 'Blocked' },
+      { id: 'REVIEW', label: 'Review' },
+    ];
+    const emptyByStatus = () => TASK_STATUSES.map((s) => ({ label: s.label, value: 0 }));
+
+    if (projectIds.length === 0) {
+      return {
+        projectCount: 0,
+        myOpenTaskCount: 0,
+        myTasksDueThisWeek: 0,
+        openIssueCount: 0,
+        escalatedIssueCount: 0,
+        myReportsThisWeek: 0,
+        taskThroughput: this.emptyThroughput(),
+        myOpenTasksByStatus: emptyByStatus(),
+      };
+    }
+
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const weekAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const myTaskBase = { projectId: { $in: projectIds }, assignedToId: userId, deletedAt: null };
+
+    const [
+      myOpenTaskCount,
+      myTasksDueThisWeek,
+      myOpenByStatusGroups,
+      myCompletedTasks,
+      openIssueGroups,
+      myReportsThisWeek,
+    ] = await Promise.all([
+      this.taskModel.countDocuments({ ...myTaskBase, status: { $ne: 'DONE' } }),
+      this.taskModel.countDocuments({
+        ...myTaskBase,
+        status: { $ne: 'DONE' },
+        dueDate: { $gte: now, $lte: weekAhead },
+      }),
+      this.taskModel.aggregate([
+        { $match: { ...myTaskBase, status: { $ne: 'DONE' } } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      this.taskModel
+        .find({ ...myTaskBase, status: 'DONE', completedAt: { $gte: weekAgo } })
+        .select('completedAt')
+        .lean(),
+      this.issueModel.aggregate([
+        { $match: { projectId: { $in: projectIds }, deletedAt: null, status: { $in: ['OPEN', 'IN_PROGRESS'] } } },
+        { $group: { _id: '$severity', count: { $sum: 1 } } },
+      ]),
+      this.dailyReportModel.countDocuments({
+        projectId: { $in: projectIds },
+        createdById: userId,
+        reportDate: { $gte: weekAgo },
+      }),
+    ]);
+
+    const statusCounts = new Map<string, number>(
+      myOpenByStatusGroups.map((g: any) => [g._id, g.count]),
+    );
+    const myOpenTasksByStatus = TASK_STATUSES.map((s) => ({
+      label: s.label,
+      value: statusCounts.get(s.id) ?? 0,
+    }));
+
+    let openIssueCount = 0;
+    let escalatedIssueCount = 0;
+    for (const g of openIssueGroups) {
+      openIssueCount += g.count;
+      if (g._id === 'HIGH' || g._id === 'CRITICAL') escalatedIssueCount += g.count;
+    }
+
+    const taskThroughput = this.buildThroughput(myCompletedTasks.map((t: any) => t.completedAt));
+
+    return {
+      projectCount: projects.length,
+      myOpenTaskCount,
+      myTasksDueThisWeek,
+      openIssueCount,
+      escalatedIssueCount,
+      myReportsThisWeek,
+      taskThroughput,
+      myOpenTasksByStatus,
+    };
+  }
+
   private buildThroughput(completedAts: (Date | string | null)[]): { label: string; value: number }[] {
     const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
     const buckets: { label: string; key: string; value: number }[] = [];

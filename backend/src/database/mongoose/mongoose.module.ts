@@ -43,6 +43,14 @@ import {
   IssueSchema,
 } from '../../modules/issues/schemas/issue.schema';
 import {
+  Inspection,
+  InspectionSchema,
+} from '../../modules/inspections/schemas/inspection.schema';
+import {
+  Rfi,
+  RfiSchema,
+} from '../../modules/rfis/schemas/rfi.schema';
+import {
   AuditLog,
   AuditLogSchema,
 } from '../../modules/audit/schemas/audit-log.schema';
@@ -144,6 +152,8 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: Task.name, schema: TaskSchema },
   { name: DailyReport.name, schema: DailyReportSchema },
   { name: Issue.name, schema: IssueSchema },
+  { name: Inspection.name, schema: InspectionSchema },
+  { name: Rfi.name, schema: RfiSchema },
   { name: AuditLog.name, schema: AuditLogSchema },
   { name: Notification.name, schema: NotificationSchema },
   { name: Ticket.name, schema: TicketSchema },

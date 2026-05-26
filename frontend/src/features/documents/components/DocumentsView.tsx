@@ -80,7 +80,9 @@ function DocumentsPanel({ projectId, canUpload, canDelete }: { projectId: string
   if (isLoading) return <Skeleton variant="rounded" height={240} />;
   if (isError) return <AppErrorState onRetry={refetch} />;
 
-  const rows = docs ?? [];
+  // Exclude photos attached to a daily report (SE-5) — those live on the report,
+  // not in the project documents/drawings table.
+  const rows = (docs ?? []).filter((d) => !d.dailyReportId);
 
   return (
     <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>

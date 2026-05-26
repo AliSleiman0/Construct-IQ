@@ -2,16 +2,36 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Task, TaskDocument } from '../projects/schemas/task.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { AddTaskCommentDto } from './dto/add-task-comment.dto';
 import { TaskStatus } from '../../common/enums';
 
+/**
+ * Who is asking. When `orgWide` is false the caller only sees tasks for the
+ * projects they belong to (field roles); when true they see the whole org.
+ */
+export interface TaskViewer {
+  userId: string;
+  orgWide: boolean;
+}
+
 @Injectable()
 export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
+
+  /** Project ids the user is a member of, within their org. */
+  private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    return projects.map((p: any) => String(p._id));
+  }
 
   private flattenUser(
     u: any,
@@ -47,11 +67,25 @@ export class TasksService {
     projectId?: string,
     assignedToId?: string,
     status?: TaskStatus,
+    viewer?: TaskViewer,
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
     if (assignedToId) filter.assignedToId = assignedToId;
     if (status) filter.status = status;
+
+    if (viewer && !viewer.orgWide && !isSuperAdmin) {
+      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      if (restrictIds.length === 0) return [];
+      // Honour an explicit project filter only if the caller is a member.
+      filter.projectId =
+        projectId && restrictIds.includes(projectId)
+          ? projectId
+          : projectId
+            ? { $in: [] }
+            : { $in: restrictIds };
+    }
+
     return this.taskModel.find(filter).sort({ position: 1, createdAt: -1 }).lean();
   }
 

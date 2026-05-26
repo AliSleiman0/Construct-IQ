@@ -1,5 +1,10 @@
 import apiClient from './client';
-import type { Delivery, CreateDeliveryPayload, UpdateDeliveryPayload } from '@/types/procurement.types';
+import type {
+  Delivery,
+  CreateDeliveryPayload,
+  UpdateDeliveryPayload,
+  ConfirmDeliveryPayload,
+} from '@/types/procurement.types';
 
 type Raw = Record<string, any>;
 function idify(d: Raw): Delivery {
@@ -25,6 +30,11 @@ export const deliveriesApi = {
 
   update: async (id: string, payload: UpdateDeliveryPayload): Promise<Delivery> => {
     const res = await apiClient.patch<Raw>(`/deliveries/${id}`, payload);
+    return idify(res.data);
+  },
+
+  confirm: async (id: string, payload: ConfirmDeliveryPayload): Promise<Delivery> => {
+    const res = await apiClient.post<Raw>(`/deliveries/${id}/confirm`, payload);
     return idify(res.data);
   },
 };

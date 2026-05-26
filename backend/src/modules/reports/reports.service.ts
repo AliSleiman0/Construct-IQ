@@ -7,15 +7,35 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { DailyReport, DailyReportDocument } from './schemas/daily-report.schema';
+import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { CreateDailyReportDto } from './dto/create-daily-report.dto';
 import { UpdateDailyReportDto } from './dto/update-daily-report.dto';
+
+/**
+ * Who is asking. When `orgWide` is false the caller only sees reports for the
+ * projects they belong to (field roles); when true they see the whole org.
+ */
+export interface ReportViewer {
+  userId: string;
+  orgWide: boolean;
+}
 
 @Injectable()
 export class ReportsService {
   constructor(
     @InjectModel(DailyReport.name)
     private reportModel: Model<DailyReportDocument>,
+    @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
+
+  /** Project ids the user is a member of, within their org. */
+  private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const projects = await this.projectModel
+      .find({ organizationId, 'members.userId': userId })
+      .select('_id')
+      .lean();
+    return projects.map((p: any) => String(p._id));
+  }
 
   private static readonly POPULATE = [
     { path: 'createdById', select: 'firstName lastName' },
@@ -57,9 +77,23 @@ export class ReportsService {
     organizationId: string,
     isSuperAdmin: boolean,
     projectId?: string,
+    viewer?: ReportViewer,
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
+
+    if (viewer && !viewer.orgWide && !isSuperAdmin) {
+      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      if (restrictIds.length === 0) return [];
+      // Honour an explicit project filter only if the caller is a member.
+      filter.projectId =
+        projectId && restrictIds.includes(projectId)
+          ? projectId
+          : projectId
+            ? { $in: [] }
+            : { $in: restrictIds };
+    }
+
     const docs = await this.reportModel
       .find(filter)
       .sort({ reportDate: -1 })

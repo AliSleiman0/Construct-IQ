@@ -55,6 +55,48 @@ export enum IssueSeverity {
   CRITICAL = 'CRITICAL',
 }
 
+// SME-VALIDATE: this inspection-type taxonomy is a sensible construction-QA
+// placeholder pending site-engineer/QA SME confirmation — it is NOT authoritative
+// domain truth. Real projects key inspection types off the contract / QA-QC plan.
+export enum InspectionType {
+  SAFETY = 'SAFETY',
+  QUALITY = 'QUALITY',
+  STRUCTURAL = 'STRUCTURAL',
+  ELECTRICAL = 'ELECTRICAL',
+  MECHANICAL = 'MECHANICAL',
+  PLUMBING = 'PLUMBING',
+  GENERAL = 'GENERAL',
+}
+
+// Thin v1: a single status doubles as schedule-state AND outcome. A richer model
+// (per-item checklist, PASS/FAIL/NA, conditional/re-inspect, formal sign-off) is
+// deliberately deferred pending SME validation.
+export enum InspectionStatus {
+  SCHEDULED = 'SCHEDULED',
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
+// Thin v1 RFI lifecycle: a question (OPEN) gets a formal answer (ANSWERED) and is
+// then closed out (CLOSED). No approval/distribution/impact tracking in v1.
+export enum RfiStatus {
+  OPEN = 'OPEN',
+  ANSWERED = 'ANSWERED',
+  CLOSED = 'CLOSED',
+}
+
+// SME-VALIDATE placeholder taxonomy (mirrors InspectionType) — not authoritative.
+export enum RfiDiscipline {
+  ARCHITECTURAL = 'ARCHITECTURAL',
+  STRUCTURAL = 'STRUCTURAL',
+  MECHANICAL = 'MECHANICAL',
+  ELECTRICAL = 'ELECTRICAL',
+  PLUMBING = 'PLUMBING',
+  CIVIL = 'CIVIL',
+  GENERAL = 'GENERAL',
+}
+
 export enum PurchaseOrderStatus {
   DRAFT = 'DRAFT',
   SUBMITTED = 'SUBMITTED',
