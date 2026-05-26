@@ -63,3 +63,23 @@ export interface OrgDashboardData {
     createdAt: string;
   }[];
 }
+
+/** Quantity-Surveyor cost rollup (GET /dashboard/surveyor). */
+export interface SurveyorDashboardData {
+  projectCount: number;
+  boqItemCount: number;
+  boqTotalValue: number;
+  boqLockedCount: number;
+  pendingVariationCount: number;
+  pendingVariationImpact: number;
+  approvedVariationImpact: number;
+  variationsByStatus: { label: string; value: number }[];
+  awaitingCertificationCount: number;
+  awaitingCertificationValue: number;
+  certifiedValue: number;
+  valuationValueByStatus: { label: string; value: number }[];
+  budgetPlannedTotal: number;
+  budgetActualSpend: number;
+  committedCost: number;
+  budgetVariancePct: number;
+}

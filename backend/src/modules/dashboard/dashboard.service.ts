@@ -8,6 +8,11 @@ import { Issue } from '../issues/schemas/issue.schema';
 import { DailyReport } from '../reports/schemas/daily-report.schema';
 import { AuditLog } from '../audit/schemas/audit-log.schema';
 import { Expense } from '../budget/schemas/expense.schema';
+import { Budget } from '../budget/schemas/budget.schema';
+import { PurchaseOrder } from '../procurement/schemas/purchase-order.schema';
+import { BoqItem } from '../surveyor/schemas/boq-item.schema';
+import { Variation } from '../surveyor/schemas/variation.schema';
+import { Valuation } from '../surveyor/schemas/valuation.schema';
 
 @Injectable()
 export class DashboardService {
@@ -19,6 +24,11 @@ export class DashboardService {
     @InjectModel(DailyReport.name) private dailyReportModel: Model<any>,
     @InjectModel(AuditLog.name) private auditLogModel: Model<any>,
     @InjectModel(Expense.name) private expenseModel: Model<any>,
+    @InjectModel(Budget.name) private budgetModel: Model<any>,
+    @InjectModel(PurchaseOrder.name) private purchaseOrderModel: Model<any>,
+    @InjectModel(BoqItem.name) private boqModel: Model<any>,
+    @InjectModel(Variation.name) private variationModel: Model<any>,
+    @InjectModel(Valuation.name) private valuationModel: Model<any>,
   ) {}
 
   async getOrgDashboard(organizationId: string) {
@@ -360,6 +370,148 @@ export class DashboardService {
       myReportsThisWeek,
       taskThroughput,
       myOpenTasksByStatus,
+    };
+  }
+
+  /**
+   * Dashboard for a Quantity Surveyor — a cost-domain rollup (BOQ, variations,
+   * valuations, budget vs actual/committed) rather than the task-centric PM/Site
+   * dashboards. Scoped exactly like the surveyor list endpoints: `orgWide` (held
+   * by `manage:budget`) aggregates the whole org; otherwise it's narrowed to the
+   * caller's member projects (a `read:budget`-only viewer), so the figures match
+   * what the BOQ/Variations/Valuations pages show.
+   */
+  async getSurveyorDashboard(organizationId: string, userId: string, orgWide: boolean) {
+    const VARIATION_STATUSES: { id: string; label: string }[] = [
+      { id: 'PENDING', label: 'Pending' },
+      { id: 'APPROVED', label: 'Approved' },
+      { id: 'REJECTED', label: 'Rejected' },
+    ];
+    const VALUATION_STATUSES: { id: string; label: string }[] = [
+      { id: 'DRAFT', label: 'Draft' },
+      { id: 'SUBMITTED', label: 'Submitted' },
+      { id: 'CERTIFIED', label: 'Certified' },
+    ];
+
+    const zeroed = () => ({
+      projectCount: 0,
+      boqItemCount: 0,
+      boqTotalValue: 0,
+      boqLockedCount: 0,
+      pendingVariationCount: 0,
+      pendingVariationImpact: 0,
+      approvedVariationImpact: 0,
+      variationsByStatus: VARIATION_STATUSES.map((s) => ({ label: s.label, value: 0 })),
+      awaitingCertificationCount: 0,
+      awaitingCertificationValue: 0,
+      certifiedValue: 0,
+      valuationValueByStatus: VALUATION_STATUSES.map((s) => ({ label: s.label, value: 0 })),
+      budgetPlannedTotal: 0,
+      budgetActualSpend: 0,
+      committedCost: 0,
+      budgetVariancePct: 0,
+    });
+
+    // Resolve the project scope. org-wide → match on organizationId only;
+    // otherwise restrict to the caller's member projects (short-circuit empty).
+    let projectCount: number;
+    let projectMatch: Record<string, unknown>;
+    if (orgWide) {
+      projectCount = await this.projectModel.countDocuments({ organizationId });
+      projectMatch = { organizationId };
+    } else {
+      const projects = await this.projectModel
+        .find({ organizationId, 'members.userId': userId })
+        .select('_id')
+        .lean();
+      const projectIds = projects.map((p: any) => p._id);
+      if (projectIds.length === 0) return zeroed();
+      projectCount = projects.length;
+      projectMatch = { organizationId, projectId: { $in: projectIds } };
+    }
+
+    // Budgets first: their _ids are the only way to scope expenses (the expense
+    // schema carries no projectId).
+    const budgets = await this.budgetModel.find(projectMatch).select('_id totalAmount').lean();
+    const budgetIds = budgets.map((b: any) => b._id);
+    const budgetPlannedTotal = budgets.reduce((sum: number, b: any) => sum + (b.totalAmount ?? 0), 0);
+    const expenseMatch = orgWide
+      ? { organizationId }
+      : { organizationId, budgetId: { $in: budgetIds } };
+
+    // aggregate() bypasses the soft-delete query middleware → add deletedAt:null
+    // explicitly for the soft-deleted collections (boq_items, variations, POs).
+    const [boqAgg, variationGroups, valuationGroups, poAgg, expenseAgg] = await Promise.all([
+      this.boqModel.aggregate([
+        { $match: { ...projectMatch, deletedAt: null } },
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            total: { $sum: '$totalAmount' },
+            locked: { $sum: { $cond: ['$isLocked', 1, 0] } },
+          },
+        },
+      ]),
+      this.variationModel.aggregate([
+        { $match: { ...projectMatch, deletedAt: null } },
+        { $group: { _id: '$status', count: { $sum: 1 }, impact: { $sum: '$impactAmount' } } },
+      ]),
+      this.valuationModel.aggregate([
+        { $match: projectMatch },
+        { $group: { _id: '$status', count: { $sum: 1 }, amount: { $sum: '$amountUsd' } } },
+      ]),
+      this.purchaseOrderModel.aggregate([
+        { $match: { ...projectMatch, deletedAt: null, status: 'APPROVED' } },
+        { $group: { _id: null, committed: { $sum: '$totalAmount' } } },
+      ]),
+      this.expenseModel.aggregate([
+        { $match: expenseMatch },
+        { $group: { _id: null, actual: { $sum: '$amount' } } },
+      ]),
+    ]);
+
+    const boq = boqAgg[0] ?? { count: 0, total: 0, locked: 0 };
+
+    // Variations: per-status count + impact (impact is signed; charts use counts).
+    const varCount = new Map<string, number>(variationGroups.map((g: any) => [g._id, g.count]));
+    const varImpact = new Map<string, number>(variationGroups.map((g: any) => [g._id, g.impact]));
+    const variationsByStatus = VARIATION_STATUSES.map((s) => ({
+      label: s.label,
+      value: varCount.get(s.id) ?? 0,
+    }));
+
+    // Valuations: per-status count + summed amountUsd (always ≥0 → safe for bars).
+    const valCount = new Map<string, number>(valuationGroups.map((g: any) => [g._id, g.count]));
+    const valAmount = new Map<string, number>(valuationGroups.map((g: any) => [g._id, g.amount]));
+    const valuationValueByStatus = VALUATION_STATUSES.map((s) => ({
+      label: s.label,
+      value: valAmount.get(s.id) ?? 0,
+    }));
+
+    const budgetActualSpend = expenseAgg[0]?.actual ?? 0;
+    const budgetVariancePct =
+      budgetPlannedTotal > 0
+        ? ((budgetPlannedTotal - budgetActualSpend) / budgetPlannedTotal) * 100
+        : 0;
+
+    return {
+      projectCount,
+      boqItemCount: boq.count,
+      boqTotalValue: boq.total,
+      boqLockedCount: boq.locked,
+      pendingVariationCount: varCount.get('PENDING') ?? 0,
+      pendingVariationImpact: varImpact.get('PENDING') ?? 0,
+      approvedVariationImpact: varImpact.get('APPROVED') ?? 0,
+      variationsByStatus,
+      awaitingCertificationCount: valCount.get('SUBMITTED') ?? 0,
+      awaitingCertificationValue: valAmount.get('SUBMITTED') ?? 0,
+      certifiedValue: valAmount.get('CERTIFIED') ?? 0,
+      valuationValueByStatus,
+      budgetPlannedTotal,
+      budgetActualSpend,
+      committedCost: poAgg[0]?.committed ?? 0,
+      budgetVariancePct,
     };
   }
 

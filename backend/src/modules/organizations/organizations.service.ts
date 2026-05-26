@@ -140,6 +140,7 @@ const STANDARD_ROLES: Array<{
       'read:deliveries',
       'read:suppliers',
       'read:documents',
+      'read:dashboard',
       'read:ai',
     ],
   },
