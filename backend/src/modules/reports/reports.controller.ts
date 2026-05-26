@@ -29,12 +29,22 @@ export class ReportsController {
   findAll(
     @CurrentUser() user: JwtPayload,
     @Query('projectId') projectId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
   ): Promise<any> {
     const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'reports');
     return this.reportsService.findAll(
       user.organizationId,
       user.isSuperAdmin,
-      projectId,
+      {
+        projectId,
+        from,
+        to,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        skip: skip ? parseInt(skip, 10) : undefined,
+      },
       { userId: user.sub, orgWide },
     );
   }

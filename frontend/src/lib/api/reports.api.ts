@@ -10,10 +10,37 @@ function normalise(t: Raw): DailyReport {
   return { ...(rest as DailyReport), id: (id ?? _id) as string };
 }
 
+export interface PagedReports {
+  items: DailyReport[];
+  total: number;
+  limit: number;
+  skip: number;
+}
+
 export const reportsApi = {
+  // Array-returning list for the project-detail Reports tab. The endpoint is now
+  // paginated, so read `.items` and request a high limit (one report per project
+  // per day, so a single project's history stays well under this).
   list: async (params?: { projectId?: string }): Promise<DailyReport[]> => {
-    const res = await apiClient.get<Raw[]>('/reports', { params });
-    return (res.data ?? []).map(normalise);
+    const res = await apiClient.get<{ items: Raw[] }>('/reports', {
+      params: { ...params, limit: 200 },
+    });
+    return (res.data.items ?? []).map(normalise);
+  },
+
+  // Paginated + date-filterable list for the standalone reports board.
+  listPaged: async (params: {
+    projectId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    skip?: number;
+  }): Promise<PagedReports> => {
+    const res = await apiClient.get<{ items: Raw[]; total: number; limit: number; skip: number }>(
+      '/reports',
+      { params },
+    );
+    return { ...res.data, items: (res.data.items ?? []).map(normalise) };
   },
 
   getById: async (id: string): Promise<DailyReport> => {

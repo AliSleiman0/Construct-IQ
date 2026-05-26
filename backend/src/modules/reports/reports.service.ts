@@ -76,15 +76,32 @@ export class ReportsService {
   async findAll(
     organizationId: string,
     isSuperAdmin: boolean,
-    projectId?: string,
+    filters: {
+      projectId?: string;
+      from?: string;
+      to?: string;
+      limit?: number;
+      skip?: number;
+    } = {},
     viewer?: ReportViewer,
-  ): Promise<any[]> {
+  ): Promise<any> {
+    const { projectId, from, to } = filters;
+    const limit = Math.min(filters.limit ?? 20, 200);
+    const skip = filters.skip ?? 0;
+
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
 
+    if (from || to) {
+      filter.reportDate = {
+        ...(from ? { $gte: new Date(from) } : {}),
+        ...(to ? { $lte: new Date(to) } : {}),
+      };
+    }
+
     if (viewer && !viewer.orgWide && !isSuperAdmin) {
       const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
-      if (restrictIds.length === 0) return [];
+      if (restrictIds.length === 0) return { items: [], total: 0, limit, skip };
       // Honour an explicit project filter only if the caller is a member.
       filter.projectId =
         projectId && restrictIds.includes(projectId)
@@ -94,12 +111,17 @@ export class ReportsService {
             : { $in: restrictIds };
     }
 
-    const docs = await this.reportModel
-      .find(filter)
-      .sort({ reportDate: -1 })
-      .populate(ReportsService.POPULATE)
-      .lean();
-    return docs.map((d) => this.mapReport(d));
+    const [docs, total] = await Promise.all([
+      this.reportModel
+        .find(filter)
+        .sort({ reportDate: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate(ReportsService.POPULATE)
+        .lean(),
+      this.reportModel.countDocuments(filter),
+    ]);
+    return { items: docs.map((d) => this.mapReport(d)), total, limit, skip };
   }
 
   async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {

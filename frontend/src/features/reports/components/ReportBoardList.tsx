@@ -8,6 +8,7 @@ import {
   Chip,
   TextField,
   InputAdornment,
+  Pagination,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import Link from 'next/link';
@@ -15,12 +16,14 @@ import dayjs from 'dayjs';
 import { useMemo, useState } from 'react';
 import { AppLoader } from '@/components/ui/AppLoader';
 import { AppErrorState } from '@/components/ui/AppErrorState';
-import { useAllReports } from '@/features/reports/hooks/useReports';
+import { useReportsPaged } from '@/features/reports/hooks/useReports';
 import type { DailyReport, UserRef } from '@/types/report.types';
 
 interface ReportBoardListProps {
   detailBasePath: string;
 }
+
+const PAGE_SIZE = 20;
 
 function authorName(u?: UserRef | null): string {
   if (!u) return 'Unknown';
@@ -28,40 +31,82 @@ function authorName(u?: UserRef | null): string {
 }
 
 export function ReportBoardList({ detailBasePath }: ReportBoardListProps) {
-  const { data: reports, isLoading, isError, refetch } = useAllReports();
   const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [page, setPage] = useState(1);
 
+  const { data, isLoading, isError, refetch } = useReportsPaged({
+    from: from || undefined,
+    to: to || undefined,
+    limit: PAGE_SIZE,
+    skip: (page - 1) * PAGE_SIZE,
+  });
+
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Client-side search over the current page (server filters are date range).
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return reports ?? [];
-    return (reports ?? []).filter(
+    if (!q) return items;
+    return items.filter(
       (r: DailyReport) =>
         authorName(r.createdBy).toLowerCase().includes(q) ||
         (r.workCompleted ?? '').toLowerCase().includes(q) ||
         (r.project?.name ?? '').toLowerCase().includes(q),
     );
-  }, [reports, search]);
+  }, [items, search]);
 
-  if (isLoading) return <AppLoader />;
+  // keepPreviousData keeps the list painted across page changes; only block on the first load.
+  if (isLoading && !data) return <AppLoader />;
   if (isError) return <AppErrorState onRetry={refetch} />;
 
   return (
     <Box>
-      <TextField
-        size="small"
-        fullWidth
-        placeholder="Search by author, project, or work…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        sx={{ mb: 2, maxWidth: 360 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" color="action" />
-            </InputAdornment>
-          ),
-        }}
-      />
+      <Stack direction={{ xs: 'column', sm: 'row' }} gap={2} mb={2} alignItems={{ sm: 'center' }}>
+        <TextField
+          size="small"
+          placeholder="Search by author, project, or work…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ flex: 1, minWidth: 200, maxWidth: 360 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" color="action" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <TextField
+          type="date"
+          size="small"
+          label="From"
+          fullWidth={false}
+          InputLabelProps={{ shrink: true }}
+          value={from}
+          onChange={(e) => {
+            setFrom(e.target.value);
+            setPage(1);
+          }}
+          sx={{ width: 170 }}
+        />
+        <TextField
+          type="date"
+          size="small"
+          label="To"
+          fullWidth={false}
+          InputLabelProps={{ shrink: true }}
+          value={to}
+          onChange={(e) => {
+            setTo(e.target.value);
+            setPage(1);
+          }}
+          sx={{ width: 170 }}
+        />
+      </Stack>
       <Stack gap={1.5}>
         {filtered.length === 0 && (
           <Box textAlign="center" py={5}>
@@ -125,6 +170,17 @@ export function ReportBoardList({ detailBasePath }: ReportBoardListProps) {
           );
         })}
       </Stack>
+
+      {pageCount > 1 && (
+        <Box display="flex" justifyContent="center" mt={3}>
+          <Pagination
+            count={pageCount}
+            page={page}
+            onChange={(_, v) => setPage(v)}
+            color="primary"
+          />
+        </Box>
+      )}
     </Box>
   );
 }
