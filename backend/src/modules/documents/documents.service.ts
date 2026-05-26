@@ -5,6 +5,7 @@ import { DocumentEntity, DocumentEntityDocument } from './schemas/document.schem
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
+import { UpdateDocumentDto } from './dto/update-document.dto';
 import { S3Service } from '../uploads/s3.service';
 import { DocumentType } from '../../common/enums';
 
@@ -141,6 +142,25 @@ export class DocumentsService {
       mimeType: file.mimetype,
       sizeBytes: file.size,
     });
+  }
+
+  /**
+   * Attach an existing document to a daily report (or unlink it with `null`).
+   * Org-scoped like {@link softDelete} — non-super-admins can only touch their
+   * own org's documents.
+   */
+  async update(
+    id: string,
+    organizationId: string,
+    isSuperAdmin: boolean,
+    dto: UpdateDocumentDto,
+  ): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const doc = await this.documentModel.findOne(filter);
+    if (!doc) throw new NotFoundException('Document not found');
+    if (dto.dailyReportId !== undefined) doc.dailyReportId = dto.dailyReportId;
+    await doc.save();
+    return doc.toObject();
   }
 
   async softDelete(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {

@@ -11,8 +11,11 @@ export function useDocuments(projectId?: string, type?: string) {
   });
 }
 
-/** Documents attached to a daily report (SE-5 — used for the report photo gallery). */
-export function useReportPhotos(reportId?: string) {
+/**
+ * All documents linked to a daily report (via `dailyReportId`). Callers filter
+ * client-side: ReportPhotos keeps the images, ReportDocuments keeps the rest.
+ */
+export function useReportDocuments(reportId?: string) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
     queryKey: ['documents', { dailyReportId: reportId ?? null }],
@@ -31,6 +34,15 @@ export function useUploadDocument() {
   return useMutation({
     mutationFn: ({ file, meta }: { file: File; meta: { projectId?: string; type?: string; name?: string; description?: string; dailyReportId?: string } }) =>
       documentsApi.upload(file, meta),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateDocument() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, dailyReportId }: { id: string; dailyReportId?: string | null }) =>
+      documentsApi.update(id, { dailyReportId }),
     onSuccess: invalidate,
   });
 }
