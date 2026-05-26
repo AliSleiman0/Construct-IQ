@@ -36,6 +36,11 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output
+test-results/
+playwright-report/
+
+# Claude Code local config
+.claude/
 
 # Prisma
 prisma/migrations/
