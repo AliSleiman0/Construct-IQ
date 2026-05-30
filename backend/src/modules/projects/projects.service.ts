@@ -4,9 +4,11 @@ import {
   ConflictException,
   ForbiddenException,
   BadRequestException,
+  GoneException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { randomBytes } from 'crypto';
 import { Project, ProjectDocument } from './schemas/project.schema';
 import { Task, TaskDocument } from './schemas/task.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
@@ -15,7 +17,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
-import { ProjectStatus } from '../../common/enums';
+import { IssueStatus, ProjectStatus } from '../../common/enums';
 
 export interface ProjectListResponse {
   id: string;
@@ -85,6 +87,8 @@ export class ProjectsService {
       totalBudget: dto.totalBudget ?? null,
       currency: dto.currency ?? 'USD',
       members: [{ userId: createdById, role: 'Admin', joinedAt: new Date() }],
+      clientPortalToken: randomBytes(32).toString('hex'),
+      clientPortalEnabled: true,
     });
 
     return this.toProjectListItem(project.toObject(), {
@@ -375,5 +379,166 @@ export class ProjectsService {
     );
 
     return { message: 'Project deleted successfully' };
+  }
+
+  // ── Client Portal ─────────────────────────────────────────────────────────
+
+  async getClientPortalInfo(
+    projectId: string,
+    organizationId: string,
+    userId: string,
+    isSuperAdmin: boolean,
+  ) {
+    const filter = isSuperAdmin
+      ? { _id: projectId }
+      : { _id: projectId, organizationId };
+
+    const project = await this.projectModel.findOne(filter).lean();
+    if (!project) throw new NotFoundException('Project not found');
+
+    if (!isSuperAdmin) {
+      const isMember = (project.members ?? []).some((m) => m.userId === userId);
+      if (!isMember) throw new ForbiddenException('You are not a member of this project');
+    }
+
+    return {
+      token: project.clientPortalToken,
+      enabled: project.clientPortalEnabled,
+    };
+  }
+
+  async regenerateClientPortalToken(
+    projectId: string,
+    organizationId: string,
+    isSuperAdmin: boolean,
+  ) {
+    const filter = isSuperAdmin
+      ? { _id: projectId }
+      : { _id: projectId, organizationId };
+
+    const project = await this.projectModel.findOne(filter);
+    if (!project) throw new NotFoundException('Project not found');
+
+    project.clientPortalToken = randomBytes(32).toString('hex');
+    await project.save();
+
+    return { token: project.clientPortalToken, enabled: project.clientPortalEnabled };
+  }
+
+  async toggleClientPortal(
+    projectId: string,
+    organizationId: string,
+    enabled: boolean,
+    isSuperAdmin: boolean,
+  ) {
+    const filter = isSuperAdmin
+      ? { _id: projectId }
+      : { _id: projectId, organizationId };
+
+    const project = await this.projectModel.findOne(filter);
+    if (!project) throw new NotFoundException('Project not found');
+
+    project.clientPortalEnabled = enabled;
+    await project.save();
+
+    return { token: project.clientPortalToken, enabled: project.clientPortalEnabled };
+  }
+
+  /** Public — no auth. Called by the client-facing portal page. */
+  async getClientPortalData(token: string) {
+    const project = await this.projectModel
+      .findOne({ clientPortalToken: token, deletedAt: null })
+      .lean();
+
+    if (!project) throw new NotFoundException('Portal link not found');
+    if (!project.clientPortalEnabled) throw new GoneException('This portal link has been disabled');
+
+    const memberUserIds = (project.members ?? []).map((m) => m.userId);
+    const [users, tasks, issues] = await Promise.all([
+      memberUserIds.length
+        ? this.userModel
+            .find({ _id: { $in: memberUserIds } }, { _id: 1, firstName: 1, lastName: 1 })
+            .lean()
+        : [],
+      this.taskModel
+        .find(
+          { projectId: project._id, deletedAt: null },
+          { _id: 1, title: 1, status: 1, priority: 1, startDate: 1, dueDate: 1, completedAt: 1, progress: 1 },
+        )
+        .sort({ position: 1, createdAt: -1 })
+        .lean(),
+      this.issueModel
+        .find(
+          { projectId: project._id, deletedAt: null },
+          { _id: 1, title: 1, type: 1, severity: 1, status: 1 },
+        )
+        .sort({ createdAt: -1 })
+        .lean(),
+    ]);
+
+    const userById = new Map((users as any[]).map((u) => [String(u._id), u]));
+
+    const tasksByStatus: Record<string, number> = {};
+    for (const t of tasks as any[]) {
+      tasksByStatus[t.status] = (tasksByStatus[t.status] ?? 0) + 1;
+    }
+
+    const issuesBySeverity: Record<string, number> = {};
+    let openIssues = 0;
+    let resolvedIssues = 0;
+    for (const i of issues as any[]) {
+      issuesBySeverity[i.severity] = (issuesBySeverity[i.severity] ?? 0) + 1;
+      if (i.status === IssueStatus.RESOLVED || i.status === IssueStatus.CLOSED) {
+        resolvedIssues++;
+      } else {
+        openIssues++;
+      }
+    }
+
+    const team = (project.members ?? []).map((m) => {
+      const u = userById.get(m.userId);
+      const displayName = u ? `${u.firstName} ${u.lastName.charAt(0)}.` : 'Team Member';
+      return { displayName, role: m.role };
+    });
+
+    return {
+      project: {
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        code: project.code,
+        location: project.location,
+        startDate: project.startDate,
+        endDate: project.endDate,
+      },
+      tasks: {
+        total: (tasks as any[]).length,
+        byStatus: tasksByStatus,
+        items: (tasks as any[]).map((t) => ({
+          id: String(t._id),
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          startDate: t.startDate ?? null,
+          dueDate: t.dueDate ?? null,
+          completedAt: t.completedAt ?? null,
+          progress: t.progress ?? 0,
+        })),
+      },
+      issues: {
+        total: (issues as any[]).length,
+        open: openIssues,
+        resolved: resolvedIssues,
+        bySeverity: issuesBySeverity,
+        items: (issues as any[]).map((i) => ({
+          id: String(i._id),
+          title: i.title,
+          type: i.type,
+          severity: i.severity,
+          status: i.status,
+        })),
+      },
+      team,
+    };
   }
 }

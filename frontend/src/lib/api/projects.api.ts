@@ -39,4 +39,19 @@ export const projectsApi = {
   removeMember: async (projectId: string, userId: string): Promise<void> => {
     await apiClient.delete(`/projects/${projectId}/members/${userId}`);
   },
+
+  getClientPortalInfo: async (projectId: string): Promise<{ token: string | null; enabled: boolean }> => {
+    const res = await apiClient.get(`/projects/${projectId}/client-portal`);
+    return res.data;
+  },
+
+  regenerateClientPortalToken: async (projectId: string): Promise<{ token: string; enabled: boolean }> => {
+    const res = await apiClient.post(`/projects/${projectId}/client-portal/regenerate`);
+    return res.data;
+  },
+
+  toggleClientPortal: async (projectId: string, enabled: boolean): Promise<{ token: string; enabled: boolean }> => {
+    const res = await apiClient.patch(`/projects/${projectId}/client-portal/toggle`, { enabled });
+    return res.data;
+  },
 };
