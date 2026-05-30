@@ -21,6 +21,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { ReorderTasksDto } from './dto/reorder-tasks.dto';
 import { AddTaskCommentDto } from './dto/add-task-comment.dto';
 import { TaskStatus } from '../../common/enums';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -35,12 +36,14 @@ export class TasksController {
     @Query('assignedToId') assignedToId?: string,
     @Query('status') status?: TaskStatus,
   ): Promise<any> {
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'tasks');
     return this.tasksService.findAll(
       user.organizationId,
       user.isSuperAdmin,
       projectId,
       assignedToId,
       status,
+      { userId: user.sub, orgWide },
     );
   }
 

@@ -19,3 +19,21 @@ export function usePmDashboard() {
     enabled: isAuthenticated,
   });
 }
+
+export function useSiteEngDashboard() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['dashboard', 'site-eng'],
+    queryFn: dashboardApi.getSiteEngDashboard,
+    enabled: isAuthenticated,
+  });
+}
+
+export function useSurveyorDashboard() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['dashboard', 'surveyor'],
+    queryFn: dashboardApi.getSurveyorDashboard,
+    enabled: isAuthenticated,
+  });
+}

@@ -18,6 +18,17 @@ export interface PmDashboardData {
   openTasksByStatus: { label: string; value: number }[];
 }
 
+export interface SiteEngDashboardData {
+  projectCount: number;
+  myOpenTaskCount: number;
+  myTasksDueThisWeek: number;
+  openIssueCount: number;
+  escalatedIssueCount: number;
+  myReportsThisWeek: number;
+  taskThroughput: { label: string; value: number }[];
+  myOpenTasksByStatus: { label: string; value: number }[];
+}
+
 export interface OrgDashboardData {
   activeProjectCount: number;
   totalProjectCount: number;
@@ -51,4 +62,24 @@ export interface OrgDashboardData {
     detail: string;
     createdAt: string;
   }[];
+}
+
+/** Quantity-Surveyor cost rollup (GET /dashboard/surveyor). */
+export interface SurveyorDashboardData {
+  projectCount: number;
+  boqItemCount: number;
+  boqTotalValue: number;
+  boqLockedCount: number;
+  pendingVariationCount: number;
+  pendingVariationImpact: number;
+  approvedVariationImpact: number;
+  variationsByStatus: { label: string; value: number }[];
+  awaitingCertificationCount: number;
+  awaitingCertificationValue: number;
+  certifiedValue: number;
+  valuationValueByStatus: { label: string; value: number }[];
+  budgetPlannedTotal: number;
+  budgetActualSpend: number;
+  committedCost: number;
+  budgetVariancePct: number;
 }

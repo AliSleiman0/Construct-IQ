@@ -3,6 +3,7 @@ import { getModelToken } from '@nestjs/mongoose';
 import { NotFoundException } from '@nestjs/common';
 import { IssuesService } from './issues.service';
 import { Issue } from './schemas/issue.schema';
+import { Project } from '../projects/schemas/project.schema';
 import { IssueStatus, IssueSeverity } from '../../common/enums';
 
 /**
@@ -13,6 +14,12 @@ import { IssueStatus, IssueSeverity } from '../../common/enums';
 describe('IssuesService', () => {
   let service: IssuesService;
   let model: any;
+  let projectModel: any;
+
+  // projectModel.find(...).select(...).lean() — member-project lookup
+  const projectFindChain = (result: any[]) => ({
+    select: () => ({ lean: () => Promise.resolve(result) }),
+  });
 
   // find(...).populate(...).lean()  — the paginated findAll re-fetch by id
   const findChain = (result: any[]) => ({
@@ -30,6 +37,7 @@ describe('IssuesService', () => {
     severity: IssueSeverity.HIGH,
     status: IssueStatus.OPEN,
     projectId: { _id: 'proj-1', name: 'Tower Heights' },
+    inspectionId: { _id: 'insp-1', title: 'Rebar inspection' },
     createdById: { _id: 'u-1', firstName: 'Pete', lastName: 'Williams' },
     assignedToId: { _id: 'u-2', firstName: 'Sara', lastName: 'Diaz' },
     comments: [
@@ -47,8 +55,15 @@ describe('IssuesService', () => {
       countDocuments: jest.fn().mockResolvedValue(0),
       updateMany: jest.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
+    projectModel = {
+      find: jest.fn().mockReturnValue(projectFindChain([])),
+    };
     const moduleRef = await Test.createTestingModule({
-      providers: [IssuesService, { provide: getModelToken(Issue.name), useValue: model }],
+      providers: [
+        IssuesService,
+        { provide: getModelToken(Issue.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: projectModel },
+      ],
     }).compile();
     service = moduleRef.get(IssuesService);
   });
@@ -89,6 +104,11 @@ describe('IssuesService', () => {
       expect(match.type).toBe('SAFETY');
     });
 
+    it('applies the inspectionId filter (issues raised from an inspection)', async () => {
+      await service.findAll('org-1', false, { inspectionId: 'insp-1' });
+      expect(model.aggregate.mock.calls[0][0][0].$match.inspectionId).toBe('insp-1');
+    });
+
     it('flattens populated refs into id + name objects', async () => {
       model.aggregate.mockResolvedValue([{ _id: 'iss-1' }]);
       model.countDocuments.mockResolvedValue(1);
@@ -99,6 +119,42 @@ describe('IssuesService', () => {
       expect(issue.project).toEqual({ id: 'proj-1', name: 'Tower Heights' });
       expect(issue.assignedTo).toEqual({ id: 'u-2', firstName: 'Sara', lastName: 'Diaz' });
       expect(issue.comments[0]).toMatchObject({ id: 'c-1', author: { id: 'u-1', firstName: 'Pete', lastName: 'Williams' } });
+    });
+  });
+
+  describe('findAll member-scoping', () => {
+    it('restricts a non-orgWide viewer to their member projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }, { _id: 'p2' }]));
+      model.aggregate.mockResolvedValue([]);
+      await service.findAll('org-1', false, {}, { userId: 'eng-1', orgWide: false });
+      const match = model.aggregate.mock.calls[0][0][0].$match;
+      expect(match.projectId).toEqual({ $in: ['p1', 'p2'] });
+      expect(projectModel.find).toHaveBeenCalledWith({ organizationId: 'org-1', 'members.userId': 'eng-1' });
+    });
+
+    it('does NOT member-scope an orgWide viewer (e.g. PM with manage:issues)', async () => {
+      await service.findAll('org-1', false, {}, { userId: 'pm-1', orgWide: true });
+      expect(projectModel.find).not.toHaveBeenCalled();
+      expect(model.aggregate.mock.calls[0][0][0].$match.projectId).toBeUndefined();
+    });
+
+    it('honours an explicit projectId only when the viewer is a member', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }]));
+      await service.findAll('org-1', false, { projectId: 'p1' }, { userId: 'eng-1', orgWide: false });
+      expect(model.aggregate.mock.calls[0][0][0].$match.projectId).toBe('p1');
+    });
+
+    it('matches nothing when the viewer requests a project they are not a member of', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([{ _id: 'p1' }]));
+      await service.findAll('org-1', false, { projectId: 'p9' }, { userId: 'eng-1', orgWide: false });
+      expect(model.aggregate.mock.calls[0][0][0].$match.projectId).toEqual({ $in: [] });
+    });
+
+    it('short-circuits to empty when the viewer belongs to no projects', async () => {
+      projectModel.find.mockReturnValue(projectFindChain([]));
+      const res = await service.findAll('org-1', false, {}, { userId: 'eng-1', orgWide: false });
+      expect(res).toEqual({ items: [], total: 0, limit: 25, skip: 0 });
+      expect(model.aggregate).not.toHaveBeenCalled();
     });
   });
 
@@ -156,6 +212,9 @@ describe('IssuesService', () => {
       const issue = await service.findById('iss-1', 'org-1', false);
       expect(issue.id).toBe('iss-1');
       expect(issue.assignedTo).toEqual({ id: 'u-2', firstName: 'Sara', lastName: 'Diaz' });
+      // SE-3: a populated inspection link flattens to { id, title }.
+      expect(issue.inspection).toEqual({ id: 'insp-1', title: 'Rebar inspection' });
+      expect(issue.inspectionId).toBe('insp-1');
     });
   });
 
@@ -174,6 +233,18 @@ describe('IssuesService', () => {
           projectId: 'proj-1',
           status: IssueStatus.OPEN,
         }),
+      );
+    });
+
+    it('persists the inspectionId link when raised from an inspection (SE-3)', async () => {
+      model.create.mockResolvedValue({ _id: 'iss-2' });
+      await service.create('org-1', 'u-1', {
+        projectId: 'proj-1',
+        title: 'Deficiency: Rebar inspection',
+        inspectionId: 'insp-1',
+      } as any);
+      expect(model.create).toHaveBeenCalledWith(
+        expect.objectContaining({ inspectionId: 'insp-1' }),
       );
     });
   });

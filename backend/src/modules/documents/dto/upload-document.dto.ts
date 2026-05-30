@@ -7,6 +7,7 @@ import { DocumentType } from '../../../common/enums';
  */
 export class UploadDocumentDto {
   @IsOptional() @IsString() projectId?: string;
+  @IsOptional() @IsString() dailyReportId?: string;
   @IsOptional() @IsEnum(DocumentType) type?: DocumentType;
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() description?: string;

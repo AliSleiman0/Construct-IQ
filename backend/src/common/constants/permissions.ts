@@ -81,6 +81,22 @@ export const PERMISSIONS = {
     MANAGE: 'manage:issues',
   },
 
+  // ── Inspections ───────────────────────────────────────────
+  INSPECTIONS: {
+    READ: 'read:inspections',
+    CREATE: 'create:inspections',
+    UPDATE: 'update:inspections',
+    MANAGE: 'manage:inspections',
+  },
+
+  // ── RFIs (Requests For Information) ───────────────────────
+  RFIS: {
+    READ: 'read:rfis',
+    CREATE: 'create:rfis',
+    UPDATE: 'update:rfis',
+    MANAGE: 'manage:rfis',
+  },
+
   // ── Budget ────────────────────────────────────────────────
   BUDGET: {
     READ: 'read:budget',
@@ -115,6 +131,7 @@ export const PERMISSIONS = {
   DELIVERIES: {
     READ: 'read:deliveries',
     UPDATE: 'update:deliveries',
+    CONFIRM: 'confirm:deliveries',
     MANAGE: 'manage:deliveries',
   },
 

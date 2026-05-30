@@ -298,7 +298,7 @@ export class UsersService {
     if (!role) {
       const created = await this.roleModel.create({
         organizationId: dto.organizationId,
-        name: 'Admin',
+        name: 'ORG_ADMIN',
         description: 'Full control within own organization',
         isSystem: true,
         permissionKeys: ['manage:company'],

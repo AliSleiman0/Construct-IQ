@@ -18,9 +18,14 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { ProcurementService } from './procurement.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { CreatePurchaseOrderDto, RejectPurchaseOrderDto } from './dto/create-purchase-order.dto';
-import { CreateDeliveryDto, UpdateDeliveryDto } from './dto/create-delivery.dto';
+import {
+  CreateDeliveryDto,
+  UpdateDeliveryDto,
+  ConfirmDeliveryDto,
+} from './dto/create-delivery.dto';
 import { CreateMaterialRequestDto, ReviewMaterialRequestDto, ConvertMaterialRequestDto } from './dto/create-material-request.dto';
 import { PartialType } from '@nestjs/mapped-types';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
@@ -199,7 +204,11 @@ export class DeliveriesController {
   @Get()
   @RequirePermissions(PERMISSIONS.DELIVERIES.READ)
   findAll(@CurrentUser() user: JwtPayload): Promise<any> {
-    return this.procurementService.findAllDeliveries(user.organizationId, user.isSuperAdmin);
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'deliveries');
+    return this.procurementService.findAllDeliveries(user.organizationId, user.isSuperAdmin, {
+      userId: user.sub,
+      orgWide,
+    });
   }
 
   @Post()
@@ -224,5 +233,11 @@ export class DeliveriesController {
   @RequirePermissions(PERMISSIONS.DELIVERIES.MANAGE)
   remove(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
     return this.procurementService.deleteDelivery(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  @Post(':id/confirm')
+  @RequirePermissions(PERMISSIONS.DELIVERIES.CONFIRM)
+  confirm(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: ConfirmDeliveryDto): Promise<any> {
+    return this.procurementService.confirmDelivery(id, user, dto);
   }
 }

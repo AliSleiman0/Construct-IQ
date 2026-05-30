@@ -11,6 +11,19 @@ export function useDocuments(projectId?: string, type?: string) {
   });
 }
 
+/**
+ * All documents linked to a daily report (via `dailyReportId`). Callers filter
+ * client-side: ReportPhotos keeps the images, ReportDocuments keeps the rest.
+ */
+export function useReportDocuments(reportId?: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['documents', { dailyReportId: reportId ?? null }],
+    queryFn: () => documentsApi.list({ dailyReportId: reportId }),
+    enabled: isAuthenticated && !!reportId,
+  });
+}
+
 function useInvalidate() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ['documents'] });
@@ -19,8 +32,17 @@ function useInvalidate() {
 export function useUploadDocument() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: ({ file, meta }: { file: File; meta: { projectId?: string; type?: string; name?: string; description?: string } }) =>
+    mutationFn: ({ file, meta }: { file: File; meta: { projectId?: string; type?: string; name?: string; description?: string; dailyReportId?: string } }) =>
       documentsApi.upload(file, meta),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateDocument() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, dailyReportId }: { id: string; dailyReportId?: string | null }) =>
+      documentsApi.update(id, { dailyReportId }),
     onSuccess: invalidate,
   });
 }

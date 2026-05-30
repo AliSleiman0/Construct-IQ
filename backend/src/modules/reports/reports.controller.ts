@@ -17,6 +17,7 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { ReportsService } from './reports.service';
 import { CreateDailyReportDto } from './dto/create-daily-report.dto';
 import { UpdateDailyReportDto } from './dto/update-daily-report.dto';
+import { seesAllProjects } from '../../common/util/project-scope.util';
 
 @Controller('reports')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -28,11 +29,23 @@ export class ReportsController {
   findAll(
     @CurrentUser() user: JwtPayload,
     @Query('projectId') projectId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+    @Query('skip') skip?: string,
   ): Promise<any> {
+    const orgWide = seesAllProjects(user.isSuperAdmin, user.permissions, 'reports');
     return this.reportsService.findAll(
       user.organizationId,
       user.isSuperAdmin,
-      projectId,
+      {
+        projectId,
+        from,
+        to,
+        limit: limit ? parseInt(limit, 10) : undefined,
+        skip: skip ? parseInt(skip, 10) : undefined,
+      },
+      { userId: user.sub, orgWide },
     );
   }
 

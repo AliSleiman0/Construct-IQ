@@ -5,14 +5,14 @@ import AddIcon from '@mui/icons-material/Add';
 import Link from 'next/link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
-import { ReportList } from '@/features/site-reports/components/ReportList';
+import { ReportBoardList } from '@/features/reports/components/ReportBoardList';
 
 export default function SiteEngReportsPage() {
   return (
     <Box>
       <PageHeader
         title="Daily Reports"
-        subtitle="Tower Heights · daily site report log."
+        subtitle="Daily site report log for your assigned projects."
         actions={
           <AppButton
             component={Link}
@@ -24,7 +24,7 @@ export default function SiteEngReportsPage() {
           </AppButton>
         }
       />
-      <ReportList detailBasePath="/site-eng/reports" />
+      <ReportBoardList detailBasePath="/site-eng/reports" />
     </Box>
   );
 }

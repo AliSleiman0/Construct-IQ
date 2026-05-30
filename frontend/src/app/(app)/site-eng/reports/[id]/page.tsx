@@ -5,7 +5,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { ReportDetail } from '@/features/site-reports/components/ReportDetail';
+import { ReportDetailView } from '@/features/reports/components/ReportDetailView';
 
 export default function SiteEngReportDetailPage() {
   const params = useParams();
@@ -22,7 +22,7 @@ export default function SiteEngReportDetailPage() {
           </Button>
         }
       />
-      <ReportDetail reportId={id} />
+      <ReportDetailView reportId={id} />
     </Box>
   );
 }

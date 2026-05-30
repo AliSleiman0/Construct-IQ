@@ -16,6 +16,8 @@ export interface ProjectDocument {
   organizationId: string;
   projectId?: string | null;
   type: DocumentType;
+  /** Set when the document is a photo attached to a daily report (SE-5). */
+  dailyReportId?: string | null;
   name: string;
   description?: string | null;
   fileKey: string;

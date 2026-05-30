@@ -27,6 +27,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import StoreIcon from '@mui/icons-material/Store';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
+import QuestionAnswerIcon from '@mui/icons-material/QuestionAnswer';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import CalculateIcon from '@mui/icons-material/Calculate';
@@ -109,6 +110,9 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Daily Reports', href: '/site-eng/reports', icon: ArticleIcon },
     { label: 'Issues', href: '/site-eng/issues', icon: ReportProblemIcon },
     { label: 'Inspections', href: '/site-eng/inspections', icon: FactCheckIcon },
+    { label: 'RFIs', href: '/site-eng/rfis', icon: QuestionAnswerIcon },
+    { label: 'Deliveries', href: '/site-eng/deliveries', icon: LocalShippingIcon },
+    { label: 'Documents', href: '/site-eng/documents', icon: FolderIcon },
   ],
 
   CLIENT: [

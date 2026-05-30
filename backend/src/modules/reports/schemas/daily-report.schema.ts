@@ -117,3 +117,5 @@ export class DailyReport {
 export const DailyReportSchema = SchemaFactory.createForClass(DailyReport);
 
 DailyReportSchema.index({ projectId: 1, reportDate: -1 }, { unique: true });
+// Backs the org-wide sorted + paginated list and the date-range filter.
+DailyReportSchema.index({ organizationId: 1, reportDate: -1 });

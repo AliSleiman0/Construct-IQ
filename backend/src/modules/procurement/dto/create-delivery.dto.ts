@@ -14,3 +14,13 @@ export class UpdateDeliveryDto {
   @IsOptional() @IsString() receivedById?: string;
   @IsOptional() @IsString() notes?: string;
 }
+
+/**
+ * Goods-received confirmation by the receiving site engineer (SE-7).
+ * `status` is forced to DELIVERED and `receivedById` to the current user
+ * server-side — neither is client-settable here.
+ */
+export class ConfirmDeliveryDto {
+  @IsOptional() @IsDateString() deliveryDate?: string;
+  @IsOptional() @IsString() notes?: string;
+}

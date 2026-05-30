@@ -17,7 +17,9 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/seed.ts"
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/seed.ts",
+    "seed:site-eng": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/seed-site-eng.ts",
+    "seed:surveyor": "ts-node --compiler-options {\"module\":\"CommonJS\"} scripts/seed-surveyor.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",

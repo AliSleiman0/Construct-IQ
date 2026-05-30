@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { reportsApi } from '@/lib/api/reports.api';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -19,6 +19,23 @@ export function useAllReports() {
     queryKey: ['reports', 'all'],
     queryFn: () => reportsApi.list(),
     enabled: isAuthenticated,
+  });
+}
+
+/** Paginated, date-filterable org reports (used by the standalone reports board). */
+export function useReportsPaged(params: {
+  projectId?: string;
+  from?: string;
+  to?: string;
+  limit: number;
+  skip: number;
+}) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['reports', 'paged', params],
+    queryFn: () => reportsApi.listPaged(params),
+    enabled: isAuthenticated,
+    placeholderData: keepPreviousData,
   });
 }
 
