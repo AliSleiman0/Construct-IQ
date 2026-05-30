@@ -9,6 +9,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import LinkIcon from '@mui/icons-material/Link';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppLoader } from '@/components/ui/AppLoader';
@@ -24,6 +25,7 @@ import { ReportList } from '@/features/reports/components/ReportList';
 import { CreateReportModal, EditReportModal } from '@/features/reports/components/ReportModals';
 import { useProject } from '@/features/projects/hooks/useProjects';
 import { useProjectEditController } from '@/features/projects/hooks/useProjectEditController';
+import { useClientPortal } from '@/features/projects/hooks/useClientPortal';
 import { useTasks } from '@/features/tasks/hooks/useTasks';
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
 import { useIssues } from '@/features/issues/hooks/useIssues';
@@ -35,6 +37,7 @@ import { ROUTES } from '@/constants/routes';
 import type { Task } from '@/types/task.types';
 import type { Issue } from '@/types/issue.types';
 import type { DailyReport } from '@/types/report.types';
+import { Tooltip } from '@mui/material';
 
 interface TabPanelProps { children?: React.ReactNode; index: number; value: number; }
 function TabPanel({ children, value, index }: TabPanelProps) {
@@ -55,6 +58,9 @@ export default function ProjectDetailPage() {
 
   const [tab, setTab] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const { portalInfo } = useClientPortal(projectId);
 
   // Project
   const { data: project, isLoading: projectLoading, isError: projectError, refetch: refetchProject } = useProject(projectId);
@@ -138,6 +144,23 @@ export default function ProjectDetailPage() {
             <AppButton variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => router.push(ROUTES.PROJECTS)}>
               Back
             </AppButton>
+            {portalInfo?.token && (
+              <Tooltip title={linkCopied ? 'Link copied!' : 'Copy client tracking link'}>
+                <AppButton
+                  variant="outlined"
+                  color={linkCopied ? 'success' : 'primary'}
+                  startIcon={<LinkIcon />}
+                  onClick={() => {
+                    const url = `${window.location.origin}${ROUTES.CLIENT_PORTAL(portalInfo.token!)}`;
+                    navigator.clipboard.writeText(url);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2500);
+                  }}
+                >
+                  {linkCopied ? 'Copied!' : 'Client Link'}
+                </AppButton>
+              </Tooltip>
+            )}
             {canEditProject && (
               <AppButton variant="contained" startIcon={<EditIcon />} onClick={() => openEdit(project)}>
                 Edit

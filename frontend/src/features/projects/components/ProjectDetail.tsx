@@ -5,6 +5,8 @@ import { Box, Stack, Typography, Tabs, Tab, Avatar, Divider, Chip, IconButton, T
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
+import LinkIcon from '@mui/icons-material/Link';
+import CheckIcon from '@mui/icons-material/Check';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppLoader } from '@/components/ui/AppLoader';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
@@ -21,6 +23,8 @@ import { AddMemberModal, EditRoleModal } from './MemberModals';
 import { useProject } from '@/features/projects/hooks/useProjects';
 import { useAddMember, useUpdateMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
 import { useProjectEditController } from '@/features/projects/hooks/useProjectEditController';
+import { useClientPortal } from '@/features/projects/hooks/useClientPortal';
+import { ROUTES } from '@/constants/routes';
 import { useTasks } from '@/features/tasks/hooks/useTasks';
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
 import { useIssues } from '@/features/issues/hooks/useIssues';
@@ -49,9 +53,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   const [tab, setTab] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Project
   const { data: project, isLoading: projectLoading, isError: projectError, refetch: refetchProject } = useProject(projectId);
+  const { portalInfo, isLoading: portalLoading, regenerate, isRegenerating } = useClientPortal(projectId);
   const { editProject, openEdit, closeEdit, handleUpdate: handleUpdateProject, isUpdating: isUpdatingProject, updateError } = useProjectEditController();
 
   // Tasks
@@ -153,11 +159,37 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Title + Edit */}
       <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2} spacing={2}>
         <Typography variant="h5" fontWeight={700}>{project.name}</Typography>
-        {canEditProject && (
-          <AppButton variant="contained" startIcon={<EditIcon />} onClick={() => openEdit(project)}>
-            Edit
-          </AppButton>
-        )}
+        <Stack direction="row" spacing={1}>
+          {/* Always visible — copies link if token exists, otherwise generates one first */}
+          <Tooltip title={linkCopied ? 'Copied!' : 'Share a read-only tracking link with your client'}>
+            <AppButton
+              variant="outlined"
+              color={linkCopied ? 'success' : 'primary'}
+              startIcon={linkCopied ? <CheckIcon /> : <LinkIcon />}
+              disabled={isRegenerating || portalLoading}
+              onClick={async () => {
+                let token = portalInfo?.token ?? null;
+                if (!token) {
+                  const result = await new Promise<{ token: string }>((resolve) =>
+                    regenerate(undefined, { onSuccess: resolve })
+                  );
+                  token = result.token;
+                }
+                const url = `${window.location.origin}${ROUTES.CLIENT_PORTAL(token)}`;
+                navigator.clipboard.writeText(url);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2500);
+              }}
+            >
+              {linkCopied ? 'Copied!' : 'Client Link'}
+            </AppButton>
+          </Tooltip>
+          {canEditProject && (
+            <AppButton variant="contained" startIcon={<EditIcon />} onClick={() => openEdit(project)}>
+              Edit
+            </AppButton>
+          )}
+        </Stack>
       </Stack>
 
       {/* Summary bar */}

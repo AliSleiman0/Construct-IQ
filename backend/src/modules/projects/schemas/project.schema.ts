@@ -70,6 +70,15 @@ export class Project {
   @Prop({ type: [ProjectMemberSchema], default: [] })
   members: ProjectMember[];
 
+  // Client portal — a shareable read-only link. Token is auto-generated on
+  // project creation and rotated on demand. Setting enabled=false hides the
+  // portal without invalidating the token.
+  @Prop({ type: String, default: null, sparse: true })
+  clientPortalToken: string | null;
+
+  @Prop({ type: Boolean, default: true })
+  clientPortalEnabled: boolean;
+
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -81,3 +90,4 @@ ProjectSchema.plugin(softDeletePlugin);
 
 ProjectSchema.index({ organizationId: 1, status: 1 });
 ProjectSchema.index({ 'members.userId': 1 });
+ProjectSchema.index({ clientPortalToken: 1 }, { sparse: true });

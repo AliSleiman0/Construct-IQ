@@ -9,4 +9,5 @@ export const ROUTES = {
   SETTINGS: '/settings',
   PROJECTS: '/projects',
   PROJECT_DETAIL: (id: string) => `/projects/${id}`,
+  CLIENT_PORTAL: (token: string) => `/portal/${token}`,
 } as const;

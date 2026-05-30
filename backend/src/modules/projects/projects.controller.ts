@@ -7,6 +7,8 @@ import {
   Body,
   Param,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -92,5 +94,44 @@ export class ProjectsController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.projectsService.removeMember(id, user.organizationId, userId);
+  }
+
+  // ── Client Portal ──────────────────────────────────────────────────────
+
+  @Get(':id/client-portal')
+  @RequirePermissions(PERMISSIONS.PROJECTS.READ)
+  getClientPortalInfo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.projectsService.getClientPortalInfo(
+      id,
+      user.organizationId,
+      user.sub,
+      user.isSuperAdmin,
+    );
+  }
+
+  @Post(':id/client-portal/regenerate')
+  @RequirePermissions(PERMISSIONS.PROJECTS.UPDATE)
+  @HttpCode(HttpStatus.OK)
+  regenerateClientPortalToken(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.projectsService.regenerateClientPortalToken(
+      id,
+      user.organizationId,
+      user.isSuperAdmin,
+    );
+  }
+
+  @Patch(':id/client-portal/toggle')
+  @RequirePermissions(PERMISSIONS.PROJECTS.UPDATE)
+  toggleClientPortal(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body('enabled') enabled: boolean,
+  ) {
+    return this.projectsService.toggleClientPortal(
+      id,
+      user.organizationId,
+      enabled,
+      user.isSuperAdmin,
+    );
   }
 }

@@ -17,7 +17,8 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/post-login']);
 
-const isPublicPath = (pathname: string): boolean => PUBLIC_PATHS.has(pathname);
+const isPublicPath = (pathname: string): boolean =>
+  PUBLIC_PATHS.has(pathname) || pathname.startsWith('/portal/');
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
