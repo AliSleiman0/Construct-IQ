@@ -202,7 +202,10 @@ export function CreatePOModal({
 }
 
 // ── Edit Purchase Order ──────────────────────────────────────────────────────
+const PO_STATUSES: PurchaseOrderStatus[] = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'DELIVERED', 'CANCELLED'];
+
 const editPoSchema = z.object({
+  status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'DELIVERED', 'CANCELLED']),
   expectedDeliveryDate: z.string().optional(),
   notes: z.string().optional(),
   items: z.array(z.object({
@@ -226,12 +229,13 @@ export function EditPOModal({
 }) {
   const { control, handleSubmit, reset, watch } = useForm<EditPOFormValues>({
     resolver: zodResolver(editPoSchema),
-    defaultValues: { expectedDeliveryDate: '', notes: '', items: [] },
+    defaultValues: { status: 'DRAFT', expectedDeliveryDate: '', notes: '', items: [] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   useEffect(() => {
     if (open && po) reset({
+      status: po.status,
       expectedDeliveryDate: po.expectedDeliveryDate ? po.expectedDeliveryDate.slice(0, 10) : '',
       notes: po.notes ?? '',
       items: (po.items ?? []).map((it) => ({
@@ -255,6 +259,7 @@ export function EditPOModal({
       unit: it.unit || undefined,
     }));
     onSubmit({
+      status: v.status,
       expectedDeliveryDate: v.expectedDeliveryDate || undefined,
       notes: v.notes || undefined,
       items: builtItems,
@@ -273,6 +278,10 @@ export function EditPOModal({
     >
       <Stack spacing={2.5} px={3} pb={1}>
         {error && <Alert severity="error">{error}</Alert>}
+        <FormSelectField
+          name="status" control={control} label="Status"
+          options={PO_STATUSES.map((s) => ({ label: s.charAt(0) + s.slice(1).toLowerCase(), value: s }))}
+        />
         <FormTextField name="expectedDeliveryDate" control={control} label="Expected delivery (optional)" type="date" fullWidth InputLabelProps={{ shrink: true }} />
         <FormTextField name="notes" control={control} label="Notes (optional)" fullWidth multiline minRows={2} />
 

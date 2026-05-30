@@ -472,11 +472,12 @@ async function main() {
 
   // Field roles are project-membership-scoped: list endpoints (issues/reports/
   // tasks) only return data for projects the caller belongs to. Add the demo
-  // Site Engineer and Quantity Surveyor to all Company A projects so their
-  // sections have data to work with.
+  // Site Engineer, Quantity Surveyor, and Procurement officer to all Company A
+  // projects so their sections have data to work with.
   for (const [roleKey, memberRole] of [
     ['SITE_ENG', 'Site Engineer'],
     ['SURVEYOR', 'Quantity Surveyor'],
+    ['PROCUREMENT', 'Procurement Officer'],
   ] as const) {
     if (userMap[roleKey]) {
       const memberId = userMap[roleKey]._id.toString();

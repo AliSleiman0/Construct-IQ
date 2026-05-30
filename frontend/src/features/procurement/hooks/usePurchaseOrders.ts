@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth.store';
 import type { CreatePurchaseOrderPayload } from '@/types/procurement.types';
 
 export interface UpdatePurchaseOrderPayload {
+  status?: string;
   expectedDeliveryDate?: string;
   notes?: string;
   items?: Array<{ description: string; quantity: number; unitPrice: number; totalPrice: number; unit?: string }>;
