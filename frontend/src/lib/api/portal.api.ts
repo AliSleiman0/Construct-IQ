@@ -1,5 +1,24 @@
 import axios from 'axios';
 
+export interface PortalTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  startDate: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
+  progress: number;
+}
+
+export interface PortalIssue {
+  id: string;
+  title: string;
+  type: string;
+  severity: string;
+  status: string;
+}
+
 export interface PortalProjectData {
   project: {
     name: string;
@@ -13,11 +32,14 @@ export interface PortalProjectData {
   tasks: {
     total: number;
     byStatus: Record<string, number>;
+    items: PortalTask[];
   };
   issues: {
     total: number;
     open: number;
     resolved: number;
+    bySeverity: Record<string, number>;
+    items: PortalIssue[];
   };
   team: Array<{ displayName: string; role: string | null }>;
 }
