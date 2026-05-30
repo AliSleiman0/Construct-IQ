@@ -149,8 +149,13 @@ async function main() {
     { name: 'read:purchase_orders', resource: 'purchase_orders', action: 'read', description: 'View purchase orders' },
     { name: 'create:purchase_orders', resource: 'purchase_orders', action: 'create', description: 'Create purchase orders' },
     { name: 'update:purchase_orders', resource: 'purchase_orders', action: 'update', description: 'Edit purchase orders' },
-    { name: 'approve:purchase_orders', resource: 'purchase_orders', action: 'approve', description: 'Approve/reject purchase orders' },
+    { name: 'approve:purchase_orders', resource: 'purchase_orders', action: 'approve', description: 'Approve purchase orders' },
+    { name: 'reject:purchase_orders', resource: 'purchase_orders', action: 'reject', description: 'Reject purchase orders' },
     { name: 'manage:purchase_orders', resource: 'purchase_orders', action: 'manage', description: 'Full purchase order management' },
+    { name: 'read:material_requests', resource: 'material_requests', action: 'read', description: 'View material requests' },
+    { name: 'create:material_requests', resource: 'material_requests', action: 'create', description: 'Create material requests' },
+    { name: 'approve:material_requests', resource: 'material_requests', action: 'approve', description: 'Approve/reject material requests' },
+    { name: 'manage:material_requests', resource: 'material_requests', action: 'manage', description: 'Full material request management' },
     { name: 'read:deliveries', resource: 'deliveries', action: 'read', description: 'View deliveries' },
     { name: 'update:deliveries', resource: 'deliveries', action: 'update', description: 'Update delivery status' },
     { name: 'confirm:deliveries', resource: 'deliveries', action: 'confirm', description: 'Confirm goods received on site' },
@@ -199,7 +204,8 @@ async function main() {
       'manage:rfis',
       'read:budget', 'update:projects',
       'read:suppliers',
-      'read:purchase_orders', 'approve:purchase_orders',
+      'read:purchase_orders', 'approve:purchase_orders', 'reject:purchase_orders',
+      'read:material_requests', 'create:material_requests',
       'read:deliveries',
       'manage:documents',
       'read:dashboard',
@@ -207,7 +213,11 @@ async function main() {
     ],
     PROCUREMENT: [
       'read:projects', 'read:users', 'read:tasks', 'read:budget',
-      'manage:suppliers', 'manage:purchase_orders', 'update:deliveries', 'manage:deliveries',
+      'manage:suppliers',
+      'create:purchase_orders', 'read:purchase_orders', 'update:purchase_orders',
+      'approve:purchase_orders', 'reject:purchase_orders', 'manage:purchase_orders',
+      'read:material_requests', 'create:material_requests', 'approve:material_requests', 'manage:material_requests',
+      'update:deliveries', 'manage:deliveries', 'read:deliveries',
       'read:documents', 'upload:documents', 'read:ai',
     ],
     SURVEYOR: [
@@ -462,11 +472,12 @@ async function main() {
 
   // Field roles are project-membership-scoped: list endpoints (issues/reports/
   // tasks) only return data for projects the caller belongs to. Add the demo
-  // Site Engineer and Quantity Surveyor to all Company A projects so their
-  // sections have data to work with.
+  // Site Engineer, Quantity Surveyor, and Procurement officer to all Company A
+  // projects so their sections have data to work with.
   for (const [roleKey, memberRole] of [
     ['SITE_ENG', 'Site Engineer'],
     ['SURVEYOR', 'Quantity Surveyor'],
+    ['PROCUREMENT', 'Procurement Officer'],
   ] as const) {
     if (userMap[roleKey]) {
       const memberId = userMap[roleKey]._id.toString();

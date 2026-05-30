@@ -48,6 +48,9 @@ export interface PurchaseOrder {
   notes?: string | null;
   approvedById?: string | null;
   approvedAt?: string | null;
+  rejectedById?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
   items: PurchaseOrderItem[];
   createdAt: string;
   updatedAt: string;
@@ -90,6 +93,46 @@ export interface CreatePurchaseOrderPayload {
   expectedDeliveryDate?: string;
   notes?: string;
   items?: PurchaseOrderItem[];
+}
+
+export type MaterialRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CONVERTED';
+
+export interface MaterialRequest {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  requestedById: string;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  estimatedCost?: number | null;
+  currency: string;
+  neededByDate?: string | null;
+  status: MaterialRequestStatus;
+  reviewedById?: string | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+  convertedToPOId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMaterialRequestPayload {
+  projectId: string;
+  title: string;
+  description?: string;
+  category?: string;
+  estimatedCost?: number;
+  currency?: string;
+  neededByDate?: string;
+}
+
+export interface ReviewMaterialRequestPayload {
+  reviewNote?: string;
+}
+
+export interface ConvertMaterialRequestPayload {
+  poId: string;
 }
 
 export interface CreateDeliveryPayload {

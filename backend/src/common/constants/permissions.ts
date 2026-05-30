@@ -115,7 +115,16 @@ export const PERMISSIONS = {
     CREATE: 'create:purchase_orders',
     UPDATE: 'update:purchase_orders',
     APPROVE: 'approve:purchase_orders',
+    REJECT: 'reject:purchase_orders',
     MANAGE: 'manage:purchase_orders',
+  },
+
+  // ── Material Requests ─────────────────────────────────────
+  MATERIAL_REQUESTS: {
+    READ: 'read:material_requests',
+    CREATE: 'create:material_requests',
+    APPROVE: 'approve:material_requests',
+    MANAGE: 'manage:material_requests',
   },
 
   // ── Deliveries ────────────────────────────────────────────

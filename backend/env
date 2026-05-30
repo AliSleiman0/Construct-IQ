@@ -1,0 +1,36 @@
+# Application
+NODE_ENV=development
+PORT=4000
+FRONTEND_URL=http://localhost:3000
+
+# Database
+MONGO_URL="mongodb://localhost:27017/constructiq?replicaSet=rs0&directConnection=true"
+DATABASE_URL="mongodb://localhost:27017/constructiq?replicaSet=rs0&directConnection=true"
+
+# JWT
+JWT_ACCESS_SECRET=your_super_secret_access_key_change_in_production
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_SECRET=your_super_secret_refresh_key_change_in_production
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=redis_secret
+
+# Super Admin credentials (used by the seed script)
+# CHANGE THESE IN PRODUCTION
+SUPER_ADMIN_EMAIL=admin@constructiq.com
+SUPER_ADMIN_PASSWORD=Admin@1234
+
+# AI (add in Phase 7)
+OPENAI_API_KEY=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
+AI_MODEL=gpt-4o-mini
+
+# Storage — local MinIO (S3-compatible) via docker-compose
+S3_ENDPOINT=http://localhost:9000
+S3_BUCKET=constructiq-logos
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_REGION=us-east-1
+S3_PUBLIC_URL=http://localhost:9000/constructiq-logos

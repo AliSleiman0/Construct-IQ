@@ -75,4 +75,14 @@ export const budgetApi = {
   removeExpense: async (budgetId: string, expenseId: string): Promise<void> => {
     await apiClient.delete(`/budget/${budgetId}/expenses/${expenseId}`);
   },
+
+  getSummary: async (projectId: string): Promise<Budget | null> => {
+    try {
+      const res = await apiClient.get<Raw>('/budget/summary', { params: { projectId } });
+      return normaliseBudget(res.data);
+    } catch (e) {
+      if (e instanceof AxiosError && e.response?.status === 404) return null;
+      throw e;
+    }
+  },
 };

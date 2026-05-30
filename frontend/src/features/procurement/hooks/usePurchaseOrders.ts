@@ -3,6 +3,14 @@ import { purchaseOrdersApi } from '@/lib/api/purchaseOrders.api';
 import { useAuthStore } from '@/store/auth.store';
 import type { CreatePurchaseOrderPayload } from '@/types/procurement.types';
 
+export interface UpdatePurchaseOrderPayload {
+  status?: string;
+  expectedDeliveryDate?: string;
+  notes?: string;
+  items?: Array<{ description: string; quantity: number; unitPrice: number; totalPrice: number; unit?: string }>;
+  totalAmount?: number;
+}
+
 export function usePurchaseOrders(projectId?: string) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
@@ -17,6 +25,15 @@ function useInvalidate() {
   return () => qc.invalidateQueries({ queryKey: ['purchase-orders'] });
 }
 
+export function useUpdatePO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdatePurchaseOrderPayload }) =>
+      purchaseOrdersApi.update(id, payload),
+    onSuccess: invalidate,
+  });
+}
+
 export function useCreatePO() {
   const invalidate = useInvalidate();
   return useMutation({
@@ -29,6 +46,14 @@ export function useApprovePO() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: (id: string) => purchaseOrdersApi.approve(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectPO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => purchaseOrdersApi.reject(id, reason),
     onSuccess: invalidate,
   });
 }

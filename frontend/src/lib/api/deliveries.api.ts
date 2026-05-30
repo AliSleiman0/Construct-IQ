@@ -33,6 +33,10 @@ export const deliveriesApi = {
     return idify(res.data);
   },
 
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/deliveries/${id}`);
+  },
+
   confirm: async (id: string, payload: ConfirmDeliveryPayload): Promise<Delivery> => {
     const res = await apiClient.post<Raw>(`/deliveries/${id}/confirm`, payload);
     return idify(res.data);

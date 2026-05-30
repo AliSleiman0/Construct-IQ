@@ -4,8 +4,10 @@ import { Model } from 'mongoose';
 import { Budget, BudgetDocument } from './schemas/budget.schema';
 import { BudgetLine, BudgetLineDocument } from './schemas/budget-line.schema';
 import { Expense, ExpenseDocument } from './schemas/expense.schema';
+import { PurchaseOrder, PurchaseOrderDocument } from '../procurement/schemas/purchase-order.schema';
 import { CreateBudgetDto, CreateBudgetLineDto, CreateExpenseDto, UpdateExpenseDto } from './dto/create-budget.dto';
 import { PartialType } from '@nestjs/mapped-types';
+import { PurchaseOrderStatus } from '../../common/enums';
 
 class UpdateBudgetDto extends PartialType(CreateBudgetDto) {}
 
@@ -15,6 +17,7 @@ export class BudgetService {
     @InjectModel(Budget.name) private budgetModel: Model<BudgetDocument>,
     @InjectModel(BudgetLine.name) private lineModel: Model<BudgetLineDocument>,
     @InjectModel(Expense.name) private expenseModel: Model<ExpenseDocument>,
+    @InjectModel(PurchaseOrder.name) private poModel: Model<PurchaseOrderDocument>,
   ) {}
 
   async findByProject(projectId: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
@@ -165,5 +168,50 @@ export class BudgetService {
     const expense = await this.expenseModel.findOneAndDelete(expenseFilter);
     if (!expense) throw new NotFoundException('Expense not found');
     return { message: 'Expense deleted successfully' };
+  }
+
+  async getBudgetSummaryWithCommitted(projectId: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const filter: Record<string, unknown> = { projectId };
+    if (!isSuperAdmin) filter.organizationId = organizationId;
+
+    const budget = await this.budgetModel.findOne(filter).lean();
+    if (!budget) throw new NotFoundException('Budget not found for this project');
+
+    const orgMatch = isSuperAdmin ? {} : { organizationId };
+
+    const [lines, expenses, committedByLine] = await Promise.all([
+      this.lineModel.find({ budgetId: budget._id }).lean(),
+      this.expenseModel.find({ budgetId: budget._id }).lean(),
+      this.poModel.aggregate([
+        {
+          $match: {
+            ...orgMatch,
+            budgetLineId: { $ne: null },
+            deletedAt: null,
+            status: { $in: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.APPROVED] },
+          },
+        },
+        { $group: { _id: '$budgetLineId', committed: { $sum: '$totalAmount' } } },
+      ]),
+    ]);
+
+    const committedMap: Record<string, number> = {};
+    for (const row of committedByLine) committedMap[row._id] = row.committed ?? 0;
+
+    const spentByLine = expenses.reduce<Record<string, number>>((acc, e) => {
+      if (e.budgetLineId) acc[e.budgetLineId] = (acc[e.budgetLineId] ?? 0) + e.amount;
+      return acc;
+    }, {});
+
+    return {
+      ...budget,
+      lines: lines.map((l) => ({
+        ...l,
+        spentAmount: spentByLine[l._id] ?? 0,
+        committedAmount: committedMap[l._id] ?? 0,
+      })),
+      totalSpent: expenses.reduce((sum, e) => sum + e.amount, 0),
+      totalCommitted: Object.values(committedMap).reduce((sum, v) => sum + v, 0),
+    };
   }
 }

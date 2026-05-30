@@ -77,6 +77,15 @@ export class PurchaseOrder {
   @Prop({ type: Date, default: null })
   approvedAt: Date | null;
 
+  @Prop({ type: String, ref: 'User', default: null })
+  rejectedById: string | null;
+
+  @Prop({ type: Date, default: null })
+  rejectedAt: Date | null;
+
+  @Prop({ type: String, default: null })
+  rejectionReason: string | null;
+
   @Prop({ type: [PurchaseOrderItemSchema], default: [] })
   items: PurchaseOrderItem[];
 

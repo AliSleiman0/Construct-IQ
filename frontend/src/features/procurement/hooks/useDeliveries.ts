@@ -34,6 +34,14 @@ export function useUpdateDelivery() {
   });
 }
 
+export function useDeleteDelivery() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => deliveriesApi.delete(id),
+    onSuccess: invalidate,
+  });
+}
+
 export function useConfirmDelivery() {
   const invalidate = useInvalidate();
   return useMutation({
