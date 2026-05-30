@@ -4,11 +4,13 @@ import { useMemo, useState } from 'react';
 import {
   Box, Paper, Typography, Stack, Table, TableHead, TableBody, TableRow, TableCell,
   IconButton, Tooltip, Skeleton, Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  MenuItem,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import dayjs from 'dayjs';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppErrorState } from '@/components/ui/AppErrorState';
@@ -19,7 +21,9 @@ import {
   useApproveMaterialRequest,
   useRejectMaterialRequest,
   useDeleteMaterialRequest,
+  useConvertMaterialRequest,
 } from '../hooks/useMaterialRequests';
+import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { useProjects } from '@/features/projects/hooks/useProjects';
 import { MRStatusChip } from './ProcurementChips';
 import { CreateMaterialRequestModal } from './ProcurementModals';
@@ -36,15 +40,19 @@ export function MaterialRequestsPanel({
 }: { canCreate: boolean; canApprove: boolean; canManage: boolean }) {
   const { data: requests, isLoading, isError, refetch } = useMaterialRequests();
   const { data: projects } = useProjects();
+  const { data: pos } = usePurchaseOrders();
   const createMR = useCreateMaterialRequest();
   const approveMR = useApproveMaterialRequest();
   const rejectMR = useRejectMaterialRequest();
   const deleteMR = useDeleteMaterialRequest();
+  const convertMR = useConvertMaterialRequest();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [reviewTarget, setReviewTarget] = useState<{ mr: MaterialRequest; action: 'approve' | 'reject' } | null>(null);
   const [reviewNote, setReviewNote] = useState('');
+  const [convertTarget, setConvertTarget] = useState<MaterialRequest | null>(null);
+  const [convertPoId, setConvertPoId] = useState('');
 
   const projectName = useMemo(() => {
     const m = new Map((projects ?? []).map((p) => [p.id, p.name]));
@@ -114,6 +122,16 @@ export function MaterialRequestsPanel({
                         </Tooltip>
                       </>
                     )}
+                    {canManage && mr.status === 'APPROVED' && (
+                      <Tooltip title="Convert to PO">
+                        <span>
+                          <IconButton size="small" color="primary" disabled={convertMR.isPending}
+                            onClick={() => { setConvertTarget(mr); setConvertPoId(''); }}>
+                            <SwapHorizIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
                     {canManage && (
                       <Tooltip title="Delete">
                         <span>
@@ -148,6 +166,39 @@ export function MaterialRequestsPanel({
           }
         }}
       />
+
+      <Dialog open={!!convertTarget} onClose={() => setConvertTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Convert &quot;{convertTarget?.title}&quot; to PO</DialogTitle>
+        <DialogContent>
+          <TextField
+            select
+            label="Select purchase order"
+            fullWidth
+            value={convertPoId}
+            onChange={(e) => setConvertPoId(e.target.value)}
+            sx={{ mt: 1 }}
+          >
+            {(pos ?? []).map((po) => (
+              <MenuItem key={po.id} value={po.id}>{po.poNumber}</MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <AppButton variant="outlined" onClick={() => setConvertTarget(null)}>Cancel</AppButton>
+          <AppButton
+            variant="contained"
+            disabled={!convertPoId}
+            loading={convertMR.isPending}
+            onClick={async () => {
+              if (!convertTarget || !convertPoId) return;
+              await convertMR.mutateAsync({ id: convertTarget.id, payload: { poId: convertPoId } });
+              setConvertTarget(null);
+            }}
+          >
+            Convert
+          </AppButton>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!reviewTarget} onClose={() => setReviewTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>

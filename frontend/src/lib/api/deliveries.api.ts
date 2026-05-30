@@ -27,4 +27,8 @@ export const deliveriesApi = {
     const res = await apiClient.patch<Raw>(`/deliveries/${id}`, payload);
     return idify(res.data);
   },
+
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete(`/deliveries/${id}`);
+  },
 };

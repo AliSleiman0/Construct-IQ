@@ -33,3 +33,11 @@ export function useUpdateDelivery() {
     onSuccess: invalidate,
   });
 }
+
+export function useDeleteDelivery() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (id: string) => deliveriesApi.delete(id),
+    onSuccess: invalidate,
+  });
+}

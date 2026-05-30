@@ -204,6 +204,14 @@ export class ProcurementService {
     return delivery.toObject();
   }
 
+  async deleteDelivery(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const delivery = await this.deliveryModel.findOne(filter);
+    if (!delivery) throw new NotFoundException('Delivery not found');
+    await this.deliveryModel.deleteOne({ _id: id });
+    return { message: 'Delivery deleted successfully' };
+  }
+
   // ── Material Requests ──────────────────────────────────────────────────────
 
   async findAllMaterialRequests(organizationId: string, isSuperAdmin: boolean, projectId?: string): Promise<any[]> {

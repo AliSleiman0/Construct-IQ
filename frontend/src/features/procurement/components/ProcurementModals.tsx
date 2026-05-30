@@ -17,6 +17,7 @@ import type {
   Supplier, PurchaseOrder, Delivery, PurchaseOrderStatus, DeliveryStatus,
   CreateSupplierPayload, CreatePurchaseOrderPayload, CreateMaterialRequestPayload,
 } from '@/types/procurement.types';
+import type { UpdatePurchaseOrderPayload } from '../hooks/usePurchaseOrders';
 
 const num = z.coerce.number({ invalid_type_error: 'Number' }).min(0, '≥ 0');
 
@@ -167,6 +168,113 @@ export function CreatePOModal({
           <FormSelectField name="status" control={control} label="Status" options={[{ label: 'Draft', value: 'DRAFT' }, { label: 'Submitted', value: 'SUBMITTED' }]} />
         </Stack>
         <FormTextField name="expectedDeliveryDate" control={control} label="Expected delivery (optional)" type="date" fullWidth InputLabelProps={{ shrink: true }} />
+
+        <Divider />
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Typography variant="subtitle2" fontWeight={600}>Line items</Typography>
+          <AppButton size="small" startIcon={<AddIcon />} onClick={() => append({ description: '', quantity: 1, unitPrice: 0, unit: '' })}>
+            Add item
+          </AppButton>
+        </Box>
+        {fields.map((f, i) => (
+          <Stack key={f.id} direction="row" spacing={1} alignItems="flex-start">
+            <Controller name={`items.${i}.description`} control={control}
+              render={({ field, fieldState }) => (
+                <TextField {...field} label="Description" size="small" sx={{ flex: 2 }} error={!!fieldState.error} />
+              )} />
+            <Controller name={`items.${i}.quantity`} control={control}
+              render={({ field, fieldState }) => (
+                <TextField {...field} label="Qty" type="number" size="small" sx={{ flex: 1 }} error={!!fieldState.error} />
+              )} />
+            <Controller name={`items.${i}.unitPrice`} control={control}
+              render={({ field, fieldState }) => (
+                <TextField {...field} label="Unit price" type="number" size="small" sx={{ flex: 1 }} error={!!fieldState.error} />
+              )} />
+            <IconButton aria-label={`Remove item ${i + 1}`} onClick={() => remove(i)} sx={{ mt: 0.5 }}><DeleteIcon fontSize="small" /></IconButton>
+          </Stack>
+        ))}
+        <Typography variant="body2" color="text.secondary" align="right">
+          Total: {total.toLocaleString()}
+        </Typography>
+      </Stack>
+    </AppModal>
+  );
+}
+
+// ── Edit Purchase Order ──────────────────────────────────────────────────────
+const editPoSchema = z.object({
+  expectedDeliveryDate: z.string().optional(),
+  notes: z.string().optional(),
+  items: z.array(z.object({
+    description: z.string().min(1, 'Description'),
+    quantity: num,
+    unitPrice: num,
+    unit: z.string().optional(),
+  })).optional(),
+});
+type EditPOFormValues = z.infer<typeof editPoSchema>;
+
+export function EditPOModal({
+  open, po, isLoading, error, onClose, onSubmit,
+}: {
+  open: boolean;
+  po: PurchaseOrder | null;
+  isLoading: boolean;
+  error?: string | null;
+  onClose: () => void;
+  onSubmit: (payload: UpdatePurchaseOrderPayload) => void;
+}) {
+  const { control, handleSubmit, reset, watch } = useForm<EditPOFormValues>({
+    resolver: zodResolver(editPoSchema),
+    defaultValues: { expectedDeliveryDate: '', notes: '', items: [] },
+  });
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+
+  useEffect(() => {
+    if (open && po) reset({
+      expectedDeliveryDate: po.expectedDeliveryDate ? po.expectedDeliveryDate.slice(0, 10) : '',
+      notes: po.notes ?? '',
+      items: (po.items ?? []).map((it) => ({
+        description: it.description,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        unit: it.unit ?? '',
+      })),
+    });
+  }, [open, po, reset]);
+
+  const items = watch('items') ?? [];
+  const total = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unitPrice) || 0), 0);
+
+  const submit = (v: EditPOFormValues) => {
+    const builtItems = (v.items ?? []).map((it) => ({
+      description: it.description,
+      quantity: Number(it.quantity),
+      unitPrice: Number(it.unitPrice),
+      totalPrice: Number(it.quantity) * Number(it.unitPrice),
+      unit: it.unit || undefined,
+    }));
+    onSubmit({
+      expectedDeliveryDate: v.expectedDeliveryDate || undefined,
+      notes: v.notes || undefined,
+      items: builtItems,
+      totalAmount: total || undefined,
+    });
+  };
+
+  return (
+    <AppModal open={open} onClose={onClose} title={`Edit PO ${po?.poNumber ?? ''}`}
+      actions={
+        <Stack direction="row" spacing={1} justifyContent="flex-end" p={2} pt={0}>
+          <AppButton variant="outlined" onClick={onClose} disabled={isLoading}>Cancel</AppButton>
+          <AppButton variant="contained" loading={isLoading} onClick={handleSubmit(submit)}>Save changes</AppButton>
+        </Stack>
+      }
+    >
+      <Stack spacing={2.5} px={3} pb={1}>
+        {error && <Alert severity="error">{error}</Alert>}
+        <FormTextField name="expectedDeliveryDate" control={control} label="Expected delivery (optional)" type="date" fullWidth InputLabelProps={{ shrink: true }} />
+        <FormTextField name="notes" control={control} label="Notes (optional)" fullWidth multiline minRows={2} />
 
         <Divider />
         <Box display="flex" alignItems="center" justifyContent="space-between">

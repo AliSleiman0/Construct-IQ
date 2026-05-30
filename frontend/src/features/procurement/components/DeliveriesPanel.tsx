@@ -7,11 +7,12 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import dayjs from 'dayjs';
 import { AppButton } from '@/components/ui/AppButton';
 import { AppErrorState } from '@/components/ui/AppErrorState';
 import { AppEmptyState } from '@/components/ui/AppEmptyState';
-import { useDeliveries, useCreateDelivery, useUpdateDelivery } from '../hooks/useDeliveries';
+import { useDeliveries, useCreateDelivery, useUpdateDelivery, useDeleteDelivery } from '../hooks/useDeliveries';
 import { usePurchaseOrders } from '../hooks/usePurchaseOrders';
 import { DeliveryModal } from './ProcurementModals';
 import { DeliveryStatusChip } from './ProcurementChips';
@@ -22,6 +23,7 @@ export function DeliveriesPanel({ canManage }: { canManage: boolean }) {
   const { data: pos } = usePurchaseOrders();
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
+  const deleteDelivery = useDeleteDelivery();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Delivery | null>(null);
@@ -73,6 +75,14 @@ export function DeliveriesPanel({ canManage }: { canManage: boolean }) {
                       <IconButton size="small" aria-label={`Update delivery ${poNumber(d.purchaseOrderId)}`} onClick={() => { setEditing(d); setFormError(null); setModalOpen(true); }}>
                         <EditIcon fontSize="small" />
                       </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Delete">
+                      <span>
+                        <IconButton size="small" color="error" aria-label={`Delete delivery ${poNumber(d.purchaseOrderId)}`} disabled={deleteDelivery.isPending}
+                          onClick={async () => { if (confirm(`Delete delivery for PO "${poNumber(d.purchaseOrderId)}"?`)) await deleteDelivery.mutateAsync(d.id); }}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </TableCell>
                 )}

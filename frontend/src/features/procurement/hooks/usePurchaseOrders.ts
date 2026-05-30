@@ -3,6 +3,13 @@ import { purchaseOrdersApi } from '@/lib/api/purchaseOrders.api';
 import { useAuthStore } from '@/store/auth.store';
 import type { CreatePurchaseOrderPayload } from '@/types/procurement.types';
 
+export interface UpdatePurchaseOrderPayload {
+  expectedDeliveryDate?: string;
+  notes?: string;
+  items?: Array<{ description: string; quantity: number; unitPrice: number; totalPrice: number; unit?: string }>;
+  totalAmount?: number;
+}
+
 export function usePurchaseOrders(projectId?: string) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
@@ -15,6 +22,15 @@ export function usePurchaseOrders(projectId?: string) {
 function useInvalidate() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ['purchase-orders'] });
+}
+
+export function useUpdatePO() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdatePurchaseOrderPayload }) =>
+      purchaseOrdersApi.update(id, payload),
+    onSuccess: invalidate,
+  });
 }
 
 export function useCreatePO() {

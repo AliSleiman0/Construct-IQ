@@ -219,4 +219,10 @@ export class DeliveriesController {
   update(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: UpdateDeliveryDto): Promise<any> {
     return this.procurementService.updateDelivery(id, user.organizationId, dto, user.isSuperAdmin);
   }
+
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.DELIVERIES.MANAGE)
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
+    return this.procurementService.deleteDelivery(id, user.organizationId, user.isSuperAdmin);
+  }
 }
