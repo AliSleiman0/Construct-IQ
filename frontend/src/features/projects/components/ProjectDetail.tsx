@@ -24,6 +24,7 @@ import { useProject } from '@/features/projects/hooks/useProjects';
 import { useAddMember, useUpdateMember, useRemoveMember } from '@/features/projects/hooks/useProjectMutations';
 import { useProjectEditController } from '@/features/projects/hooks/useProjectEditController';
 import { useClientPortal } from '@/features/projects/hooks/useClientPortal';
+import { useAutocadLink } from '@/features/projects/hooks/useAutocadLink';
 import { ROUTES } from '@/constants/routes';
 import { useTasks } from '@/features/tasks/hooks/useTasks';
 import { useCreateTask, useUpdateTask, useDeleteTask } from '@/features/tasks/hooks/useTaskMutations';
@@ -54,10 +55,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [cadLinkCopied, setCadLinkCopied] = useState(false);
 
   // Project
   const { data: project, isLoading: projectLoading, isError: projectError, refetch: refetchProject } = useProject(projectId);
   const { portalInfo, isLoading: portalLoading, regenerate, isRegenerating } = useClientPortal(projectId);
+  const { linkInfo: cadLinkInfo, isLoading: cadLinkLoading, regenerate: regenerateCad, isRegenerating: isRegeneratingCad } = useAutocadLink(projectId);
   const { editProject, openEdit, closeEdit, handleUpdate: handleUpdateProject, isUpdating: isUpdatingProject, updateError } = useProjectEditController();
 
   // Tasks
@@ -184,6 +187,31 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               {linkCopied ? 'Copied!' : 'Client Link'}
             </AppButton>
           </Tooltip>
+          {/* AutoCAD Engineer Link */}
+          <Tooltip title={cadLinkCopied ? 'Copied!' : 'Send this link to your AutoCAD engineer — they can draw the building plan directly in the browser'}>
+            <AppButton
+              variant="outlined"
+              color={cadLinkCopied ? 'success' : 'secondary'}
+              startIcon={cadLinkCopied ? <CheckIcon /> : <LinkIcon />}
+              disabled={isRegeneratingCad || cadLinkLoading}
+              onClick={async () => {
+                let token = cadLinkInfo?.token ?? null;
+                if (!token) {
+                  const result = await new Promise<{ token: string }>((resolve) =>
+                    regenerateCad(undefined, { onSuccess: resolve })
+                  );
+                  token = result.token;
+                }
+                const url = `${window.location.origin}/autocad/${token}`;
+                navigator.clipboard.writeText(url);
+                setCadLinkCopied(true);
+                setTimeout(() => setCadLinkCopied(false), 2500);
+              }}
+            >
+              {cadLinkCopied ? 'Copied!' : '📐 CAD Link'}
+            </AppButton>
+          </Tooltip>
+
           {canEditProject && (
             <AppButton variant="contained" startIcon={<EditIcon />} onClick={() => openEdit(project)}>
               Edit

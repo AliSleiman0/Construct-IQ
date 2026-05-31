@@ -79,6 +79,16 @@ export class Project {
   @Prop({ type: Boolean, default: true })
   clientPortalEnabled: boolean;
 
+  // AutoCAD engineer portal — a shareable link given to the engineer who
+  // draws the building plans. The engineer can upload DWG/DXF files through
+  // this link; those files are translated via Autodesk Platform Services so
+  // the team can view them in the browser.
+  @Prop({ type: String, default: null, sparse: true })
+  autocadToken: string | null;
+
+  @Prop({ type: Boolean, default: true })
+  autocadTokenEnabled: boolean;
+
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -91,3 +101,4 @@ ProjectSchema.plugin(softDeletePlugin);
 ProjectSchema.index({ organizationId: 1, status: 1 });
 ProjectSchema.index({ 'members.userId': 1 });
 ProjectSchema.index({ clientPortalToken: 1 }, { sparse: true });
+ProjectSchema.index({ autocadToken: 1 }, { sparse: true });
