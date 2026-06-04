@@ -134,4 +134,43 @@ export class ProjectsController {
       user.isSuperAdmin,
     );
   }
+
+  // ── AutoCAD Engineer Portal ──────────────────────────────────────────────
+
+  @Get(':id/autocad-link')
+  @RequirePermissions(PERMISSIONS.PROJECTS.READ)
+  getAutocadLinkInfo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.projectsService.getAutocadLinkInfo(
+      id,
+      user.organizationId,
+      user.sub,
+      user.isSuperAdmin,
+    );
+  }
+
+  @Post(':id/autocad-link/regenerate')
+  @RequirePermissions(PERMISSIONS.PROJECTS.UPDATE)
+  @HttpCode(HttpStatus.OK)
+  regenerateAutocadToken(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.projectsService.regenerateAutocadToken(
+      id,
+      user.organizationId,
+      user.isSuperAdmin,
+    );
+  }
+
+  @Patch(':id/autocad-link/toggle')
+  @RequirePermissions(PERMISSIONS.PROJECTS.UPDATE)
+  toggleAutocadLink(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body('enabled') enabled: boolean,
+  ) {
+    return this.projectsService.toggleAutocadLink(
+      id,
+      user.organizationId,
+      enabled,
+      user.isSuperAdmin,
+    );
+  }
 }

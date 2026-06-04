@@ -54,4 +54,14 @@ export const projectsApi = {
     const res = await apiClient.patch(`/projects/${projectId}/client-portal/toggle`, { enabled });
     return res.data;
   },
+
+  getAutocadLinkInfo: async (projectId: string): Promise<{ token: string | null; enabled: boolean }> => {
+    const res = await apiClient.get(`/projects/${projectId}/autocad-link`);
+    return res.data;
+  },
+
+  regenerateAutocadToken: async (projectId: string): Promise<{ token: string; enabled: boolean }> => {
+    const res = await apiClient.post(`/projects/${projectId}/autocad-link/regenerate`);
+    return res.data;
+  },
 };

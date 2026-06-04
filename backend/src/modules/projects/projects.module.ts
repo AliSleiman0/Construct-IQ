@@ -6,9 +6,18 @@ import { PhasesService } from './phases.service';
 import { MilestonesController } from './milestones.controller';
 import { MilestonesService } from './milestones.service';
 import { PublicProjectsController } from './public-projects.controller';
+import { PublicAutocadController } from './public-autocad.controller';
+import { ApsModule } from '../aps/aps.module';
 
 @Module({
-  controllers: [ProjectsController, PhasesController, MilestonesController, PublicProjectsController],
+  imports: [ApsModule],
+  controllers: [
+    ProjectsController,
+    PhasesController,
+    MilestonesController,
+    PublicProjectsController,
+    PublicAutocadController,
+  ],
   providers: [ProjectsService, PhasesService, MilestonesService],
   exports: [ProjectsService, PhasesService, MilestonesService],
 })
