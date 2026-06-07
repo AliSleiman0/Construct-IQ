@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { purchaseOrdersApi } from '@/lib/api/purchaseOrders.api';
 import { useAuthStore } from '@/store/auth.store';
-import type { CreatePurchaseOrderPayload } from '@/types/procurement.types';
+import type { CreatePurchaseOrderPayload, PurchaseOrderStatus } from '@/types/procurement.types';
 
 export interface UpdatePurchaseOrderPayload {
-  status?: string;
+  status?: PurchaseOrderStatus;
   expectedDeliveryDate?: string;
   notes?: string;
   items?: Array<{ description: string; quantity: number; unitPrice: number; totalPrice: number; unit?: string }>;

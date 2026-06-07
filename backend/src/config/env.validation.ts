@@ -55,6 +55,13 @@ class EnvironmentVariables {
   @IsOptional()
   FRONTEND_URL: string = 'http://localhost:3000';
 
+  // 'true' marks auth cookies Secure (requires HTTPS). Leave unset/false when
+  // serving over plain HTTP. Parsed as a string to avoid boolean-coercion
+  // surprises; configuration.ts compares against 'true'.
+  @IsString()
+  @IsOptional()
+  COOKIE_SECURE?: string;
+
   @IsString()
   @IsOptional()
   SUPER_ADMIN_EMAIL: string = 'admin@constructiq.com';

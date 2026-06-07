@@ -33,7 +33,7 @@ async function bootstrap() {
     origin: frontendUrl,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Organization-Id'],
   });
 
   // API versioned prefix
@@ -63,6 +63,10 @@ async function bootstrap() {
       swaggerOptions: { persistAuthorization: true },
     });
   }
+
+  // Drain in-flight requests / close Mongo + Redis cleanly on SIGTERM
+  // (e.g. `docker stop` during a rollout).
+  app.enableShutdownHooks();
 
   const port = configService.get<number>('app.port') ?? 4000;
   await app.listen(port);
