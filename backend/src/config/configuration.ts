@@ -3,6 +3,10 @@ export default () => ({
     nodeEnv: process.env.NODE_ENV || 'development',
     port: parseInt(process.env.PORT || '4000', 10),
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+    // Marks auth cookies Secure. Decoupled from NODE_ENV so we can run prod
+    // over plain HTTP (droplet IP) without Secure cookies being dropped by the
+    // browser. Flip to true once TLS is in front of the app.
+    cookieSecure: process.env.COOKIE_SECURE === 'true',
   },
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,

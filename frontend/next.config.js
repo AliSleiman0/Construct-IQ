@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Emit a self-contained server bundle (.next/standalone) for a small,
+  // dependency-light production Docker image.
+  output: 'standalone',
+
   // Proxy all /api/v1/* calls to the NestJS backend
   // This enables same-origin cookies and eliminates CORS issues
   async rewrites() {

@@ -36,6 +36,7 @@ import { AiFeaturesModule } from './modules/ai-features/ai-features.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OrgSettingsModule } from './modules/org-settings/org-settings.module';
 import { SupportTicketsModule } from './modules/support-tickets/support-tickets.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { SupportTicketsModule } from './modules/support-tickets/support-tickets.
     DashboardModule,
     OrgSettingsModule,
     SupportTicketsModule,
+    HealthModule,
   ],
   providers: [
     {
