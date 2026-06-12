@@ -4,6 +4,7 @@ import { AiController } from './ai.controller';
 import { OrchestratorService } from './orchestrator/orchestrator.service';
 import { NavigationAgent } from './agents/navigation.agent';
 import { ReportSummaryAgent } from './agents/report-summary.agent';
+import { BidExtractorAgent } from './agents/bid-extractor.agent';
 import { ChatSessionService } from './chat/chat-session.service';
 import { AiFeatureGuard } from '../../common/guards/ai-feature.guard';
 
@@ -14,9 +15,10 @@ import { AiFeatureGuard } from '../../common/guards/ai-feature.guard';
     OrchestratorService,
     NavigationAgent,
     ReportSummaryAgent,
+    BidExtractorAgent,
     ChatSessionService,
     AiFeatureGuard,
   ],
-  exports: [OrchestratorService],
+  exports: [OrchestratorService, BidExtractorAgent],
 })
 export class AiModule {}

@@ -142,6 +142,7 @@ import {
   OrgSettings,
   OrgSettingsSchema,
 } from '../../modules/org-settings/schemas/org-settings.schema';
+import { Bid, BidSchema } from '../../modules/bids/schemas/bid.schema';
 
 const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: User.name, schema: UserSchema },
@@ -181,6 +182,7 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: AiFeature.name, schema: AiFeatureSchema },
   { name: AiPlan.name, schema: AiPlanSchema },
   { name: OrgSettings.name, schema: OrgSettingsSchema },
+  { name: Bid.name, schema: BidSchema },
 ]);
 
 /**

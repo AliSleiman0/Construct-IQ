@@ -74,6 +74,7 @@ const STANDARD_ROLES: Array<{
       'read:dashboard',
       'read:ai',
       'use:ai',
+      'manage:bids',
     ],
   },
   {
@@ -159,6 +160,7 @@ const STANDARD_ROLES: Array<{
       'read:documents',
       'upload:documents',
       'read:ai',
+      'manage:bids',
     ],
   },
   {

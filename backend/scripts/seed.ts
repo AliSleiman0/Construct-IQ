@@ -177,6 +177,11 @@ async function main() {
     { name: 'update:settings', resource: 'settings', action: 'update', description: 'Update organization settings' },
     { name: 'manage:settings', resource: 'settings', action: 'manage', description: 'Full settings management' },
     { name: 'read:dashboard', resource: 'dashboard', action: 'read', description: 'View organization dashboard' },
+    { name: 'read:bids', resource: 'bids', action: 'read', description: 'View subcontractor bids' },
+    { name: 'create:bids', resource: 'bids', action: 'create', description: 'Upload and analyze bid PDFs' },
+    { name: 'update:bids', resource: 'bids', action: 'update', description: 'Edit bid records' },
+    { name: 'delete:bids', resource: 'bids', action: 'delete', description: 'Delete bid records' },
+    { name: 'manage:bids', resource: 'bids', action: 'manage', description: 'Full subcontractor bid management' },
   ];
 
   for (const def of permissionDefs) {
@@ -210,6 +215,7 @@ async function main() {
       'manage:documents',
       'read:dashboard',
       'read:ai', 'use:ai',
+      'manage:bids',
     ],
     PROCUREMENT: [
       'read:projects', 'read:users', 'read:tasks', 'read:budget',
@@ -219,6 +225,7 @@ async function main() {
       'read:material_requests', 'create:material_requests', 'approve:material_requests', 'manage:material_requests',
       'update:deliveries', 'manage:deliveries', 'read:deliveries',
       'read:documents', 'upload:documents', 'read:ai',
+      'manage:bids',
     ],
     SURVEYOR: [
       'read:projects', 'read:users', 'read:tasks',

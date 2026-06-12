@@ -65,6 +65,12 @@ export const AI_FEATURES = {
     description: 'Estimate quantities directly from construction drawings with AI vision.',
     isActive: false,
   },
+  AI_BID_ANALYSIS: {
+    key: 'ai_bid_analysis',
+    name: 'AI Subcontractor Bid Analyzer',
+    description: 'Extract price, terms, warranties, and red flags from subcontractor bid PDFs and compare them side-by-side.',
+    isActive: true,
+  },
 } as const satisfies Record<string, AiFeatureDefinition>;
 
 /** Union type of all valid AI feature keys — use this for type-safe checks. */
