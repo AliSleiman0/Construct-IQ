@@ -49,6 +49,7 @@
     "openai": "^6.34.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pdf-parse": "^1.1.4",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1"
   },
@@ -63,6 +64,7 @@
     "@types/jest": "^29.5.12",
     "@types/node": "^20.11.5",
     "@types/passport-jwt": "^4.0.1",
+    "@types/pdf-parse": "^1.1.5",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.56.0",

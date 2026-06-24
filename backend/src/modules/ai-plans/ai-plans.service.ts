@@ -39,6 +39,7 @@ const SEED_TIERS: AiPlanSeed[] = [
       AI_FEATURES.AI_ASSISTANT.key,
       AI_FEATURES.AI_REPORT_SUMMARY.key,
       AI_FEATURES.AI_SUPPLIER_SEARCH.key,
+      AI_FEATURES.AI_BID_ANALYSIS.key,
     ],
     isPopular: true,
   },
@@ -54,6 +55,7 @@ const SEED_TIERS: AiPlanSeed[] = [
       AI_FEATURES.AI_DOC_SEARCH.key,
       AI_FEATURES.AI_RISK_DETECTION.key,
       AI_FEATURES.AI_TAKEOFF.key,
+      AI_FEATURES.AI_BID_ANALYSIS.key,
     ],
   },
 ];

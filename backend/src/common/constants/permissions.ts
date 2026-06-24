@@ -149,6 +149,15 @@ export const PERMISSIONS = {
     USE: 'use:ai',
   },
 
+  // ── Bids (Subcontractor Bid Analyzer) ─────────────────────
+  BIDS: {
+    READ: 'read:bids',
+    CREATE: 'create:bids',
+    UPDATE: 'update:bids',
+    DELETE: 'delete:bids',
+    MANAGE: 'manage:bids',
+  },
+
   // ── Support Tickets ───────────────────────────────────────
   TICKETS: {
     READ: 'read:tickets',

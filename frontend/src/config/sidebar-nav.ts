@@ -35,6 +35,7 @@ import ApartmentIcon from '@mui/icons-material/Apartment';
 import HomeIcon from '@mui/icons-material/Home';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import PaymentIcon from '@mui/icons-material/Payment';
+import GavelIcon from '@mui/icons-material/Gavel';
 import type { Role } from './roles';
 
 export interface NavItem {
@@ -84,6 +85,7 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Issues', href: '/pm/issues', icon: ReportProblemIcon },
     { label: 'Budget', href: '/pm/budget', icon: AccountBalanceWalletIcon },
     { label: 'Procurement', href: '/pm/procurement', icon: LocalShippingIcon },
+    { label: 'Bids', href: '/pm/bids', icon: GavelIcon },
     { label: 'Documents', href: '/pm/documents', icon: FolderIcon },
   ],
 
@@ -93,6 +95,7 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Suppliers', href: '/procurement/suppliers', icon: StoreIcon },
     { label: 'Purchase Orders', href: '/procurement/orders', icon: ShoppingCartIcon },
     { label: 'Deliveries', href: '/procurement/deliveries', icon: LocalShippingIcon },
+    { label: 'Bids', href: '/procurement/bids', icon: GavelIcon },
   ],
 
   SURVEYOR: [
