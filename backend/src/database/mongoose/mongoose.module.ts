@@ -28,6 +28,10 @@ import {
   Project,
   ProjectSchema,
 } from '../../modules/projects/schemas/project.schema';
+import {
+  CadDrawing,
+  CadDrawingSchema,
+} from '../../modules/projects/schemas/cad-drawing.schema';
 import { Phase, PhaseSchema } from '../../modules/projects/schemas/phase.schema';
 import {
   Milestone,
@@ -152,6 +156,7 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: ChatSession.name, schema: ChatSessionSchema },
   { name: ChatMessage.name, schema: ChatMessageSchema },
   { name: Project.name, schema: ProjectSchema },
+  { name: CadDrawing.name, schema: CadDrawingSchema },
   { name: Phase.name, schema: PhaseSchema },
   { name: Milestone.name, schema: MilestoneSchema },
   { name: Task.name, schema: TaskSchema },

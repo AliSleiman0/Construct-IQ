@@ -37,6 +37,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { OrgSettingsModule } from './modules/org-settings/org-settings.module';
 import { SupportTicketsModule } from './modules/support-tickets/support-tickets.module';
 import { BidsModule } from './modules/bids/bids.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { BidsModule } from './modules/bids/bids.module';
     OrgSettingsModule,
     SupportTicketsModule,
     BidsModule,
+    HealthModule,
   ],
   providers: [
     {

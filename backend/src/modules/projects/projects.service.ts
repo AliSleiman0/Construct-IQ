@@ -13,11 +13,14 @@ import { Project, ProjectDocument } from './schemas/project.schema';
 import { Task, TaskDocument } from './schemas/task.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
 import { Issue, IssueDocument } from '../issues/schemas/issue.schema';
+import { DocumentEntity, DocumentEntityDocument } from '../documents/schemas/document.schema';
+import { CadDrawing, CadDrawingDocument } from './schemas/cad-drawing.schema';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { UpdateProjectMemberDto } from './dto/update-project-member.dto';
-import { IssueStatus, ProjectStatus } from '../../common/enums';
+import { IssueStatus, ProjectStatus, DocumentType } from '../../common/enums';
+import { ApsService } from '../aps/aps.service';
 
 export interface ProjectListResponse {
   id: string;
@@ -44,6 +47,9 @@ export class ProjectsService {
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
+    @InjectModel(DocumentEntity.name) private documentModel: Model<DocumentEntityDocument>,
+    @InjectModel(CadDrawing.name) private cadDrawingModel: Model<CadDrawingDocument>,
+    private readonly apsService: ApsService,
   ) {}
 
   private toProjectListItem(
@@ -89,6 +95,8 @@ export class ProjectsService {
       members: [{ userId: createdById, role: 'Admin', joinedAt: new Date() }],
       clientPortalToken: randomBytes(32).toString('hex'),
       clientPortalEnabled: true,
+      autocadToken: randomBytes(32).toString('hex'),
+      autocadTokenEnabled: true,
     });
 
     return this.toProjectListItem(project.toObject(), {
@@ -540,5 +548,231 @@ export class ProjectsService {
       },
       team,
     };
+  }
+
+  // ── AutoCAD Engineer Portal ───────────────────────────────────────────────
+
+  async getAutocadLinkInfo(
+    projectId: string,
+    organizationId: string,
+    userId: string,
+    isSuperAdmin: boolean,
+  ) {
+    const filter = isSuperAdmin ? { _id: projectId } : { _id: projectId, organizationId };
+    const project = await this.projectModel.findOne(filter).lean();
+    if (!project) throw new NotFoundException('Project not found');
+
+    if (!isSuperAdmin) {
+      const isMember = (project.members ?? []).some((m) => m.userId === userId);
+      if (!isMember) throw new ForbiddenException('You are not a member of this project');
+    }
+
+    return {
+      token: project.autocadToken,
+      enabled: project.autocadTokenEnabled,
+      apsConfigured: this.apsService.isConfigured(),
+    };
+  }
+
+  async regenerateAutocadToken(
+    projectId: string,
+    organizationId: string,
+    isSuperAdmin: boolean,
+  ) {
+    const filter = isSuperAdmin ? { _id: projectId } : { _id: projectId, organizationId };
+    const project = await this.projectModel.findOne(filter);
+    if (!project) throw new NotFoundException('Project not found');
+
+    project.autocadToken = randomBytes(32).toString('hex');
+    await project.save();
+
+    return { token: project.autocadToken, enabled: project.autocadTokenEnabled };
+  }
+
+  async toggleAutocadLink(
+    projectId: string,
+    organizationId: string,
+    enabled: boolean,
+    isSuperAdmin: boolean,
+  ) {
+    const filter = isSuperAdmin ? { _id: projectId } : { _id: projectId, organizationId };
+    const project = await this.projectModel.findOne(filter);
+    if (!project) throw new NotFoundException('Project not found');
+
+    project.autocadTokenEnabled = enabled;
+    await project.save();
+
+    return { token: project.autocadToken, enabled: project.autocadTokenEnabled };
+  }
+
+  /** Public — no auth. Returns project info + uploaded drawings. */
+  async getAutocadPortalData(token: string) {
+    const project = await this.projectModel
+      .findOne({ autocadToken: token, deletedAt: null })
+      .lean();
+
+    if (!project) throw new NotFoundException('AutoCAD portal link not found');
+    if (!project.autocadTokenEnabled) {
+      throw new GoneException('This AutoCAD portal link has been disabled');
+    }
+
+    const drawings = await this.documentModel
+      .find({
+        projectId: project._id,
+        type: DocumentType.DRAWING,
+        'metadata.source': 'autocad-portal',
+        deletedAt: null,
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return {
+      project: {
+        name: project.name,
+        description: project.description,
+        status: project.status,
+        code: project.code,
+        location: project.location,
+        startDate: project.startDate,
+        endDate: project.endDate,
+      },
+      drawings: drawings.map((d) => ({
+        id: String(d._id),
+        name: d.name,
+        mimeType: d.mimeType,
+        sizeBytes: d.sizeBytes,
+        uploadedAt: d.createdAt,
+        apsUrn: (d.metadata as any)?.apsUrn ?? null,
+        translationStatus: (d.metadata as any)?.translationStatus ?? 'pending',
+      })),
+      apsConfigured: this.apsService.isConfigured(),
+    };
+  }
+
+  /** Public — no auth. Called after engineer uploads a file via the portal. */
+  async saveAutocadDrawing(
+    token: string,
+    file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
+  ) {
+    const project = await this.projectModel
+      .findOne({ autocadToken: token, deletedAt: null })
+      .lean();
+
+    if (!project) throw new NotFoundException('AutoCAD portal link not found');
+    if (!project.autocadTokenEnabled) {
+      throw new GoneException('This AutoCAD portal link has been disabled');
+    }
+
+    const objectKey = `${project._id}/${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    let apsUrn: string | null = null;
+    let translationStatus = 'not_configured';
+
+    if (this.apsService.isConfigured()) {
+      try {
+        const result = await this.apsService.uploadToOss(objectKey, file.buffer, file.mimetype);
+        apsUrn = result.urn;
+        translationStatus = 'pending';
+        // Fire-and-forget — translation is async; status polled separately
+        this.apsService.triggerTranslation(result.urn).catch(() => {});
+      } catch {
+        translationStatus = 'upload_failed';
+      }
+    }
+
+    const doc = await this.documentModel.create({
+      organizationId: project.organizationId,
+      projectId: project._id,
+      type: DocumentType.DRAWING,
+      name: file.originalname,
+      fileKey: objectKey,
+      mimeType: file.mimetype,
+      sizeBytes: file.size,
+      uploadedById: null,
+      metadata: {
+        source: 'autocad-portal',
+        apsUrn,
+        translationStatus,
+      },
+    });
+
+    return {
+      id: String(doc._id),
+      name: doc.name,
+      apsUrn,
+      translationStatus,
+      uploadedAt: doc.createdAt,
+    };
+  }
+
+  // ── CAD Drawing (canvas JSON) ─────────────────────────────────────────────
+
+  async loadCadDrawing(token: string) {
+    const project = await this.projectModel
+      .findOne({ autocadToken: token, deletedAt: null })
+      .lean();
+    if (!project) throw new NotFoundException('AutoCAD portal link not found');
+    if (!project.autocadTokenEnabled) throw new GoneException('This portal link has been disabled');
+
+    const drawing = await this.cadDrawingModel
+      .findOne({ projectId: project._id })
+      .lean();
+
+    return {
+      project: { name: project.name, description: project.description, status: project.status },
+      canvasJson: drawing?.canvasJson ?? null,
+      version: drawing?.version ?? 0,
+    };
+  }
+
+  async saveCadDrawing(token: string, canvasJson: string) {
+    const project = await this.projectModel
+      .findOne({ autocadToken: token, deletedAt: null })
+      .lean();
+    if (!project) throw new NotFoundException('AutoCAD portal link not found');
+    if (!project.autocadTokenEnabled) throw new GoneException('This portal link has been disabled');
+
+    await this.cadDrawingModel.findOneAndUpdate(
+      { projectId: project._id },
+      {
+        $set: { canvasJson, organizationId: project.organizationId },
+        $inc: { version: 1 },
+      },
+      { upsert: true, new: true },
+    );
+
+    return { saved: true };
+  }
+
+  /** Public — polls APS for the current translation status and updates the stored record. */
+  async refreshDrawingTranslationStatus(token: string, drawingId: string) {
+    const project = await this.projectModel
+      .findOne({ autocadToken: token, deletedAt: null })
+      .lean();
+
+    if (!project) throw new NotFoundException('AutoCAD portal link not found');
+
+    const doc = await this.documentModel.findOne({
+      _id: drawingId,
+      projectId: project._id,
+      deletedAt: null,
+    });
+    if (!doc) throw new NotFoundException('Drawing not found');
+
+    const apsUrn = (doc.metadata as any)?.apsUrn;
+    if (!apsUrn || !this.apsService.isConfigured()) {
+      return { translationStatus: (doc.metadata as any)?.translationStatus ?? 'not_configured' };
+    }
+
+    const { status } = await this.apsService.getManifest(apsUrn);
+    const translationStatus =
+      status === 'success' ? 'success' :
+      status === 'failed'  ? 'failed'  :
+      'processing';
+
+    (doc.metadata as any) = { ...(doc.metadata as any), translationStatus };
+    doc.markModified('metadata');
+    await doc.save();
+
+    return { translationStatus };
   }
 }
