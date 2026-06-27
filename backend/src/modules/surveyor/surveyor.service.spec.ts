@@ -255,6 +255,45 @@ describe('SurveyorService', () => {
     });
   });
 
+  describe('#29 — financial bounds', () => {
+    it('createValuation rejects retention greater than the amount', async () => {
+      valuationModel.findOne.mockResolvedValue(null); // no duplicate period
+      await expect(
+        service.createValuation('org-1', { projectId: 'p1', period: 'Jun', amountUsd: 1000, retentionUsd: 1200 } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(valuationModel.create).not.toHaveBeenCalled();
+    });
+
+    it('createValuation accepts retention within the amount', async () => {
+      valuationModel.findOne.mockResolvedValue(null);
+      valuationModel.create.mockResolvedValue({ _id: 'val-1' });
+      await service.createValuation('org-1', { projectId: 'p1', period: 'Jul', amountUsd: 1000, retentionUsd: 50 } as any);
+      expect(valuationModel.create).toHaveBeenCalled();
+    });
+
+    it('updateValuation rejects when the new retention exceeds the (effective) amount', async () => {
+      const doc: any = { amountUsd: 1000, retentionUsd: 0, status: ValuationStatus.DRAFT, save: jest.fn(), toObject: () => ({}) };
+      valuationModel.findOne.mockResolvedValue(doc);
+      await expect(
+        service.updateValuation('val-1', 'org-1', { retentionUsd: 1500 } as any, false),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(doc.save).not.toHaveBeenCalled();
+    });
+
+    it('createVariation rejects a zero impact amount', async () => {
+      await expect(
+        service.createVariation('org-1', { projectId: 'p1', title: 'No-op', impactAmount: 0 } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(variationModel.create).not.toHaveBeenCalled();
+    });
+
+    it('createVariation accepts a negative (deduction) impact amount', async () => {
+      variationModel.create.mockResolvedValue({ _id: 'v-1' });
+      await service.createVariation('org-1', { projectId: 'p1', title: 'Deduct', impactAmount: -500 } as any);
+      expect(variationModel.create).toHaveBeenCalled();
+    });
+  });
+
   describe('updateValuation (#28 — transition-guarded status)', () => {
     const makeValuation = (status: ValuationStatus) => {
       const doc: any = { status, amountUsd: 100, retentionUsd: 0 };

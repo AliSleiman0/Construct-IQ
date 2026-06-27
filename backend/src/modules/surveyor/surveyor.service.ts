@@ -29,6 +29,13 @@ const VALUATION_TRANSITIONS: TransitionMap<ValuationStatus> = {
   [ValuationStatus.DRAFT]: [ValuationStatus.SUBMITTED],
 };
 
+/** Retention is withheld from the certified amount — it can never exceed it. */
+function assertRetentionWithinAmount(amountUsd: number, retentionUsd: number): void {
+  if (retentionUsd > amountUsd) {
+    throw new BadRequestException('Retention cannot exceed the valuation amount');
+  }
+}
+
 /**
  * Who is asking. When `orgWide` is false the caller only sees cost rows for the
  * projects they belong to (field roles, read-only budget viewers); when true
@@ -164,6 +171,9 @@ export class SurveyorService {
   }
 
   async createVariation(organizationId: string, dto: CreateVariationDto): Promise<any> {
+    if (dto.impactAmount === 0) {
+      throw new BadRequestException('Variation impact amount must be non-zero');
+    }
     return this.variationModel.create({
       organizationId,
       projectId: dto.projectId,
@@ -186,7 +196,12 @@ export class SurveyorService {
     // Status transitions are owned by approveVariation (guards the prior state).
     if (dto.title !== undefined) variation.title = dto.title;
     if (dto.description !== undefined) variation.description = dto.description ?? null;
-    if (dto.impactAmount !== undefined) variation.impactAmount = dto.impactAmount;
+    if (dto.impactAmount !== undefined) {
+      if (dto.impactAmount === 0) {
+        throw new BadRequestException('Variation impact amount must be non-zero');
+      }
+      variation.impactAmount = dto.impactAmount;
+    }
 
     await variation.save();
     return variation.toObject();
@@ -230,6 +245,8 @@ export class SurveyorService {
     const existing = await this.valuationModel.findOne({ projectId: dto.projectId, period: dto.period });
     if (existing) throw new ConflictException('A valuation for this period already exists');
 
+    assertRetentionWithinAmount(dto.amountUsd, dto.retentionUsd ?? 0);
+
     return this.valuationModel.create({
       organizationId,
       projectId: dto.projectId,
@@ -248,6 +265,10 @@ export class SurveyorService {
     if (!valuation) throw new NotFoundException('Valuation not found');
 
     // Explicit assignment only — status is transition-guarded, never blindly copied.
+    // Validate retention against the effective amount (either may change in this PATCH).
+    const nextAmount = dto.amountUsd ?? valuation.amountUsd;
+    const nextRetention = dto.retentionUsd ?? valuation.retentionUsd;
+    assertRetentionWithinAmount(nextAmount, nextRetention);
     if (dto.amountUsd !== undefined) valuation.amountUsd = dto.amountUsd;
     if (dto.retentionUsd !== undefined) valuation.retentionUsd = dto.retentionUsd;
     if (dto.status !== undefined) {

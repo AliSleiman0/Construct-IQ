@@ -1,10 +1,11 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { BudgetService } from './budget.service';
 import { Budget } from './schemas/budget.schema';
 import { BudgetLine } from './schemas/budget-line.schema';
 import { Expense } from './schemas/expense.schema';
+import { PurchaseOrder } from '../procurement/schemas/purchase-order.schema';
 
 /**
  * Unit tests for BudgetService — focused on the expense list/delete additions
@@ -31,6 +32,7 @@ describe('BudgetService', () => {
         { provide: getModelToken(Budget.name), useValue: budgetModel },
         { provide: getModelToken(BudgetLine.name), useValue: lineModel },
         { provide: getModelToken(Expense.name), useValue: expenseModel },
+        { provide: getModelToken(PurchaseOrder.name), useValue: {} },
       ],
     }).compile();
     service = moduleRef.get(BudgetService);
@@ -124,5 +126,49 @@ describe('BudgetService', () => {
       expenseModel.findOneAndDelete.mockResolvedValue(null);
       await expect(service.removeExpense('b-1', 'e-x', 'org-1', false)).rejects.toBeInstanceOf(NotFoundException);
     });
+  });
+});
+
+/**
+ * #29 — budget LINE allocations may not exceed budget.totalAmount. (Expenses are
+ * intentionally not capped — cost overruns must be recordable.)
+ */
+describe('BudgetService.addLine (#29 allocation cap)', () => {
+  let service: BudgetService;
+  let budgetModel: any;
+  let lineModel: any;
+
+  const leanOnce = (result: any) => ({ lean: () => Promise.resolve(result) });
+
+  beforeEach(async () => {
+    budgetModel = { findOne: jest.fn().mockReturnValue(leanOnce({ _id: 'b-1', organizationId: 'org-1', totalAmount: 1000 })) };
+    lineModel = {
+      aggregate: jest.fn().mockResolvedValue([{ total: 0 }]),
+      create: jest.fn().mockImplementation((d) => Promise.resolve({ _id: 'l-1', ...d })),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BudgetService,
+        { provide: getModelToken(Budget.name), useValue: budgetModel },
+        { provide: getModelToken(BudgetLine.name), useValue: lineModel },
+        { provide: getModelToken(Expense.name), useValue: {} },
+        { provide: getModelToken(PurchaseOrder.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(BudgetService);
+  });
+
+  it('accepts a line whose allocation stays within the budget total', async () => {
+    lineModel.aggregate.mockResolvedValue([{ total: 700 }]); // 700 + 300 = 1000 (ok)
+    await service.addLine('b-1', 'org-1', { category: 'Labor', plannedAmount: 300 } as any, false);
+    expect(lineModel.create).toHaveBeenCalled();
+  });
+
+  it('rejects a line whose allocation would exceed the budget total', async () => {
+    lineModel.aggregate.mockResolvedValue([{ total: 900 }]); // 900 + 200 = 1100 > 1000
+    await expect(
+      service.addLine('b-1', 'org-1', { category: 'Materials', plannedAmount: 200 } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(lineModel.create).not.toHaveBeenCalled();
   });
 });

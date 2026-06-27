@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Budget, BudgetDocument } from './schemas/budget.schema';
@@ -76,6 +76,17 @@ export class BudgetService {
     const filter = isSuperAdmin ? { _id: budgetId } : { _id: budgetId, organizationId };
     const budget = await this.budgetModel.findOne(filter).lean();
     if (!budget) throw new NotFoundException('Budget not found');
+
+    // Planned allocations across lines may not exceed the budget total. (Expenses
+    // are intentionally NOT capped — actual cost overruns must be recordable.)
+    const [agg] = await this.lineModel.aggregate([
+      { $match: { budgetId } },
+      { $group: { _id: null, total: { $sum: '$plannedAmount' } } },
+    ]);
+    const allocated = agg?.total ?? 0;
+    if (allocated + dto.plannedAmount > (budget as any).totalAmount) {
+      throw new BadRequestException('Budget line allocations would exceed the budget total');
+    }
 
     return this.lineModel.create({
       budgetId,
