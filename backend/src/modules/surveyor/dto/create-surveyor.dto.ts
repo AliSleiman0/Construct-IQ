@@ -6,7 +6,6 @@ import {
   Min,
   MaxLength,
 } from 'class-validator';
-import { VariationStatus } from '../schemas/variation.schema';
 import { ValuationStatus } from '../schemas/valuation.schema';
 import { IsEnum } from 'class-validator';
 
@@ -32,7 +31,9 @@ export class UpdateVariationDto {
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsNumber() impactAmount?: number;
-  @IsOptional() @IsEnum(VariationStatus) status?: VariationStatus;
+  // `status` is intentionally NOT settable here — APPROVED/REJECTED transitions go
+  // through the dedicated guarded endpoint (POST /variations/:id/approve). With the
+  // global forbidNonWhitelisted pipe, sending `status` to this PATCH now 400s.
 }
 
 export class CreateValuationDto {

@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { Invoice } from './schemas/invoice.schema';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -69,5 +69,75 @@ describe('BillingService — create (issue #23)', () => {
     invoiceModel.findOne.mockResolvedValue({ _id: 'dupe' });
     await expect(service.create(dto(), true)).rejects.toBeInstanceOf(ConflictException);
     expect(invoiceModel.create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Unit tests for BillingService.update (issue #27): invoice status changes are
+ * Super-Admin-only AND must follow the legal payment lifecycle — no jumping
+ * straight to PAID, no reviving terminal states.
+ */
+describe('BillingService — update (issue #27)', () => {
+  let service: BillingService;
+  let invoiceModel: any;
+
+  const makeInvoice = (status: InvoiceStatus) => {
+    const doc: any = { _id: 'inv-1', status, paidAt: null, notes: null };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    doc.toObject = jest.fn().mockReturnValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    invoiceModel = { findOne: jest.fn() };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BillingService,
+        { provide: getModelToken(Invoice.name), useValue: invoiceModel },
+      ],
+    }).compile();
+    service = moduleRef.get(BillingService);
+  });
+
+  it('rejects a non-super-admin caller with Forbidden before any lookup', async () => {
+    await expect(
+      service.update('inv-1', { status: InvoiceStatus.PAID } as any, 'org-A', false),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(invoiceModel.findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects an illegal transition DRAFT → PAID (400) and does not save', async () => {
+    const doc = makeInvoice(InvoiceStatus.DRAFT);
+    invoiceModel.findOne.mockResolvedValue(doc);
+    await expect(
+      service.update('inv-1', { status: InvoiceStatus.PAID } as any, 'org-A', true),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it('allows the legal transition ISSUED → PAID and stamps paidAt', async () => {
+    const doc = makeInvoice(InvoiceStatus.ISSUED);
+    invoiceModel.findOne.mockResolvedValue(doc);
+    await service.update('inv-1', { status: InvoiceStatus.PAID } as any, 'org-A', true);
+    expect(doc.status).toBe(InvoiceStatus.PAID);
+    expect(doc.paidAt).toBeInstanceOf(Date);
+    expect(doc.save).toHaveBeenCalled();
+  });
+
+  it('rejects moving out of a terminal PAID state (400)', async () => {
+    const doc = makeInvoice(InvoiceStatus.PAID);
+    invoiceModel.findOne.mockResolvedValue(doc);
+    await expect(
+      service.update('inv-1', { status: InvoiceStatus.ISSUED } as any, 'org-A', true),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows a notes-only update without a status change', async () => {
+    const doc = makeInvoice(InvoiceStatus.ISSUED);
+    invoiceModel.findOne.mockResolvedValue(doc);
+    await service.update('inv-1', { notes: 'follow up' } as any, 'org-A', true);
+    expect(doc.notes).toBe('follow up');
+    expect(doc.status).toBe(InvoiceStatus.ISSUED);
+    expect(doc.save).toHaveBeenCalled();
   });
 });

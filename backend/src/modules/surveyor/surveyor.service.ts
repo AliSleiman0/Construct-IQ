@@ -173,7 +173,13 @@ export class SurveyorService {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const variation = await this.variationModel.findOne(filter);
     if (!variation) throw new NotFoundException('Variation not found');
-    Object.assign(variation, dto);
+
+    // Explicit field assignment only — never `status`/`approvedById`/`approvedAt`.
+    // Status transitions are owned by approveVariation (guards the prior state).
+    if (dto.title !== undefined) variation.title = dto.title;
+    if (dto.description !== undefined) variation.description = dto.description ?? null;
+    if (dto.impactAmount !== undefined) variation.impactAmount = dto.impactAmount;
+
     await variation.save();
     return variation.toObject();
   }

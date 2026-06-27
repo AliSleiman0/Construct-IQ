@@ -173,6 +173,36 @@ describe('SurveyorService', () => {
     });
   });
 
+  describe('updateVariation (#26 — status not settable via generic PATCH)', () => {
+    const makeVariation = (over: Partial<any> = {}) => {
+      const doc: any = {
+        title: 'Old', description: 'old', impactAmount: 100,
+        status: VariationStatus.PENDING, approvedById: null, approvedAt: null, ...over,
+      };
+      doc.save = jest.fn().mockResolvedValue(doc);
+      doc.toObject = jest.fn().mockReturnValue(doc);
+      return doc;
+    };
+
+    it('updates only editable fields and never touches status/approver', async () => {
+      const doc = makeVariation();
+      variationModel.findOne.mockResolvedValue(doc);
+      // A tampering caller passes status; the service must ignore it.
+      await service.updateVariation('v-1', 'org-1', { title: 'New', impactAmount: 5000, status: VariationStatus.APPROVED } as any, false);
+      expect(doc.title).toBe('New');
+      expect(doc.impactAmount).toBe(5000);
+      expect(doc.status).toBe(VariationStatus.PENDING); // unchanged
+      expect(doc.approvedById).toBeNull();
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('throws NotFound (org-scoped) when missing', async () => {
+      variationModel.findOne.mockResolvedValue(null);
+      await expect(service.updateVariation('v-1', 'org-1', { title: 'x' } as any, false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(variationModel.findOne).toHaveBeenCalledWith({ _id: 'v-1', organizationId: 'org-1' });
+    });
+  });
+
   describe('approveVariation', () => {
     it('approves a PENDING variation: stamps approver + APPROVED', async () => {
       const doc: any = { status: VariationStatus.PENDING, save: jest.fn(), toObject: () => ({ _id: 'v-1' }) };

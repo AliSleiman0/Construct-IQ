@@ -4,9 +4,17 @@ import { Model } from 'mongoose';
 import { Invoice, InvoiceDocument } from './schemas/invoice.schema';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InvoiceStatus } from '../../common/enums';
+import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
 import { PartialType } from '@nestjs/mapped-types';
 
 class UpdateInvoiceDto extends PartialType(CreateInvoiceDto) {}
+
+// Legal invoice lifecycle. PAID and VOID are terminal (omitted = no outgoing moves).
+const INVOICE_TRANSITIONS: TransitionMap<InvoiceStatus> = {
+  [InvoiceStatus.DRAFT]: [InvoiceStatus.ISSUED, InvoiceStatus.VOID],
+  [InvoiceStatus.ISSUED]: [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.VOID],
+  [InvoiceStatus.OVERDUE]: [InvoiceStatus.PAID, InvoiceStatus.VOID],
+};
 
 @Injectable()
 export class BillingService {
@@ -47,13 +55,23 @@ export class BillingService {
   }
 
   async update(id: string, dto: UpdateInvoiceDto, organizationId: string, isSuperAdmin: boolean): Promise<any> {
+    // Platform subscription invoices are managed by the platform operator only —
+    // consistent with create(). Closes the manage:company guard bypass for Org Admins.
+    if (!isSuperAdmin) {
+      throw new ForbiddenException('Only platform administrators can modify invoices');
+    }
+
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const invoice = await this.invoiceModel.findOne(filter);
     if (!invoice) throw new NotFoundException('Invoice not found');
 
-    if (dto.status !== undefined) invoice.status = dto.status;
-    if (dto.status === InvoiceStatus.PAID && !invoice.paidAt) {
-      invoice.paidAt = new Date();
+    if (dto.status !== undefined) {
+      // Enforce the payment lifecycle — no jumping straight to PAID, no reviving terminal states.
+      assertStatusTransition('invoice', invoice.status, dto.status, INVOICE_TRANSITIONS);
+      invoice.status = dto.status;
+      if (dto.status === InvoiceStatus.PAID && !invoice.paidAt) {
+        invoice.paidAt = new Date();
+      }
     }
     if (dto.notes !== undefined) invoice.notes = dto.notes ?? null;
 
