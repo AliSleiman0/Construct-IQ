@@ -39,7 +39,7 @@ export class TicketsController {
   }
 
   @Post()
-  @RequirePermissions(PERMISSIONS.TICKETS.READ)
+  @RequirePermissions(PERMISSIONS.TICKETS.MANAGE)
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateTicketDto): Promise<any> {
     return this.ticketsService.create(user.organizationId, user.sub, dto);
   }
@@ -63,7 +63,7 @@ export class TicketsController {
   }
 
   @Post(':id/comments')
-  @RequirePermissions(PERMISSIONS.TICKETS.READ)
+  @RequirePermissions(PERMISSIONS.TICKETS.MANAGE)
   addComment(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: AddTicketCommentDto): Promise<any> {
     return this.ticketsService.addComment(id, user.organizationId, user.sub, dto, user.isSuperAdmin);
   }
