@@ -78,7 +78,7 @@ export class TasksController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateTaskDto,
   ): Promise<any> {
-    return this.tasksService.update(id, user.organizationId, dto, user.isSuperAdmin);
+    return this.tasksService.update(id, user.organizationId, dto, user.isSuperAdmin, user.sub);
   }
 
   @Patch(':id/assign')

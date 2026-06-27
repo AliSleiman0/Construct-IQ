@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { IssuesController } from './issues.controller';
 import { IssuesService } from './issues.service';
+import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
+  imports: [AuditModule, NotificationsModule],
   controllers: [IssuesController],
   providers: [IssuesService],
   exports: [IssuesService],

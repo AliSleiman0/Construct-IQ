@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Model } from 'mongoose';
 import { Task, TaskDocument } from '../projects/schemas/task.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
@@ -7,6 +8,8 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { AddTaskCommentDto } from './dto/add-task-comment.dto';
 import { TaskStatus } from '../../common/enums';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Who is asking. When `orgWide` is false the caller only sees tasks for the
@@ -22,7 +25,58 @@ export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
+  }
+
+  /**
+   * Daily sweep: alert the assignee of every task that is past its due date and
+   * still open. Each task is alerted once — `overdueNotifiedAt` is stamped so a
+   * later run never re-notifies. The soft-delete plugin already excludes deleted
+   * tasks from the query. Returns the count for logging/tests.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_8AM)
+  async notifyOverdueTasks(): Promise<{ notified: number }> {
+    const now = new Date();
+    const overdue = await this.taskModel
+      .find({
+        dueDate: { $ne: null, $lt: now },
+        status: { $ne: TaskStatus.DONE },
+        overdueNotifiedAt: null,
+      })
+      .select('_id title organizationId assignedToId')
+      .lean();
+    if (overdue.length === 0) return { notified: 0 };
+
+    for (const t of overdue as any[]) {
+      this.notify(t.organizationId, [t.assignedToId], {
+        title: 'Task overdue',
+        message: `Task "${t.title}" is past its due date.`,
+        type: 'warning',
+        entityType: 'TASK',
+        entityId: t._id,
+      });
+    }
+    await this.taskModel.updateMany(
+      { _id: { $in: overdue.map((t: any) => t._id) } },
+      { overdueNotifiedAt: now },
+    );
+    return { notified: overdue.length };
+  }
 
   /** Project ids the user is a member of, within their org. */
   private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
@@ -126,10 +180,13 @@ export class TasksService {
     organizationId: string,
     dto: UpdateTaskDto,
     isSuperAdmin: boolean,
+    actorUserId?: string,
   ): Promise<any> {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const task = await this.taskModel.findOne(filter);
     if (!task) throw new NotFoundException('Task not found');
+
+    const prevStatus = task.status;
 
     if (dto.title !== undefined) task.title = dto.title;
     if (dto.description !== undefined) task.description = dto.description ?? null;
@@ -153,6 +210,27 @@ export class TasksService {
     }
 
     await task.save();
+
+    if (dto.status !== undefined && dto.status !== prevStatus) {
+      const done = task.status === TaskStatus.DONE;
+      this.audit({
+        organizationId: task.organizationId,
+        actorUserId,
+        projectId: task.projectId,
+        action: 'UPDATE',
+        entityType: 'TASK',
+        entityId: task._id,
+        metadata: { field: 'status', from: prevStatus, to: task.status },
+      });
+      this.notify(task.organizationId, [task.createdById, task.assignedToId].filter((u) => u !== actorUserId), {
+        title: done ? 'Task completed' : 'Task status changed',
+        message: `Task "${task.title}" is now ${task.status}.`,
+        type: done ? 'success' : 'info',
+        entityType: 'TASK',
+        entityId: task._id,
+      });
+    }
+
     return task.toObject();
   }
 
@@ -221,6 +299,22 @@ export class TasksService {
 
     task.comments.push({ authorId, body: dto.body } as any);
     await task.save();
+
+    this.audit({
+      organizationId: task.organizationId,
+      actorUserId: authorId,
+      projectId: task.projectId,
+      action: 'COMMENT',
+      entityType: 'TASK',
+      entityId: task._id,
+    });
+    this.notify(task.organizationId, [task.createdById, task.assignedToId].filter((u) => u !== authorId), {
+      title: 'New comment on task',
+      message: `A comment was added to "${task.title}".`,
+      type: 'info',
+      entityType: 'TASK',
+      entityId: task._id,
+    });
 
     return task.comments[task.comments.length - 1];
   }

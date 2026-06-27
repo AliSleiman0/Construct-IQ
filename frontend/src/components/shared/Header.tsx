@@ -27,7 +27,12 @@ import { useAuthStore } from '@/store/auth.store';
 import { useCompanyStore } from '@/store/company.store';
 import { useLogout } from '@/features/auth/hooks/useLogout';
 import { ROLE_LABELS } from '@/config/roles';
-import { mockNotifications, type MockNotification } from '@/mocks/notifications.mock';
+import {
+  useNotifications,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from '@/features/notifications/hooks/useNotifications';
+import Button from '@mui/material/Button';
 
 const SIDEBAR_WIDTH = 260;
 
@@ -35,7 +40,7 @@ interface HeaderProps {
   pageTitle?: string;
 }
 
-const NOTIFICATION_COLOR: Record<MockNotification['kind'], 'default' | 'info' | 'warning' | 'success' | 'error'> = {
+const NOTIFICATION_COLOR: Record<string, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
   info: 'info',
   warning: 'warning',
   success: 'success',
@@ -63,7 +68,10 @@ export function Header({ pageTitle }: HeaderProps) {
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
   const [notifAnchor, setNotifAnchor] = useState<HTMLElement | null>(null);
 
-  const unreadCount = mockNotifications.filter((n) => !n.read).length;
+  const { data: notifications = [] } = useNotifications();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const closeAccount = () => setAccountAnchor(null);
   const closeNotif = () => setNotifAnchor(null);
@@ -163,29 +171,44 @@ export function Header({ pageTitle }: HeaderProps) {
             <Typography variant="subtitle2" fontWeight={600}>
               Notifications
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {unreadCount} unread
-            </Typography>
+            {unreadCount > 0 ? (
+              <Button
+                size="small"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+                sx={{ fontSize: '0.7rem', textTransform: 'none', minWidth: 0, p: 0.25 }}
+              >
+                Mark all read
+              </Button>
+            ) : (
+              <Typography variant="caption" color="text.secondary">
+                {unreadCount} unread
+              </Typography>
+            )}
           </Box>
           <Divider />
           <List disablePadding sx={{ maxHeight: 360, overflowY: 'auto' }}>
-            {mockNotifications.length === 0 && (
+            {notifications.length === 0 && (
               <ListItem sx={{ py: 3, justifyContent: 'center' }}>
                 <Typography variant="body2" color="text.secondary">
                   You're all caught up.
                 </Typography>
               </ListItem>
             )}
-            {mockNotifications.map((n) => (
+            {notifications.map((n) => (
               <ListItem
-                key={n.id}
+                key={n._id}
                 alignItems="flex-start"
+                onClick={() => {
+                  if (!n.isRead) markRead.mutate(n._id);
+                }}
                 sx={{
                   px: 2,
                   py: 1.25,
+                  cursor: n.isRead ? 'default' : 'pointer',
                   borderBottom: '1px solid',
                   borderColor: 'divider',
-                  bgcolor: n.read ? 'transparent' : 'action.hover',
+                  bgcolor: n.isRead ? 'transparent' : 'action.hover',
                   '&:last-of-type': { borderBottom: 'none' },
                 }}
               >
@@ -193,13 +216,13 @@ export function Header({ pageTitle }: HeaderProps) {
                   primary={
                     <Box display="flex" alignItems="center" gap={1}>
                       <Chip
-                        label={n.kind}
+                        label={n.type}
                         size="small"
-                        color={NOTIFICATION_COLOR[n.kind]}
+                        color={NOTIFICATION_COLOR[n.type] ?? 'default'}
                         variant="outlined"
                         sx={{ height: 18, fontSize: '0.65rem', textTransform: 'capitalize' }}
                       />
-                      <Typography variant="body2" fontWeight={n.read ? 400 : 600}>
+                      <Typography variant="body2" fontWeight={n.isRead ? 400 : 600}>
                         {n.title}
                       </Typography>
                     </Box>
@@ -207,7 +230,7 @@ export function Header({ pageTitle }: HeaderProps) {
                   secondary={
                     <Box mt={0.5}>
                       <Typography variant="caption" color="text.secondary" component="div">
-                        {n.body}
+                        {n.message}
                       </Typography>
                       <Typography variant="caption" color="text.disabled" component="div">
                         {formatRelative(n.createdAt)}

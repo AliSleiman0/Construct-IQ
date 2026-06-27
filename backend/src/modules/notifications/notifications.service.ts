@@ -35,6 +35,22 @@ export class NotificationsService {
     });
   }
 
+  /**
+   * Fan a single notification out to several recipients. De-duplicates and drops
+   * falsy ids (so callers can pass `[createdById, assignedToId]` without guarding
+   * nulls or self-notifies — exclude the actor at the call site). One row per user.
+   */
+  async notifyMany(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Omit<CreateNotificationDto, 'organizationId' | 'userId'>,
+  ): Promise<void> {
+    const recipients = [...new Set(userIds.filter((id): id is string => !!id))];
+    await Promise.all(
+      recipients.map((userId) => this.notify({ organizationId, userId, ...payload })),
+    );
+  }
+
   async findAll(userId: string, organizationId: string): Promise<any[]> {
     return this.notificationModel
       .find({ userId, organizationId })

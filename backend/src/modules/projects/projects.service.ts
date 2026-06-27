@@ -10,6 +10,7 @@ import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model } from 'mongoose';
 import { randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { cascadeSoftDelete } from '../../database/mongoose/cascade.util';
 import { Project, ProjectDocument } from './schemas/project.schema';
 import { Task, TaskDocument } from './schemas/task.schema';
@@ -54,11 +55,21 @@ export class ProjectsService {
     @InjectConnection() private readonly connection: Connection,
     private readonly apsService: ApsService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** Fire-and-forget audit write — a logging failure must never break the op. */
   private audit(entry: Parameters<AuditService['log']>[0]): void {
     this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
   }
 
   private toProjectListItem(
@@ -236,6 +247,7 @@ export class ProjectsService {
     organizationId: string,
     dto: UpdateProjectDto,
     isSuperAdmin = false,
+    actorUserId?: string,
   ) {
     const filter = isSuperAdmin
       ? { _id: id }
@@ -243,6 +255,8 @@ export class ProjectsService {
 
     const project = await this.projectModel.findOne(filter);
     if (!project) throw new NotFoundException('Project not found');
+
+    const prevStatus = project.status;
 
     if (dto.name !== undefined) project.name = dto.name;
     if (dto.description !== undefined) project.description = dto.description ?? null;
@@ -258,6 +272,27 @@ export class ProjectsService {
     if (dto.currency !== undefined) project.currency = dto.currency ?? 'USD';
 
     await project.save();
+
+    // Project status transitions are team-significant: audit + notify members.
+    if (dto.status !== undefined && dto.status !== prevStatus) {
+      this.audit({
+        organizationId: project.organizationId,
+        actorUserId,
+        projectId: id,
+        action: 'UPDATE',
+        entityType: 'PROJECT',
+        entityId: id,
+        metadata: { field: 'status', from: prevStatus, to: project.status },
+      });
+      const members = project.members.map((m: any) => m.userId).filter(Boolean);
+      this.notify(project.organizationId, members.filter((u: string) => u !== actorUserId), {
+        title: 'Project status changed',
+        message: `"${project.name}" moved to ${project.status}.`,
+        type: 'info',
+        entityType: 'PROJECT',
+        entityId: id,
+      });
+    }
 
     return this.toProjectListItem(project.toObject(), {
       members: project.members.length,

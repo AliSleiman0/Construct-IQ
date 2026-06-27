@@ -8,6 +8,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { BoqItem, BoqItemDocument } from './schemas/boq-item.schema';
 import { Variation, VariationDocument, VariationStatus } from './schemas/variation.schema';
 import { Valuation, ValuationDocument, ValuationStatus } from './schemas/valuation.schema';
@@ -56,11 +57,21 @@ export class SurveyorService {
     @InjectModel(Valuation.name) private valuationModel: Model<ValuationDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** Fire-and-forget audit write — a logging failure must never break the op. */
   private audit(entry: Parameters<AuditService['log']>[0]): void {
     this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
   }
 
   /** Project ids the user is a member of, within their org. */
@@ -243,6 +254,13 @@ export class SurveyorService {
       entityId: variation._id,
       metadata: { impactAmount: variation.impactAmount, to: VariationStatus.APPROVED },
     });
+    this.notify(variation.organizationId, [variation.createdById].filter((u) => u !== approvedById), {
+      title: 'Variation approved',
+      message: `Your variation "${variation.title}" was approved.`,
+      type: 'success',
+      entityType: 'VARIATION',
+      entityId: variation._id,
+    });
     return variation.toObject();
   }
 
@@ -268,6 +286,13 @@ export class SurveyorService {
       entityType: 'VARIATION',
       entityId: variation._id,
       metadata: { to: VariationStatus.REJECTED, reason: reason ?? null },
+    });
+    this.notify(variation.organizationId, [variation.createdById].filter((u) => u !== rejectedById), {
+      title: 'Variation rejected',
+      message: `Your variation "${variation.title}" was rejected${reason ? `: ${reason}` : ''}.`,
+      type: 'error',
+      entityType: 'VARIATION',
+      entityId: variation._id,
     });
     return variation.toObject();
   }

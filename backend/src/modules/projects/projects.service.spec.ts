@@ -14,6 +14,7 @@ import { DocumentEntity } from '../documents/schemas/document.schema';
 import { CadDrawing } from './schemas/cad-drawing.schema';
 import { ApsService } from '../aps/aps.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Unit tests for ProjectsService member management — org scoping, the duplicate
@@ -56,6 +57,7 @@ describe('ProjectsService — members', () => {
         { provide: getConnectionToken(), useValue: connection },
         { provide: ApsService, useValue: {} },
         { provide: AuditService, useValue: { log: auditLog } },
+        { provide: NotificationsService, useValue: { notifyMany: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = moduleRef.get(ProjectsService);
