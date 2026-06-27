@@ -176,6 +176,7 @@ export enum UnitType {
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
+  PARTIAL = 'PARTIAL',
   PAID = 'PAID',
   OVERDUE = 'OVERDUE',
   CANCELLED = 'CANCELLED',

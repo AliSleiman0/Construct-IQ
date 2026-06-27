@@ -84,6 +84,20 @@ export class Bid {
   @Prop({ type: Date, default: null })
   extractedAt: Date | null;
 
+  // Award workflow (#36): awarding a bid auto-creates a DRAFT PurchaseOrder.
+  // A bid can be awarded once; these stay null until then.
+  @Prop({ type: String, ref: 'Supplier', default: null })
+  awardedSupplierId: string | null;
+
+  @Prop({ type: String, ref: 'User', default: null })
+  awardedById: string | null;
+
+  @Prop({ type: Date, default: null })
+  awardedAt: Date | null;
+
+  @Prop({ type: String, ref: 'PurchaseOrder', default: null })
+  purchaseOrderId: string | null;
+
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

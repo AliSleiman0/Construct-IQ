@@ -6,7 +6,7 @@ import {
   Min,
   MaxLength,
 } from 'class-validator';
-import { UnitStatus, UnitType } from '../../../common/enums';
+import { UnitStatus, UnitType, PaymentStatus } from '../../../common/enums';
 
 export class CreateUnitDto {
   @IsString() projectId!: string;
@@ -33,6 +33,15 @@ export class CreatePaymentDto {
   @IsNumber() @Min(0) amountUsd!: number;
   @IsString() dueDate!: string;
   @IsOptional() @IsString() invoiceNumber?: string;
+}
+
+// Explicit (not PartialType) so `status` + `paidAmountUsd` are whitelisted by the
+// global ValidationPipe (forbidNonWhitelisted) and reach the service. (#36)
+export class UpdatePaymentDto {
+  @IsOptional() @IsString() dueDate?: string;
+  @IsOptional() @IsString() invoiceNumber?: string;
+  @IsOptional() @IsEnum(PaymentStatus) status?: PaymentStatus;
+  @IsOptional() @IsNumber() @Min(0) paidAmountUsd?: number;
 }
 
 export class CreateProgressPhotoDto {

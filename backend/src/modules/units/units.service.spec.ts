@@ -6,6 +6,7 @@ import { Unit } from './schemas/unit.schema';
 import { Payment } from './schemas/payment.schema';
 import { ProgressPhoto } from './schemas/progress-photo.schema';
 import { Project } from '../projects/schemas/project.schema';
+import { PaymentStatus } from '../../common/enums';
 
 /**
  * Unit tests for UnitsService.findPhotos — org + project-membership scoping of
@@ -158,5 +159,67 @@ describe('UnitsService.deleteUnit (#34 payment guard)', () => {
     const res = await service.deleteUnit('u-1', 'org-1', false);
     expect(unitModel.updateOne).toHaveBeenCalledWith({ _id: 'u-1' }, { deletedAt: expect.any(Date) });
     expect(res).toEqual({ message: 'Unit deleted successfully' });
+  });
+});
+
+/**
+ * #36 — amount-tracked PARTIAL payments: updatePayment derives status from the
+ * amount received (0 → PENDING, part → PARTIAL, full → PAID, stamping paidAt).
+ */
+describe('UnitsService.updatePayment (#36 PARTIAL)', () => {
+  let service: UnitsService;
+  let paymentModel: any;
+
+  const makePayment = (over: any = {}) => {
+    const doc: any = { _id: 'pay-1', amountUsd: 1000, paidAmountUsd: 0, status: PaymentStatus.PENDING, paidAt: null, ...over };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    doc.toObject = () => doc;
+    return doc;
+  };
+
+  beforeEach(async () => {
+    paymentModel = { findOne: jest.fn() };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        UnitsService,
+        { provide: getModelToken(Unit.name), useValue: {} },
+        { provide: getModelToken(Payment.name), useValue: paymentModel },
+        { provide: getModelToken(ProgressPhoto.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(UnitsService);
+  });
+
+  it('a part payment (0 < x < amount) → PARTIAL, paidAt stays null', async () => {
+    const doc = makePayment();
+    paymentModel.findOne.mockResolvedValue(doc);
+    await service.updatePayment('pay-1', 'org-1', { paidAmountUsd: 400 } as any, false);
+    expect(doc.paidAmountUsd).toBe(400);
+    expect(doc.status).toBe(PaymentStatus.PARTIAL);
+    expect(doc.paidAt).toBeNull();
+  });
+
+  it('a full payment (= amount) → PAID and stamps paidAt', async () => {
+    const doc = makePayment();
+    paymentModel.findOne.mockResolvedValue(doc);
+    await service.updatePayment('pay-1', 'org-1', { paidAmountUsd: 1000 } as any, false);
+    expect(doc.status).toBe(PaymentStatus.PAID);
+    expect(doc.paidAt).toBeInstanceOf(Date);
+  });
+
+  it('zeroing the amount → PENDING and clears paidAt', async () => {
+    const doc = makePayment({ paidAmountUsd: 500, status: PaymentStatus.PARTIAL, paidAt: null });
+    paymentModel.findOne.mockResolvedValue(doc);
+    await service.updatePayment('pay-1', 'org-1', { paidAmountUsd: 0 } as any, false);
+    expect(doc.status).toBe(PaymentStatus.PENDING);
+    expect(doc.paidAmountUsd).toBe(0);
+  });
+
+  it('rejects paidAmountUsd greater than the installment amount (400)', async () => {
+    paymentModel.findOne.mockResolvedValue(makePayment());
+    await expect(
+      service.updatePayment('pay-1', 'org-1', { paidAmountUsd: 1500 } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Model } from 'mongoose';
+import { Organization } from '../organizations/schemas/organization.schema';
+import { DashboardSnapshot } from './schemas/dashboard-snapshot.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { Task } from '../projects/schemas/task.schema';
 import { User } from '../users/schemas/user.schema';
@@ -14,9 +17,16 @@ import { BoqItem } from '../surveyor/schemas/boq-item.schema';
 import { Variation } from '../surveyor/schemas/variation.schema';
 import { Valuation } from '../surveyor/schemas/valuation.schema';
 
+/** How long an org snapshot is served before a read recomputes + writes it back. */
+const SNAPSHOT_TTL_MS = 15 * 60 * 1000;
+
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
+
   constructor(
+    @InjectModel(Organization.name) private organizationModel: Model<any>,
+    @InjectModel(DashboardSnapshot.name) private snapshotModel: Model<any>,
     @InjectModel(Project.name) private projectModel: Model<any>,
     @InjectModel(Task.name) private taskModel: Model<any>,
     @InjectModel(User.name) private userModel: Model<any>,
@@ -31,7 +41,48 @@ export class DashboardService {
     @InjectModel(Valuation.name) private valuationModel: Model<any>,
   ) {}
 
+  /**
+   * Org dashboard via a persisted snapshot (#36). Serves a fresh snapshot when
+   * one exists within the TTL; otherwise computes live, writes the snapshot back,
+   * and returns the fresh result. A cron keeps snapshots warm so most reads are
+   * a single cheap document fetch instead of ~16 aggregations.
+   */
   async getOrgDashboard(organizationId: string) {
+    const snapshot: any = await this.snapshotModel.findOne({ organizationId }).lean();
+    if (snapshot && Date.now() - new Date(snapshot.computedAt).getTime() < SNAPSHOT_TTL_MS) {
+      return snapshot.payload;
+    }
+    return this.refreshOrgSnapshot(organizationId);
+  }
+
+  /** Recompute the org dashboard and upsert its snapshot; returns the fresh payload. */
+  async refreshOrgSnapshot(organizationId: string) {
+    const payload = await this.computeOrgDashboard(organizationId);
+    await this.snapshotModel.updateOne(
+      { organizationId },
+      { $set: { payload, computedAt: new Date() } },
+      { upsert: true },
+    );
+    return payload;
+  }
+
+  /** Daily-driver cron: keep every active org's snapshot warm. */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async refreshOrgSnapshots(): Promise<{ refreshed: number }> {
+    const orgs = await this.organizationModel.find({ isActive: true }).select('_id').lean();
+    let refreshed = 0;
+    for (const org of orgs as any[]) {
+      try {
+        await this.refreshOrgSnapshot(String(org._id));
+        refreshed++;
+      } catch (e) {
+        this.logger.warn(`Dashboard snapshot refresh failed for org ${org._id}: ${e}`);
+      }
+    }
+    return { refreshed };
+  }
+
+  private async computeOrgDashboard(organizationId: string) {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -539,21 +590,18 @@ export class DashboardService {
 
   private async getWeeklyReportCounts(organizationId: string) {
     const now = new Date();
-    const weeks: { week: string; count: number }[] = [];
-
-    for (let i = 3; i >= 0; i--) {
-      const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-      const weekStart = new Date(weekEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-      const count = await this.dailyReportModel.countDocuments({
-        organizationId,
-        createdAt: { $gte: weekStart, $lt: weekEnd },
-      });
-
-      weeks.push({ week: `Week ${4 - i}`, count });
-    }
-
-    return weeks;
+    // Run the four week-buckets in parallel (was a sequential await loop).
+    const counts = await Promise.all(
+      [3, 2, 1, 0].map((i) => {
+        const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+        const weekStart = new Date(weekEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return this.dailyReportModel.countDocuments({
+          organizationId,
+          createdAt: { $gte: weekStart, $lt: weekEnd },
+        });
+      }),
+    );
+    return counts.map((count, idx) => ({ week: `Week ${idx + 1}`, count }));
   }
 
   private getAvatarColor(name: string): string {

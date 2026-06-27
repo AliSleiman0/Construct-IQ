@@ -32,6 +32,11 @@ export class Payment {
   @Prop({ type: Number, required: true, min: 0 })
   amountUsd: number;
 
+  // How much of this installment has actually been received. 0 = nothing,
+  // amountUsd = fully paid; anything in between is a PARTIAL payment. (#36)
+  @Prop({ type: Number, default: 0, min: 0 })
+  paidAmountUsd: number;
+
   @Prop({ type: Date, required: true, index: true })
   dueDate: Date;
 

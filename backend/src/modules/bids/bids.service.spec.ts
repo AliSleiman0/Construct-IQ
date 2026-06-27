@@ -13,6 +13,9 @@ import { Bid, BidExtractionStatus, BidPriceBasis } from './schemas/bid.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { DocumentsService } from '../documents/documents.service';
 import { BidExtractorAgent } from '../ai/agents/bid-extractor.agent';
+import { ProcurementService } from '../procurement/procurement.service';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 describe('BidsService', () => {
   let service: BidsService;
@@ -20,6 +23,9 @@ describe('BidsService', () => {
   let projectModel: any;
   let documentsService: { uploadAndCreate: jest.Mock };
   let bidExtractor: { extract: jest.Mock };
+  let procurementService: { findSupplierById: jest.Mock; createPO: jest.Mock };
+  let auditLog: jest.Mock;
+  let notifyMany: jest.Mock;
 
   const makeBidDoc = (overrides: Record<string, any> = {}): any => ({
     _id: 'b-1',
@@ -27,12 +33,18 @@ describe('BidsService', () => {
     projectId: 'p-1',
     tradePackage: 'Electrical - Block A',
     sourceDocumentId: 'd-1',
+    uploadedById: 'uploader-1',
     extractionStatus: BidExtractionStatus.PENDING as BidExtractionStatus,
     extractedData: null as any,
     aiRawResponse: null as any,
     extractionError: null as string | null,
     extractedAt: null as Date | null,
+    awardedAt: null as Date | null,
+    purchaseOrderId: null as string | null,
     save: jest.fn().mockResolvedValue(undefined),
+    toObject(this: any) {
+      return this;
+    },
     ...overrides,
   });
 
@@ -47,6 +59,12 @@ describe('BidsService', () => {
     projectModel = { findOne: jest.fn() };
     documentsService = { uploadAndCreate: jest.fn() };
     bidExtractor = { extract: jest.fn() };
+    procurementService = {
+      findSupplierById: jest.fn().mockResolvedValue({ _id: 's-1', name: 'Acme' }),
+      createPO: jest.fn().mockResolvedValue({ _id: 'po-1', status: 'DRAFT' }),
+    };
+    auditLog = jest.fn().mockResolvedValue(undefined);
+    notifyMany = jest.fn().mockResolvedValue(undefined);
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -55,6 +73,9 @@ describe('BidsService', () => {
         { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: DocumentsService, useValue: documentsService },
         { provide: BidExtractorAgent, useValue: bidExtractor },
+        { provide: ProcurementService, useValue: procurementService },
+        { provide: AuditService, useValue: { log: auditLog } },
+        { provide: NotificationsService, useValue: { notifyMany } },
       ],
     }).compile();
     service = moduleRef.get(BidsService);
@@ -272,6 +293,47 @@ describe('BidsService', () => {
       bidModel.find.mockReturnValue({ sort });
       await service.list('org-1', true, { projectId: 'p-1' });
       expect(bidModel.find).toHaveBeenCalledWith({ projectId: 'p-1' });
+    });
+  });
+
+  describe('awardBid (#36)', () => {
+    it('creates a DRAFT PO from the bid, stamps the bid, and audits/notifies', async () => {
+      const bid = makeBidDoc({ extractedData: { total_price: 120000, currency: 'USD' } });
+      bidModel.findOne.mockResolvedValue(bid);
+
+      const res = await service.awardBid('b-1', 'org-1', 's-1', 'actor-1', false);
+
+      expect(procurementService.findSupplierById).toHaveBeenCalledWith('s-1', 'org-1', false);
+      expect(procurementService.createPO).toHaveBeenCalledWith('org-1',
+        expect.objectContaining({ projectId: 'p-1', supplierId: 's-1', status: 'DRAFT', totalAmount: 120000, currency: 'USD' }));
+      expect(bid.awardedSupplierId).toBe('s-1');
+      expect(bid.purchaseOrderId).toBe('po-1');
+      expect(bid.awardedAt).toBeInstanceOf(Date);
+      expect(bid.save).toHaveBeenCalled();
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'AWARD', entityType: 'BID', entityId: 'b-1' }),
+      );
+      expect(notifyMany).toHaveBeenCalledWith('org-1', ['uploader-1'],
+        expect.objectContaining({ type: 'success', entityType: 'BID' }));
+      expect(res.purchaseOrder).toEqual({ _id: 'po-1', status: 'DRAFT' });
+    });
+
+    it('blocks awarding an already-awarded bid (409) — no PO created', async () => {
+      bidModel.findOne.mockResolvedValue(makeBidDoc({ awardedAt: new Date(), purchaseOrderId: 'po-old' }));
+      await expect(service.awardBid('b-1', 'org-1', 's-1', 'actor-1', false)).rejects.toBeInstanceOf(ConflictException);
+      expect(procurementService.createPO).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown supplier (propagates NotFound) — no PO created', async () => {
+      bidModel.findOne.mockResolvedValue(makeBidDoc());
+      procurementService.findSupplierById.mockRejectedValue(new NotFoundException('Supplier not found'));
+      await expect(service.awardBid('b-1', 'org-1', 's-x', 'actor-1', false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(procurementService.createPO).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFound when the bid is absent', async () => {
+      bidModel.findOne.mockResolvedValue(null);
+      await expect(service.awardBid('b-x', 'org-1', 's-1', 'actor-1', false)).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

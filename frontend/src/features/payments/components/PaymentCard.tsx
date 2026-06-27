@@ -4,8 +4,9 @@ import { Box, Paper, Typography, Chip, Button } from '@mui/material';
 import dayjs from 'dayjs';
 import type { MockPayment, PaymentStatus } from '@/mocks/payments.mock';
 
-const STATUS_COLOR: Record<PaymentStatus, 'success' | 'warning' | 'default' | 'error'> = {
+const STATUS_COLOR: Record<PaymentStatus, 'success' | 'warning' | 'default' | 'error' | 'info'> = {
   PAID: 'success',
+  PARTIAL: 'info',
   DUE: 'warning',
   PENDING: 'default',
   OVERDUE: 'error',
@@ -13,6 +14,7 @@ const STATUS_COLOR: Record<PaymentStatus, 'success' | 'warning' | 'default' | 'e
 
 const STATUS_LABEL: Record<PaymentStatus, string> = {
   PAID: 'Paid',
+  PARTIAL: 'Partially paid',
   DUE: 'Due now',
   PENDING: 'Pending',
   OVERDUE: 'Overdue',

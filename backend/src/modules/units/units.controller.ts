@@ -16,13 +16,12 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PERMISSIONS } from '../../common/constants/permissions';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { UnitsService } from './units.service';
-import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto } from './dto/create-unit.dto';
+import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto, UpdatePaymentDto } from './dto/create-unit.dto';
 import { UnitStatus } from '../../common/enums';
 import { PartialType } from '@nestjs/mapped-types';
 import { seesAllProjects } from '../../common/util/project-scope.util';
 
 class UpdateUnitDto extends PartialType(CreateUnitDto) {}
-class UpdatePaymentDto extends PartialType(CreatePaymentDto) {}
 
 @Controller('units')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
