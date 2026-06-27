@@ -17,7 +17,7 @@ import { AppEmptyState } from '@/components/ui/AppEmptyState';
 import { useUsers } from '@/features/users/hooks/useUsers';
 import { useVariations } from '../hooks/useVariations';
 import {
-  useCreateVariation, useUpdateVariation, useApproveVariation, useDeleteVariation,
+  useCreateVariation, useUpdateVariation, useApproveVariation, useRejectVariation, useDeleteVariation,
 } from '../hooks/useVariationMutations';
 import { CreateVariationModal, EditVariationModal } from './VariationModals';
 import type { Variation, VariationStatus } from '@/types/variation.types';
@@ -48,6 +48,7 @@ export function VariationsPanel({ projectId, canManage }: { projectId: string; c
   const createVariation = useCreateVariation();
   const updateVariation = useUpdateVariation();
   const approveVariation = useApproveVariation();
+  const rejectVariation = useRejectVariation();
   const deleteVariation = useDeleteVariation();
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -155,10 +156,11 @@ export function VariationsPanel({ projectId, canManage }: { projectId: string; c
                             <Tooltip title="Reject">
                               <span>
                                 <IconButton size="small" color="warning" aria-label={`Reject ${v.title}`} data-testid={`variation-reject-${v.id}`}
-                                  disabled={updateVariation.isPending}
+                                  disabled={rejectVariation.isPending}
                                   onClick={async () => {
-                                    if (!confirm(`Reject variation "${v.title}"?`)) return;
-                                    await updateVariation.mutateAsync({ id: v.id, payload: { status: 'REJECTED' } });
+                                    const reason = prompt(`Reject variation "${v.title}"? Optionally add a reason:`);
+                                    if (reason === null) return; // cancelled
+                                    await rejectVariation.mutateAsync({ id: v.id, reason: reason || undefined });
                                   }}>
                                   <CancelIcon fontSize="small" />
                                 </IconButton>

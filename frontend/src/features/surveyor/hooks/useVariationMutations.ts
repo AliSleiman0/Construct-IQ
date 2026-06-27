@@ -31,6 +31,14 @@ export function useApproveVariation() {
   });
 }
 
+export function useRejectVariation() {
+  const invalidate = useInvalidateVariations();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) => variationsApi.reject(id, reason),
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeleteVariation() {
   const invalidate = useInvalidateVariations();
   return useMutation({

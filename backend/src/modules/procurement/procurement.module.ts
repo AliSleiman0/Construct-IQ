@@ -7,8 +7,10 @@ import {
   DeliveriesController,
 } from './procurement.controller';
 import { ProcurementService } from './procurement.service';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
+  imports: [AuditModule],
   controllers: [
     ProcurementDashboardController,
     SuppliersController,

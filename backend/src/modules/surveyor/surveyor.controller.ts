@@ -25,8 +25,13 @@ import {
   UpdateValuationDto,
 } from './dto/create-surveyor.dto';
 import { PartialType } from '@nestjs/mapped-types';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 class UpdateBoqItemDto extends PartialType(CreateBoqItemDto) {}
+
+class RejectVariationDto {
+  @IsOptional() @IsString() @MaxLength(1000) reason?: string;
+}
 
 @Controller('boq')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -80,7 +85,7 @@ export class VariationsController {
   @Post()
   @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
   create(@CurrentUser() user: JwtPayload, @Body() dto: CreateVariationDto): Promise<any> {
-    return this.surveyorService.createVariation(user.organizationId, dto);
+    return this.surveyorService.createVariation(user.organizationId, user.sub, dto);
   }
 
   @Patch(':id')
@@ -93,6 +98,12 @@ export class VariationsController {
   @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
   approve(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
     return this.surveyorService.approveVariation(id, user.organizationId, user.sub, user.isSuperAdmin);
+  }
+
+  @Post(':id/reject')
+  @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
+  reject(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: RejectVariationDto): Promise<any> {
+    return this.surveyorService.rejectVariation(id, user.organizationId, user.sub, dto.reason, user.isSuperAdmin);
   }
 
   @Delete(':id')
