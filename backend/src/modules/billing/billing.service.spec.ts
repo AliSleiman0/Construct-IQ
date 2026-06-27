@@ -70,6 +70,19 @@ describe('BillingService — create (issue #23)', () => {
     await expect(service.create(dto(), true)).rejects.toBeInstanceOf(ConflictException);
     expect(invoiceModel.create).not.toHaveBeenCalled();
   });
+
+  // #30 — due date may not precede the issue date.
+  it('rejects a dueAt earlier than issuedAt with 400 (super admin)', async () => {
+    await expect(
+      service.create(dto({ issuedAt: '2026-07-27', dueAt: '2026-06-27' }), true),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(invoiceModel.create).not.toHaveBeenCalled();
+  });
+
+  it('allows dueAt equal to issuedAt (same-day net-0)', async () => {
+    await service.create(dto({ issuedAt: '2026-06-27', dueAt: '2026-06-27' }), true);
+    expect(invoiceModel.create).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
@@ -82,7 +95,14 @@ describe('BillingService — update (issue #27)', () => {
   let invoiceModel: any;
 
   const makeInvoice = (status: InvoiceStatus) => {
-    const doc: any = { _id: 'inv-1', status, paidAt: null, notes: null };
+    const doc: any = {
+      _id: 'inv-1',
+      status,
+      paidAt: null,
+      notes: null,
+      issuedAt: new Date('2026-06-27'),
+      dueAt: new Date('2026-07-27'),
+    };
     doc.save = jest.fn().mockResolvedValue(doc);
     doc.toObject = jest.fn().mockReturnValue(doc);
     return doc;
@@ -138,6 +158,24 @@ describe('BillingService — update (issue #27)', () => {
     await service.update('inv-1', { notes: 'follow up' } as any, 'org-A', true);
     expect(doc.notes).toBe('follow up');
     expect(doc.status).toBe(InvoiceStatus.ISSUED);
+    expect(doc.save).toHaveBeenCalled();
+  });
+
+  // #30 — a lone dueAt edit can't drop below the stored issuedAt.
+  it('rejects a dueAt edit that falls before the stored issuedAt (400)', async () => {
+    const doc = makeInvoice(InvoiceStatus.ISSUED); // issuedAt 2026-06-27
+    invoiceModel.findOne.mockResolvedValue(doc);
+    await expect(
+      service.update('inv-1', { dueAt: '2026-06-01' } as any, 'org-A', true),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it('persists a valid dueAt edit', async () => {
+    const doc = makeInvoice(InvoiceStatus.ISSUED);
+    invoiceModel.findOne.mockResolvedValue(doc);
+    await service.update('inv-1', { dueAt: '2026-08-15' } as any, 'org-A', true);
+    expect(doc.dueAt).toEqual(new Date('2026-08-15'));
     expect(doc.save).toHaveBeenCalled();
   });
 });

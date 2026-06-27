@@ -282,3 +282,104 @@ describe('ProcurementService — status transition guards (#28)', () => {
     expect(d.receivedById).toBeNull();
   });
 });
+
+/**
+ * #30 — a PO's expected delivery date can't precede its order date nor sit in the
+ * past, and the supplier on-time rate must ignore deliveries lacking a target or
+ * actual date (instead of scoring null targets as "on-time").
+ */
+describe('ProcurementService — date validation (#30)', () => {
+  let service: ProcurementService;
+  let poModel: any;
+  let supplierModel: any;
+  let deliveryModel: any;
+
+  const futureDate = () => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString();
+  };
+
+  const makeDoc = (over: any) => {
+    const doc: any = { ...over };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    doc.toObject = jest.fn().mockReturnValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    poModel = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockImplementation((doc) => Promise.resolve({ _id: 'po-1', ...doc })),
+    };
+    supplierModel = { findOne: jest.fn() };
+    deliveryModel = { aggregate: jest.fn().mockResolvedValue([]) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ProcurementService,
+        { provide: getModelToken(Supplier.name), useValue: supplierModel },
+        { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
+        { provide: getModelToken(Delivery.name), useValue: deliveryModel },
+        { provide: getModelToken(MaterialRequest.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(ProcurementService);
+  });
+
+  const baseCreateDto = (over: any = {}) => ({
+    projectId: 'p-1',
+    supplierId: 's-1',
+    poNumber: 'PO-1',
+    orderDate: '2026-06-01',
+    ...over,
+  });
+
+  it('createPO: rejects expectedDeliveryDate before orderDate', async () => {
+    await expect(
+      service.createPO('org-1', baseCreateDto({ expectedDeliveryDate: '2026-05-01' }) as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(poModel.create).not.toHaveBeenCalled();
+  });
+
+  it('createPO: rejects an expectedDeliveryDate in the past', async () => {
+    await expect(
+      service.createPO('org-1', baseCreateDto({ expectedDeliveryDate: '2020-01-01' }) as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(poModel.create).not.toHaveBeenCalled();
+  });
+
+  it('createPO: accepts a future expectedDeliveryDate after orderDate', async () => {
+    await service.createPO('org-1', baseCreateDto({ expectedDeliveryDate: futureDate() }) as any);
+    expect(poModel.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('createPO: accepts a PO with no expectedDeliveryDate', async () => {
+    await service.createPO('org-1', baseCreateDto() as any);
+    expect(poModel.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('updatePO: rejects setting expectedDeliveryDate before the stored orderDate', async () => {
+    const po = makeDoc({ status: 'DRAFT', orderDate: new Date('2026-06-01') });
+    poModel.findOne.mockResolvedValue(po);
+    await expect(
+      service.updatePO('po-1', 'org-1', { expectedDeliveryDate: '2026-05-01' } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(po.save).not.toHaveBeenCalled();
+  });
+
+  it('getSupplierPerformance: on-time pipeline excludes null target/actual dates', async () => {
+    supplierModel.findOne.mockReturnValue({ lean: () => Promise.resolve({ _id: 's-1', name: 'Acme' }) });
+    // poStats (first call) + deliveryStats (second call)
+    poModel.aggregate = jest.fn().mockResolvedValue([]);
+    await service.getSupplierPerformance('s-1', 'org-1', false);
+
+    const deliveryPipeline = deliveryModel.aggregate.mock.calls[0][0];
+    const nullGuard = deliveryPipeline.find(
+      (stage: any) => stage.$match && 'deliveryDate' in stage.$match,
+    );
+    expect(nullGuard).toBeDefined();
+    expect(nullGuard.$match.deliveryDate).toEqual({ $ne: null });
+    expect(nullGuard.$match['po.expectedDeliveryDate']).toEqual({ $ne: null });
+  });
+});

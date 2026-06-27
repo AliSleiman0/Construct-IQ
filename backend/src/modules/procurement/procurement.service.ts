@@ -45,6 +45,19 @@ const DELIVERY_TRANSITIONS: TransitionMap<DeliveryStatus> = {
   [DeliveryStatus.DELAYED]: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.CANCELLED],
 };
 
+// #30 — a PO's expected delivery can't precede its order date, nor be set to a
+// date already in the past (start-of-today, so "today" is still acceptable).
+export function assertDeliveryDateSane(orderDate: Date, expectedDeliveryDate: Date): void {
+  if (expectedDeliveryDate < orderDate) {
+    throw new BadRequestException('Expected delivery date cannot be before the order date');
+  }
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  if (expectedDeliveryDate < startOfToday) {
+    throw new BadRequestException('Expected delivery date cannot be in the past');
+  }
+}
+
 /** Who is asking — when orgWide is false, results are limited to member projects. */
 export interface DeliveryViewer {
   userId: string;
@@ -160,6 +173,11 @@ export class ProcurementService {
     const existing = await this.poModel.findOne({ organizationId, poNumber: dto.poNumber });
     if (existing) throw new ConflictException('PO number already exists in this organization');
 
+    const orderDate = new Date(dto.orderDate);
+    if (dto.expectedDeliveryDate) {
+      assertDeliveryDateSane(orderDate, new Date(dto.expectedDeliveryDate));
+    }
+
     return this.poModel.create({
       organizationId,
       projectId: dto.projectId,
@@ -171,7 +189,7 @@ export class ProcurementService {
       // present, the schema pre-save hook (applyPoTotals) recomputes this from them.
       totalAmount: dto.totalAmount ?? null,
       currency: dto.currency ?? 'USD',
-      orderDate: new Date(dto.orderDate),
+      orderDate,
       expectedDeliveryDate: dto.expectedDeliveryDate ? new Date(dto.expectedDeliveryDate) : null,
       notes: dto.notes ?? null,
       items: dto.items ?? [],
@@ -192,8 +210,13 @@ export class ProcurementService {
     // (applyPoTotals) whenever line items are present.
     if (dto.totalAmount !== undefined) po.totalAmount = dto.totalAmount ?? null;
     if (dto.notes !== undefined) po.notes = dto.notes ?? null;
-    if (dto.expectedDeliveryDate !== undefined)
+    if (dto.expectedDeliveryDate !== undefined) {
+      if (dto.expectedDeliveryDate) {
+        // orderDate is immutable post-create, so validate against the stored value.
+        assertDeliveryDateSane(po.orderDate, new Date(dto.expectedDeliveryDate));
+      }
       po.expectedDeliveryDate = dto.expectedDeliveryDate ? new Date(dto.expectedDeliveryDate) : null;
+    }
     if (dto.items !== undefined) po.items = dto.items as any;
 
     await po.save();
@@ -436,7 +459,11 @@ export class ProcurementService {
         },
       ]),
 
-      // On-time: deliveries where deliveryDate <= PO.expectedDeliveryDate
+      // On-time: deliveries where deliveryDate <= PO.expectedDeliveryDate.
+      // A delivery can only be judged on-time when it has BOTH an actual
+      // deliveryDate and a target expectedDeliveryDate — rows missing either are
+      // excluded from the rate entirely (counting null targets as "on-time"
+      // would silently inflate the score).
       this.deliveryModel.aggregate([
         { $match: { ...orgFilter, status: 'DELIVERED' } },
         {
@@ -449,18 +476,19 @@ export class ProcurementService {
         },
         { $unwind: '$po' },
         {
+          $match: {
+            deliveryDate: { $ne: null },
+            'po.expectedDeliveryDate': { $ne: null },
+          },
+        },
+        {
           $group: {
             _id: null,
             total: { $sum: 1 },
             onTime: {
               $sum: {
                 $cond: [
-                  {
-                    $or: [
-                      { $eq: ['$po.expectedDeliveryDate', null] },
-                      { $lte: ['$deliveryDate', '$po.expectedDeliveryDate'] },
-                    ],
-                  },
+                  { $lte: ['$deliveryDate', '$po.expectedDeliveryDate'] },
                   1,
                   0,
                 ],

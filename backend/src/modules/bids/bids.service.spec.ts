@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 
 // pdf-parse runs a debug self-test on require() that touches the filesystem.
 // Stub it before the service file is evaluated. The runtime import resolves
@@ -39,7 +39,8 @@ describe('BidsService', () => {
   beforeEach(async () => {
     bidModel = {
       create: jest.fn(),
-      find: jest.fn(),
+      // Default: the duplicate-bid check finds nothing existing.
+      find: jest.fn().mockReturnValue({ select: () => ({ lean: () => Promise.resolve([]) }) }),
       findOne: jest.fn(),
       updateOne: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
     };
@@ -201,6 +202,58 @@ describe('BidsService', () => {
       expect(results).toHaveLength(2);
       expect(bidA.extractionStatus).toBe(BidExtractionStatus.COMPLETE);
       expect(bidB.extractionStatus).toBe(BidExtractionStatus.FAILED);
+    });
+
+    // #30 — exact re-uploads are blocked; distinct competing bids stay allowed.
+    it('rejects a batch containing two files with the same name', async () => {
+      projectModel.findOne.mockReturnValue({
+        select: () => ({ lean: () => Promise.resolve({ _id: 'p-1' }) }),
+      });
+      await expect(
+        service.uploadAndExtract('org-1', 'u-1', false, goodDto, [
+          { ...pdfFile, originalname: 'dup.pdf' },
+          { ...pdfFile, originalname: 'dup.pdf' },
+        ]),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(documentsService.uploadAndCreate).not.toHaveBeenCalled();
+    });
+
+    it('rejects when a bid with the same filename already exists for the trade package', async () => {
+      projectModel.findOne.mockReturnValue({
+        select: () => ({ lean: () => Promise.resolve({ _id: 'p-1' }) }),
+      });
+      bidModel.find.mockReturnValue({
+        select: () => ({ lean: () => Promise.resolve([{ sourceFileName: 'bid-a.pdf' }]) }),
+      });
+      await expect(
+        service.uploadAndExtract('org-1', 'u-1', false, goodDto, [pdfFile]),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(bidModel.find).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        projectId: 'p-1',
+        tradePackage: 'Electrical - Block A',
+        sourceFileName: { $in: ['bid-a.pdf'] },
+      });
+      expect(documentsService.uploadAndCreate).not.toHaveBeenCalled();
+    });
+
+    it('allows distinct competing bids for the same trade package', async () => {
+      projectModel.findOne.mockReturnValue({
+        select: () => ({ lean: () => Promise.resolve({ _id: 'p-1' }) }),
+      });
+      documentsService.uploadAndCreate
+        .mockResolvedValueOnce({ _id: 'd-1' })
+        .mockResolvedValueOnce({ _id: 'd-2' });
+      bidModel.create
+        .mockResolvedValueOnce(makeBidDoc({ _id: 'b-1' }))
+        .mockResolvedValueOnce(makeBidDoc({ _id: 'b-2' }));
+      bidExtractor.extract.mockRejectedValue(new Error('skip extraction detail'));
+
+      const results = await service.uploadAndExtract('org-1', 'u-1', false, goodDto, [
+        { ...pdfFile, originalname: 'acme.pdf' },
+        { ...pdfFile, originalname: 'globex.pdf' },
+      ]);
+      expect(results).toHaveLength(2);
     });
   });
 
