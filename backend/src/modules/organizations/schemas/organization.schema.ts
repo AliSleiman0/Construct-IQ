@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 
 export type OrganizationDocument = CuidHydratedDocument<Organization>;
 
@@ -68,8 +69,11 @@ export class Organization {
   @Prop({ type: Boolean, default: true })
   isActive: boolean;
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const OrganizationSchema = SchemaFactory.createForClass(Organization);
+
+OrganizationSchema.plugin(softDeletePlugin);

@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 import { MaterialRequestStatus } from '../../../common/enums';
 
 export type MaterialRequestDocument = CuidHydratedDocument<MaterialRequest>;
@@ -55,8 +56,11 @@ export class MaterialRequest {
   @Prop({ type: String, ref: 'PurchaseOrder', default: null })
   convertedToPOId: string | null;
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const MaterialRequestSchema = SchemaFactory.createForClass(MaterialRequest);
+
+MaterialRequestSchema.plugin(softDeletePlugin);

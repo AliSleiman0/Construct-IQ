@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 
 export enum ValuationStatus {
   DRAFT = 'DRAFT',
@@ -44,11 +45,13 @@ export class Valuation {
   @Prop({ type: Date, default: null })
   certifiedAt: Date | null;
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const ValuationSchema = SchemaFactory.createForClass(Valuation);
 
+ValuationSchema.plugin(softDeletePlugin);
 // One valuation per project per period
 ValuationSchema.index({ projectId: 1, period: 1 }, { unique: true });

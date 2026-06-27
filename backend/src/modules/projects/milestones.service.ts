@@ -68,6 +68,11 @@ export class MilestonesService {
     if (!isSuperAdmin) filter.organizationId = organizationId;
     const milestone = await this.milestoneModel.findOneAndDelete(filter);
     if (!milestone) throw new NotFoundException('Milestone not found');
+    // Referential integrity: drop this milestone from sibling dependency lists.
+    await this.milestoneModel.updateMany(
+      { dependsOnMilestoneIds: milestoneId },
+      { $pull: { dependsOnMilestoneIds: milestoneId } },
+    );
     return { message: 'Milestone deleted successfully' };
   }
 }

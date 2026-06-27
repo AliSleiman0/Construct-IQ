@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 import { DeliveryStatus } from '../../../common/enums';
 
 export type DeliveryDocument = CuidHydratedDocument<Delivery>;
@@ -31,8 +32,11 @@ export class Delivery {
   @Prop({ type: String, default: null })
   notes: string | null;
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const DeliverySchema = SchemaFactory.createForClass(Delivery);
+
+DeliverySchema.plugin(softDeletePlugin);

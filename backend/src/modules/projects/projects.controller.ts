@@ -62,7 +62,7 @@ export class ProjectsController {
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.PROJECTS.DELETE)
   remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.projectsService.softDelete(id, user.organizationId, user.isSuperAdmin);
+    return this.projectsService.softDelete(id, user.organizationId, user.isSuperAdmin, user.sub);
   }
 
   @Post(':id/members')

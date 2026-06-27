@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 import { ProjectStatus } from '../../../common/enums';
 
 export type PhaseDocument = CuidHydratedDocument<Phase>;
@@ -42,8 +43,11 @@ export class Phase {
   @Prop({ type: [String], ref: 'Phase', default: [] })
   dependsOnPhaseIds: string[];
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const PhaseSchema = SchemaFactory.createForClass(Phase);
+
+PhaseSchema.plugin(softDeletePlugin);

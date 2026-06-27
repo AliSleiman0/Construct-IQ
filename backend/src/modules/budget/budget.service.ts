@@ -8,6 +8,7 @@ import { PurchaseOrder, PurchaseOrderDocument } from '../procurement/schemas/pur
 import { CreateBudgetDto, CreateBudgetLineDto, CreateExpenseDto, UpdateExpenseDto } from './dto/create-budget.dto';
 import { PartialType } from '@nestjs/mapped-types';
 import { PurchaseOrderStatus } from '../../common/enums';
+import { AuditService } from '../audit/audit.service';
 
 class UpdateBudgetDto extends PartialType(CreateBudgetDto) {}
 
@@ -18,7 +19,13 @@ export class BudgetService {
     @InjectModel(BudgetLine.name) private lineModel: Model<BudgetLineDocument>,
     @InjectModel(Expense.name) private expenseModel: Model<ExpenseDocument>,
     @InjectModel(PurchaseOrder.name) private poModel: Model<PurchaseOrderDocument>,
+    private readonly auditService: AuditService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
 
   async findByProject(projectId: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
     const filter: Record<string, unknown> = { projectId };
@@ -72,6 +79,32 @@ export class BudgetService {
     return budget.toObject();
   }
 
+  /** Soft-delete a budget and cascade soft-delete to its lines and expenses. */
+  async deleteBudget(id: string, organizationId: string, isSuperAdmin: boolean, actorUserId?: string): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const budget = await this.budgetModel.findOne(filter);
+    if (!budget) throw new NotFoundException('Budget not found');
+
+    const now = new Date();
+    await this.budgetModel.updateOne({ _id: id }, { deletedAt: now });
+    const [lines, expenses] = await Promise.all([
+      this.lineModel.updateMany({ budgetId: id, deletedAt: null }, { deletedAt: now }),
+      this.expenseModel.updateMany({ budgetId: id, deletedAt: null }, { deletedAt: now }),
+    ]);
+
+    this.audit({
+      organizationId: budget.organizationId,
+      actorUserId,
+      projectId: budget.projectId,
+      action: 'DELETE',
+      entityType: 'BUDGET',
+      entityId: id,
+      metadata: { lines: lines.modifiedCount ?? 0, expenses: expenses.modifiedCount ?? 0 },
+    });
+
+    return { message: 'Budget deleted successfully' };
+  }
+
   async addLine(budgetId: string, organizationId: string, dto: CreateBudgetLineDto, isSuperAdmin: boolean): Promise<any> {
     const filter = isSuperAdmin ? { _id: budgetId } : { _id: budgetId, organizationId };
     const budget = await this.budgetModel.findOne(filter).lean();
@@ -102,8 +135,22 @@ export class BudgetService {
     const budget = await this.budgetModel.findOne(filter).lean();
     if (!budget) throw new NotFoundException('Budget not found');
 
-    const line = await this.lineModel.findOneAndDelete({ _id: lineId, budgetId });
+    const line = await this.lineModel.findOne({ _id: lineId, budgetId });
     if (!line) throw new NotFoundException('Budget line not found');
+
+    // Referential integrity: refuse to orphan POs/expenses attributed to this line.
+    const [pos, expenses] = await Promise.all([
+      this.poModel.countDocuments({ budgetLineId: lineId }),
+      this.expenseModel.countDocuments({ budgetLineId: lineId }),
+    ]);
+    if (pos + expenses > 0) {
+      throw new ConflictException(
+        'Cannot delete a budget line referenced by purchase orders or expenses. Reassign them first.',
+      );
+    }
+
+    // Soft-delete for consistency (was a hard findOneAndDelete).
+    await this.lineModel.updateOne({ _id: lineId }, { deletedAt: new Date() });
     return { message: 'Budget line deleted successfully' };
   }
 

@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 
 export type BudgetDocument = CuidHydratedDocument<Budget>;
 
@@ -25,10 +26,12 @@ export class Budget {
   @Prop({ type: String, default: null })
   notes: string | null;
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const BudgetSchema = SchemaFactory.createForClass(Budget);
 
+BudgetSchema.plugin(softDeletePlugin);
 BudgetSchema.index({ projectId: 1 }, { unique: true });

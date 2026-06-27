@@ -6,9 +6,11 @@ import {
   BadRequestException,
   GoneException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
+import { Connection, Model } from 'mongoose';
 import { randomBytes } from 'crypto';
+import { AuditService } from '../audit/audit.service';
+import { cascadeSoftDelete } from '../../database/mongoose/cascade.util';
 import { Project, ProjectDocument } from './schemas/project.schema';
 import { Task, TaskDocument } from './schemas/task.schema';
 import { User, UserDocument } from '../users/schemas/user.schema';
@@ -49,8 +51,15 @@ export class ProjectsService {
     @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
     @InjectModel(DocumentEntity.name) private documentModel: Model<DocumentEntityDocument>,
     @InjectModel(CadDrawing.name) private cadDrawingModel: Model<CadDrawingDocument>,
+    @InjectConnection() private readonly connection: Connection,
     private readonly apsService: ApsService,
+    private readonly auditService: AuditService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
 
   private toProjectListItem(
     p: any,
@@ -373,6 +382,7 @@ export class ProjectsService {
     id: string,
     organizationId: string,
     isSuperAdmin = false,
+    actorUserId?: string,
   ) {
     const filter = isSuperAdmin
       ? { _id: id }
@@ -381,10 +391,22 @@ export class ProjectsService {
     const project = await this.projectModel.findOne(filter);
     if (!project) throw new NotFoundException('Project not found');
 
-    await this.projectModel.updateOne(
-      { _id: id },
-      { deletedAt: new Date() },
-    );
+    const now = new Date();
+    await this.projectModel.updateOne({ _id: id }, { deletedAt: now });
+
+    // Cascade soft-delete to every child entity scoped to this project (tasks,
+    // issues, units, phases, milestones, valuations, variations, POs, budget…).
+    const cascade = await cascadeSoftDelete(this.connection, 'projectId', id, now);
+
+    this.audit({
+      organizationId: project.organizationId,
+      actorUserId,
+      projectId: id,
+      action: 'DELETE',
+      entityType: 'PROJECT',
+      entityId: id,
+      metadata: { cascade },
+    });
 
     return { message: 'Project deleted successfully' };
   }

@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 
 export type DailyReportDocument = CuidHydratedDocument<DailyReport>;
 
@@ -110,11 +111,14 @@ export class DailyReport {
   @Prop({ type: [DailyReportEquipmentEntrySchema], default: [] })
   equipmentEntries: DailyReportEquipmentEntry[];
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const DailyReportSchema = SchemaFactory.createForClass(DailyReport);
+
+DailyReportSchema.plugin(softDeletePlugin);
 
 DailyReportSchema.index({ projectId: 1, reportDate: -1 }, { unique: true });
 // Backs the org-wide sorted + paginated list and the date-range filter.

@@ -234,6 +234,11 @@ export class TasksService {
     const task = await this.taskModel.findOne(filter);
     if (!task) throw new NotFoundException('Task not found');
     await this.taskModel.updateOne({ _id: id }, { deletedAt: new Date() });
+    // Referential integrity: drop this task from sibling dependency lists.
+    await this.taskModel.updateMany(
+      { dependsOnTaskIds: id },
+      { $pull: { dependsOnTaskIds: id } },
+    );
     return { message: 'Task deleted successfully' };
   }
 }

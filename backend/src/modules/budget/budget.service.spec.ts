@@ -1,11 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { BudgetService } from './budget.service';
 import { Budget } from './schemas/budget.schema';
 import { BudgetLine } from './schemas/budget-line.schema';
 import { Expense } from './schemas/expense.schema';
 import { PurchaseOrder } from '../procurement/schemas/purchase-order.schema';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Unit tests for BudgetService — focused on the expense list/delete additions
@@ -33,6 +34,7 @@ describe('BudgetService', () => {
         { provide: getModelToken(BudgetLine.name), useValue: lineModel },
         { provide: getModelToken(Expense.name), useValue: expenseModel },
         { provide: getModelToken(PurchaseOrder.name), useValue: {} },
+        { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = moduleRef.get(BudgetService);
@@ -153,6 +155,7 @@ describe('BudgetService.addLine (#29 allocation cap)', () => {
         { provide: getModelToken(BudgetLine.name), useValue: lineModel },
         { provide: getModelToken(Expense.name), useValue: {} },
         { provide: getModelToken(PurchaseOrder.name), useValue: {} },
+        { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = moduleRef.get(BudgetService);
@@ -197,6 +200,7 @@ describe('BudgetService.addExpense (#31 line-ownership)', () => {
         { provide: getModelToken(BudgetLine.name), useValue: lineModel },
         { provide: getModelToken(Expense.name), useValue: expenseModel },
         { provide: getModelToken(PurchaseOrder.name), useValue: {} },
+        { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
     service = moduleRef.get(BudgetService);
@@ -223,5 +227,92 @@ describe('BudgetService.addExpense (#31 line-ownership)', () => {
     expect(lineModel.findOne).not.toHaveBeenCalled();
     expect(expenseModel.create).toHaveBeenCalledTimes(1);
     expect(expenseModel.create.mock.calls[0][0].budgetLineId).toBeNull();
+  });
+});
+
+/**
+ * #34 — referential integrity on deletes: removeLine is blocked when POs/expenses
+ * reference the line; deleteBudget cascade soft-deletes its lines + expenses.
+ */
+describe('BudgetService delete cascades & guards (#34)', () => {
+  let service: BudgetService;
+  let budgetModel: any;
+  let lineModel: any;
+  let expenseModel: any;
+  let poModel: any;
+  let auditLog: jest.Mock;
+
+  const leanOnce = (result: any) => ({ lean: () => Promise.resolve(result) });
+
+  beforeEach(async () => {
+    budgetModel = { findOne: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) };
+    lineModel = {
+      findOne: jest.fn(),
+      updateOne: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ modifiedCount: 2 }),
+      countDocuments: jest.fn(),
+    };
+    expenseModel = {
+      updateMany: jest.fn().mockResolvedValue({ modifiedCount: 3 }),
+      countDocuments: jest.fn(),
+    };
+    poModel = { countDocuments: jest.fn() };
+    auditLog = jest.fn().mockResolvedValue(undefined);
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BudgetService,
+        { provide: getModelToken(Budget.name), useValue: budgetModel },
+        { provide: getModelToken(BudgetLine.name), useValue: lineModel },
+        { provide: getModelToken(Expense.name), useValue: expenseModel },
+        { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
+        { provide: AuditService, useValue: { log: auditLog } },
+      ],
+    }).compile();
+    service = moduleRef.get(BudgetService);
+  });
+
+  describe('removeLine', () => {
+    it('blocks deletion when a PO or expense references the line', async () => {
+      budgetModel.findOne.mockReturnValue(leanOnce({ _id: 'b-1', organizationId: 'org-1' }));
+      lineModel.findOne.mockResolvedValue({ _id: 'l-1' });
+      poModel.countDocuments.mockResolvedValue(1);
+      expenseModel.countDocuments.mockResolvedValue(0);
+
+      await expect(service.removeLine('b-1', 'l-1', 'org-1', false)).rejects.toBeInstanceOf(ConflictException);
+      expect(lineModel.updateOne).not.toHaveBeenCalled();
+    });
+
+    it('soft-deletes the line when nothing references it', async () => {
+      budgetModel.findOne.mockReturnValue(leanOnce({ _id: 'b-1', organizationId: 'org-1' }));
+      lineModel.findOne.mockResolvedValue({ _id: 'l-1' });
+      poModel.countDocuments.mockResolvedValue(0);
+      expenseModel.countDocuments.mockResolvedValue(0);
+
+      const res = await service.removeLine('b-1', 'l-1', 'org-1', false);
+      expect(lineModel.updateOne).toHaveBeenCalledWith({ _id: 'l-1' }, { deletedAt: expect.any(Date) });
+      expect(res).toEqual({ message: 'Budget line deleted successfully' });
+    });
+  });
+
+  describe('deleteBudget', () => {
+    it('throws NotFound when the budget is absent (no cascade)', async () => {
+      budgetModel.findOne.mockResolvedValue(null);
+      await expect(service.deleteBudget('b-x', 'org-1', false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(lineModel.updateMany).not.toHaveBeenCalled();
+      expect(expenseModel.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('soft-deletes the budget and cascades to its lines + expenses, then audits', async () => {
+      budgetModel.findOne.mockResolvedValue({ _id: 'b-1', organizationId: 'org-1', projectId: 'p-1' });
+      const res = await service.deleteBudget('b-1', 'org-1', false, 'actor-1');
+
+      expect(budgetModel.updateOne).toHaveBeenCalledWith({ _id: 'b-1' }, { deletedAt: expect.any(Date) });
+      expect(lineModel.updateMany).toHaveBeenCalledWith({ budgetId: 'b-1', deletedAt: null }, { deletedAt: expect.any(Date) });
+      expect(expenseModel.updateMany).toHaveBeenCalledWith({ budgetId: 'b-1', deletedAt: null }, { deletedAt: expect.any(Date) });
+      expect(auditLog).toHaveBeenCalledTimes(1);
+      expect(auditLog.mock.calls[0][0]).toMatchObject({ action: 'DELETE', entityType: 'BUDGET', entityId: 'b-1', actorUserId: 'actor-1' });
+      expect(res).toEqual({ message: 'Budget deleted successfully' });
+    });
   });
 });

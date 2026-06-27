@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Unit, UnitDocument } from './schemas/unit.schema';
@@ -87,6 +87,13 @@ export class UnitsService {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const unit = await this.unitModel.findOne(filter);
     if (!unit) throw new NotFoundException('Unit not found');
+    // Referential integrity: refuse to orphan recorded payments.
+    const payments = await this.paymentModel.countDocuments({ unitId: id });
+    if (payments > 0) {
+      throw new ConflictException(
+        'Cannot delete unit with recorded payments. Remove its payments first.',
+      );
+    }
     await this.unitModel.updateOne({ _id: id }, { deletedAt: new Date() });
     return { message: 'Unit deleted successfully' };
   }

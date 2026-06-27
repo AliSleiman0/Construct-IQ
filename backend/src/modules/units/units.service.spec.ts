@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { UnitsService } from './units.service';
 import { Unit } from './schemas/unit.schema';
 import { Payment } from './schemas/payment.schema';
@@ -119,5 +119,44 @@ describe('UnitsService.createPayment (#29 bounds)', () => {
   it('throws NotFound when the unit does not exist (org-scoped)', async () => {
     unitModel.findOne.mockReturnValue(leanOnce(null));
     await expect(service.createPayment('org-1', dto(100) as any)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+/**
+ * #34 — referential integrity: a unit with recorded payments can't be deleted.
+ */
+describe('UnitsService.deleteUnit (#34 payment guard)', () => {
+  let service: UnitsService;
+  let unitModel: any;
+  let paymentModel: any;
+
+  beforeEach(async () => {
+    unitModel = { findOne: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) };
+    paymentModel = { countDocuments: jest.fn() };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        UnitsService,
+        { provide: getModelToken(Unit.name), useValue: unitModel },
+        { provide: getModelToken(Payment.name), useValue: paymentModel },
+        { provide: getModelToken(ProgressPhoto.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(UnitsService);
+  });
+
+  it('blocks deletion when the unit has recorded payments', async () => {
+    unitModel.findOne.mockResolvedValue({ _id: 'u-1' });
+    paymentModel.countDocuments.mockResolvedValue(2);
+    await expect(service.deleteUnit('u-1', 'org-1', false)).rejects.toBeInstanceOf(ConflictException);
+    expect(unitModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('soft-deletes the unit when it has no payments', async () => {
+    unitModel.findOne.mockResolvedValue({ _id: 'u-1' });
+    paymentModel.countDocuments.mockResolvedValue(0);
+    const res = await service.deleteUnit('u-1', 'org-1', false);
+    expect(unitModel.updateOne).toHaveBeenCalledWith({ _id: 'u-1' }, { deletedAt: expect.any(Date) });
+    expect(res).toEqual({ message: 'Unit deleted successfully' });
   });
 });

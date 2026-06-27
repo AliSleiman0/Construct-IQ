@@ -241,5 +241,14 @@ describe('TasksService', () => {
         expect.objectContaining({ deletedAt: expect.any(Date) }),
       );
     });
+
+    it('drops the deleted task from sibling dependency lists (#34)', async () => {
+      model.findOne.mockResolvedValue({ _id: 't-1' });
+      await service.softDelete('t-1', 'org-1', false);
+      expect(model.updateMany).toHaveBeenCalledWith(
+        { dependsOnTaskIds: 't-1' },
+        { $pull: { dependsOnTaskIds: 't-1' } },
+      );
+    });
   });
 });
