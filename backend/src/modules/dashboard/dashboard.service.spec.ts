@@ -1,6 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
 import { DashboardService } from './dashboard.service';
+import { Organization } from '../organizations/schemas/organization.schema';
+import { DashboardSnapshot } from './schemas/dashboard-snapshot.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { Task } from '../projects/schemas/task.schema';
 import { User } from '../users/schemas/user.schema';
@@ -36,6 +38,8 @@ describe('DashboardService — getPmDashboard', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardService,
+        { provide: getModelToken(Organization.name), useValue: {} },
+        { provide: getModelToken(DashboardSnapshot.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: getModelToken(Task.name), useValue: taskModel },
         { provide: getModelToken(User.name), useValue: {} },
@@ -128,6 +132,8 @@ describe('DashboardService — getSiteEngDashboard', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardService,
+        { provide: getModelToken(Organization.name), useValue: {} },
+        { provide: getModelToken(DashboardSnapshot.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: getModelToken(Task.name), useValue: taskModel },
         { provide: getModelToken(User.name), useValue: {} },
@@ -213,6 +219,8 @@ describe('DashboardService — getSurveyorDashboard', () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
         DashboardService,
+        { provide: getModelToken(Organization.name), useValue: {} },
+        { provide: getModelToken(DashboardSnapshot.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: getModelToken(Task.name), useValue: {} },
         { provide: getModelToken(User.name), useValue: {} },
@@ -322,5 +330,71 @@ describe('DashboardService — getSurveyorDashboard', () => {
     expect(res.committedCost).toBe(60000);
     // (1000 - 400) / 1000 * 100 = 60
     expect(res.budgetVariancePct).toBe(60);
+  });
+});
+
+/**
+ * #36 — getOrgDashboard is backed by a persisted snapshot: serve a fresh one,
+ * else compute live + write back. A cron refreshes every active org.
+ */
+describe('DashboardService — org snapshot (#36)', () => {
+  let service: DashboardService;
+  let snapshotModel: any;
+  let organizationModel: any;
+
+  const allModelTokens = [
+    Project, Task, User, Issue, DailyReport, AuditLog, Expense, Budget, PurchaseOrder, BoqItem, Variation, Valuation,
+  ];
+
+  beforeEach(async () => {
+    snapshotModel = { findOne: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) };
+    organizationModel = { find: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        DashboardService,
+        { provide: getModelToken(Organization.name), useValue: organizationModel },
+        { provide: getModelToken(DashboardSnapshot.name), useValue: snapshotModel },
+        ...allModelTokens.map((m) => ({ provide: getModelToken(m.name), useValue: {} })),
+      ],
+    }).compile();
+    service = moduleRef.get(DashboardService);
+  });
+
+  it('returns a fresh snapshot without recomputing', async () => {
+    const compute = jest.spyOn(service as any, 'computeOrgDashboard');
+    snapshotModel.findOne.mockReturnValue({
+      lean: () => Promise.resolve({ payload: { cached: true }, computedAt: new Date() }),
+    });
+    const res = await service.getOrgDashboard('org-1');
+    expect(res).toEqual({ cached: true });
+    expect(compute).not.toHaveBeenCalled();
+    expect(snapshotModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('computes + upserts when the snapshot is stale/absent', async () => {
+    const compute = jest
+      .spyOn(service as any, 'computeOrgDashboard')
+      .mockResolvedValue({ fresh: true });
+    snapshotModel.findOne.mockReturnValue({ lean: () => Promise.resolve(null) });
+    const res = await service.getOrgDashboard('org-1');
+    expect(compute).toHaveBeenCalledWith('org-1');
+    expect(res).toEqual({ fresh: true });
+    expect(snapshotModel.updateOne).toHaveBeenCalledWith(
+      { organizationId: 'org-1' },
+      { $set: { payload: { fresh: true }, computedAt: expect.any(Date) } },
+      { upsert: true },
+    );
+  });
+
+  it('refreshOrgSnapshots recomputes for each active org', async () => {
+    const refresh = jest.spyOn(service, 'refreshOrgSnapshot').mockResolvedValue({} as any);
+    organizationModel.find.mockReturnValue({
+      select: () => ({ lean: () => Promise.resolve([{ _id: 'org-1' }, { _id: 'org-2' }]) }),
+    });
+    const res = await service.refreshOrgSnapshots();
+    expect(res).toEqual({ refreshed: 2 });
+    expect(refresh).toHaveBeenCalledWith('org-1');
+    expect(refresh).toHaveBeenCalledWith('org-2');
   });
 });

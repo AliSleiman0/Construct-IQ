@@ -32,9 +32,15 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { BidsService } from './bids.service';
 import { UploadBidsDto } from './dto/upload-bids.dto';
 import { ListBidsQueryDto } from './dto/list-bids.query.dto';
+import { IsString } from 'class-validator';
 
 const MAX_FILES = 10;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+class AwardBidDto {
+  @IsString()
+  supplierId!: string;
+}
 
 @ApiTags('Bids')
 @ApiCookieAuth()
@@ -94,6 +100,18 @@ export class BidsController {
   @ApiOperation({ summary: 'Get a single bid by id' })
   findOne(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.bidsService.findOne(id, user.organizationId, user.isSuperAdmin);
+  }
+
+  @Post(':id/award')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(PERMISSIONS.PURCHASE_ORDERS.CREATE)
+  @ApiOperation({ summary: 'Award a bid — auto-creates a draft purchase order' })
+  award(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: AwardBidDto,
+  ) {
+    return this.bidsService.awardBid(id, user.organizationId, dto.supplierId, user.sub, user.isSuperAdmin);
   }
 
   @Delete(':id')

@@ -63,6 +63,10 @@ import {
   NotificationSchema,
 } from '../../modules/notifications/schemas/notification.schema';
 import {
+  DashboardSnapshot,
+  DashboardSnapshotSchema,
+} from '../../modules/dashboard/schemas/dashboard-snapshot.schema';
+import {
   Ticket,
   TicketSchema,
 } from '../../modules/tickets/schemas/ticket.schema';
@@ -166,6 +170,7 @@ const FEATURE_MODELS = NestMongooseModule.forFeature([
   { name: Rfi.name, schema: RfiSchema },
   { name: AuditLog.name, schema: AuditLogSchema },
   { name: Notification.name, schema: NotificationSchema },
+  { name: DashboardSnapshot.name, schema: DashboardSnapshotSchema },
   { name: Ticket.name, schema: TicketSchema },
   { name: Supplier.name, schema: SupplierSchema },
   { name: PurchaseOrder.name, schema: PurchaseOrderSchema },

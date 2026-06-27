@@ -5,7 +5,7 @@ import { Unit, UnitDocument } from './schemas/unit.schema';
 import { Payment, PaymentDocument } from './schemas/payment.schema';
 import { ProgressPhoto, ProgressPhotoDocument } from './schemas/progress-photo.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
-import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto } from './dto/create-unit.dto';
+import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto, UpdatePaymentDto } from './dto/create-unit.dto';
 import { UnitStatus, PaymentStatus } from '../../common/enums';
 import { PartialType } from '@nestjs/mapped-types';
 
@@ -16,7 +16,6 @@ export interface PhotoViewer {
 }
 
 class UpdateUnitDto extends PartialType(CreateUnitDto) {}
-class UpdatePaymentDto extends PartialType(CreatePaymentDto) {}
 
 @Injectable()
 export class UnitsService {
@@ -151,13 +150,35 @@ export class UnitsService {
     if (!payment) throw new NotFoundException('Payment not found');
 
     if (dto.dueDate !== undefined) payment.dueDate = new Date(dto.dueDate);
-    if ((dto as any).status !== undefined) {
-      (payment as any).status = (dto as any).status;
-      if ((dto as any).status === PaymentStatus.PAID && !payment.paidAt) {
-        payment.paidAt = new Date();
+    if (dto.invoiceNumber !== undefined) payment.invoiceNumber = dto.invoiceNumber ?? null;
+
+    // Partial-payment tracking (#36): when an amount received is supplied, derive
+    // the status from it — 0 → PENDING, part → PARTIAL, full → PAID (stamping paidAt
+    // only on full settlement). An explicit `status` still works for the terminal
+    // overrides (OVERDUE / CANCELLED, or a manual full PAID).
+    if (dto.paidAmountUsd !== undefined) {
+      if (dto.paidAmountUsd > payment.amountUsd) {
+        throw new BadRequestException('Paid amount cannot exceed the installment amount');
+      }
+      payment.paidAmountUsd = dto.paidAmountUsd;
+      if (dto.paidAmountUsd <= 0) {
+        payment.paidAmountUsd = 0;
+        payment.status = PaymentStatus.PENDING;
+        payment.paidAt = null;
+      } else if (dto.paidAmountUsd < payment.amountUsd) {
+        payment.status = PaymentStatus.PARTIAL;
+        payment.paidAt = null;
+      } else {
+        payment.status = PaymentStatus.PAID;
+        if (!payment.paidAt) payment.paidAt = new Date();
+      }
+    } else if (dto.status !== undefined) {
+      payment.status = dto.status;
+      if (dto.status === PaymentStatus.PAID) {
+        payment.paidAmountUsd = payment.amountUsd;
+        if (!payment.paidAt) payment.paidAt = new Date();
       }
     }
-    if (dto.invoiceNumber !== undefined) payment.invoiceNumber = dto.invoiceNumber ?? null;
 
     await payment.save();
     return payment.toObject();

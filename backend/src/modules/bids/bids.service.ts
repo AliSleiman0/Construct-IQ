@@ -14,7 +14,10 @@ import { DocumentsService } from '../documents/documents.service';
 import { BidExtractorAgent } from '../ai/agents/bid-extractor.agent';
 import { UploadBidsDto } from './dto/upload-bids.dto';
 import { ListBidsQueryDto } from './dto/list-bids.query.dto';
-import { DocumentType } from '../../common/enums';
+import { DocumentType, PurchaseOrderStatus } from '../../common/enums';
+import { ProcurementService } from '../procurement/procurement.service';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const EXTRACTION_CONCURRENCY = 5;
 const MAX_FILES_PER_UPLOAD = 10;
@@ -35,7 +38,106 @@ export class BidsService {
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     private readonly documentsService: DocumentsService,
     private readonly bidExtractor: BidExtractorAgent,
+    private readonly procurementService: ProcurementService,
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
+  }
+
+  /** A readable, effectively-unique PO number; the {org, poNumber} unique index is the backstop. */
+  private generatePoNumber(): string {
+    const stamp = Date.now().toString(36).toUpperCase();
+    const rand = Math.floor(Math.random() * 36 ** 4)
+      .toString(36)
+      .toUpperCase()
+      .padStart(4, '0');
+    return `PO-${stamp}-${rand}`;
+  }
+
+  /**
+   * Award a bid: validates the chosen supplier, auto-creates a DRAFT PurchaseOrder
+   * seeded from the bid's extracted data, and stamps the bid as awarded. A bid can
+   * only be awarded once. (#36 — cross-module workflow seam.)
+   */
+  async awardBid(
+    id: string,
+    organizationId: string,
+    supplierId: string,
+    actorUserId: string,
+    isSuperAdmin: boolean,
+  ): Promise<{ bid: any; purchaseOrder: any }> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const bid = await this.bidModel.findOne(filter);
+    if (!bid) throw new NotFoundException('Bid not found');
+    if (bid.awardedAt || bid.purchaseOrderId) {
+      throw new ConflictException('This bid has already been awarded');
+    }
+
+    // Validate the supplier belongs to the bid's org (throws NotFound if absent).
+    const orgId = bid.organizationId;
+    await this.procurementService.findSupplierById(supplierId, orgId, isSuperAdmin);
+
+    const extracted = (bid.extractedData ?? null) as { total_price?: number; currency?: string } | null;
+
+    // Create the DRAFT PO (retry once if the random poNumber collides).
+    let purchaseOrder: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        purchaseOrder = await this.procurementService.createPO(orgId, {
+          projectId: bid.projectId,
+          supplierId,
+          poNumber: this.generatePoNumber(),
+          status: PurchaseOrderStatus.DRAFT,
+          orderDate: new Date().toISOString(),
+          totalAmount: extracted?.total_price ?? undefined,
+          currency: extracted?.currency ?? 'USD',
+          notes: `Auto-created from awarded bid: ${bid.tradePackage}`,
+        } as any);
+        break;
+      } catch (e) {
+        if (e instanceof ConflictException && attempt === 0) continue;
+        throw e;
+      }
+    }
+
+    bid.awardedSupplierId = supplierId;
+    bid.awardedById = actorUserId;
+    bid.awardedAt = new Date();
+    bid.purchaseOrderId = purchaseOrder._id;
+    await bid.save();
+
+    this.audit({
+      organizationId: orgId,
+      actorUserId,
+      projectId: bid.projectId,
+      action: 'AWARD',
+      entityType: 'BID',
+      entityId: bid._id,
+      metadata: { supplierId, purchaseOrderId: purchaseOrder._id },
+    });
+    this.notify(orgId, [bid.uploadedById].filter((u) => u !== actorUserId), {
+      title: 'Bid awarded',
+      message: `Bid "${bid.tradePackage}" was awarded — a draft purchase order was created.`,
+      type: 'success',
+      entityType: 'BID',
+      entityId: bid._id,
+    });
+
+    return { bid: bid.toObject(), purchaseOrder };
+  }
 
   async uploadAndExtract(
     organizationId: string,

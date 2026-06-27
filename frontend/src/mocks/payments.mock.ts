@@ -1,4 +1,4 @@
-export type PaymentStatus = 'PAID' | 'DUE' | 'PENDING' | 'OVERDUE';
+export type PaymentStatus = 'PAID' | 'PARTIAL' | 'DUE' | 'PENDING' | 'OVERDUE';
 
 export interface MockPayment {
   id: string;
