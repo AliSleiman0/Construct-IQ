@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { RfisService } from './rfis.service';
 import { Rfi } from './schemas/rfi.schema';
 import { Project } from '../projects/schemas/project.schema';
@@ -152,5 +152,54 @@ describe('RfisService', () => {
       model.findOne.mockResolvedValue(null);
       await expect(service.update('x', 'org-1', { subject: 'x' } as any, false)).rejects.toBeInstanceOf(NotFoundException);
     });
+  });
+});
+
+/**
+ * #28 — RFI status via the generic update is transition-guarded. ANSWERED is
+ * reachable only through the dedicated answer() endpoint (stamps answeredById/At);
+ * close/reopen are self-service.
+ */
+describe('RfisService — status transition guard (#28)', () => {
+  let service: RfisService;
+  let model: any;
+
+  const findOnePopulate = (result: any) => ({ populate: () => ({ lean: () => Promise.resolve(result) }) });
+
+  const makeRfi = (status: RfiStatus) => {
+    const doc: any = { _id: 'rfi-1', organizationId: 'org-1', status };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    model = { findOne: jest.fn() };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        RfisService,
+        { provide: getModelToken(Rfi.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: { find: jest.fn() } },
+      ],
+    }).compile();
+    service = moduleRef.get(RfisService);
+  });
+
+  it('rejects OPEN → ANSWERED via generic update (must use the answer endpoint)', async () => {
+    const doc = makeRfi(RfiStatus.OPEN);
+    model.findOne.mockResolvedValueOnce(doc);
+    await expect(
+      service.update('rfi-1', 'org-1', { status: RfiStatus.ANSWERED } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it('allows ANSWERED → CLOSED (self-service)', async () => {
+    const doc = makeRfi(RfiStatus.ANSWERED);
+    model.findOne
+      .mockResolvedValueOnce(doc)
+      .mockReturnValueOnce(findOnePopulate({ _id: 'rfi-1', status: 'CLOSED' }));
+    await service.update('rfi-1', 'org-1', { status: RfiStatus.CLOSED } as any, false);
+    expect(doc.status).toBe(RfiStatus.CLOSED);
+    expect(doc.save).toHaveBeenCalled();
   });
 });

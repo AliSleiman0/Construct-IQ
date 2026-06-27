@@ -23,8 +23,11 @@ export class ReportSummaryAgent {
     });
   }
 
-  async summarize(reportId: string): Promise<string> {
-    const report = await this.dailyReportModel.findOne({ _id: reportId }).lean();
+  async summarize(reportId: string, organizationId: string, isSuperAdmin = false): Promise<string> {
+    // Multi-tenancy boundary: a daily report may only be summarized by a caller in
+    // its own organization. Org-less Super Admins may summarize any (platform pattern).
+    const filter = isSuperAdmin ? { _id: reportId } : { _id: reportId, organizationId };
+    const report = await this.dailyReportModel.findOne(filter).lean();
     if (!report) {
       throw new NotFoundException(`Daily report ${reportId} not found`);
     }
@@ -73,7 +76,7 @@ export class ReportSummaryAgent {
     const summary = response.choices[0]?.message?.content ?? '';
 
     await this.dailyReportModel.updateOne(
-      { _id: reportId },
+      filter,
       { aiSummary: summary, aiSummaryAt: new Date() },
     );
 

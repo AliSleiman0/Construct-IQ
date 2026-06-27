@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { IssuesService } from './issues.service';
 import { Issue } from './schemas/issue.schema';
 import { Project } from '../projects/schemas/project.schema';
@@ -170,7 +170,12 @@ describe('IssuesService', () => {
   });
 
   describe('bulkUpdate', () => {
+    // #28: bulkUpdate now validates each selected issue's current status against
+    // the transition machine, so tests must mock find(...).select('status').lean().
+    const selectLean = (rows: any[]) => ({ select: () => ({ lean: () => Promise.resolve(rows) }) });
+
     it('stamps resolvedAt + org-scopes when setting RESOLVED', async () => {
+      model.find.mockReturnValue(selectLean([{ status: IssueStatus.OPEN }, { status: IssueStatus.IN_PROGRESS }]));
       model.updateMany.mockResolvedValue({ modifiedCount: 2 });
       const res = await service.bulkUpdate('org-1', false, { ids: ['a', 'b'], status: IssueStatus.RESOLVED });
       expect(res).toEqual({ modified: 2 });
@@ -181,6 +186,7 @@ describe('IssuesService', () => {
     });
 
     it('clears resolution timestamps on reopen (OPEN)', async () => {
+      model.find.mockReturnValue(selectLean([{ status: IssueStatus.RESOLVED }]));
       await service.bulkUpdate('org-1', false, { ids: ['a'], status: IssueStatus.OPEN });
       const update = model.updateMany.mock.calls[0][1];
       expect(update.$set.resolvedAt).toBeNull();
@@ -259,7 +265,7 @@ describe('IssuesService', () => {
     });
 
     it('saves changes then returns the populated issue', async () => {
-      const doc: any = { save: jest.fn() };
+      const doc: any = { status: IssueStatus.OPEN, save: jest.fn() }; // OPEN → RESOLVED is legal
       model.findOne
         .mockReturnValueOnce(doc) // mutation fetch (no chain)
         .mockReturnValueOnce(findOneChain(populatedDoc())); // findById re-read
@@ -291,5 +297,82 @@ describe('IssuesService', () => {
         expect.objectContaining({ deletedAt: expect.any(Date) }),
       );
     });
+  });
+});
+
+/**
+ * #28 — status transitions on the generic update + bulk are guarded against the
+ * lifecycle (OPEN→IN_PROGRESS→RESOLVED→CLOSED, with reopens) and the resolution
+ * timestamps are derived server-side, not taken from the client.
+ */
+describe('IssuesService — status transition guard (#28)', () => {
+  let service: IssuesService;
+  let model: any;
+
+  const findOnePopulate = (result: any) => ({ populate: () => ({ lean: () => Promise.resolve(result) }) });
+  const selectLean = (result: any[]) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
+
+  const makeIssue = (status: IssueStatus) => {
+    const doc: any = { _id: 'iss-1', organizationId: 'org-1', status, resolvedAt: null, closedAt: null };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    model = { findOne: jest.fn(), find: jest.fn(), updateMany: jest.fn().mockResolvedValue({ modifiedCount: 2 }) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        IssuesService,
+        { provide: getModelToken(Issue.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: { find: jest.fn() } },
+      ],
+    }).compile();
+    service = moduleRef.get(IssuesService);
+  });
+
+  it('rejects OPEN → CLOSED (must pass RESOLVED first) and does not save', async () => {
+    const doc = makeIssue(IssueStatus.OPEN);
+    model.findOne.mockResolvedValueOnce(doc);
+    await expect(
+      service.update('iss-1', 'org-1', { status: IssueStatus.CLOSED } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(doc.save).not.toHaveBeenCalled();
+  });
+
+  it('OPEN → RESOLVED stamps resolvedAt server-side, ignoring any client resolvedAt', async () => {
+    const doc = makeIssue(IssueStatus.OPEN);
+    model.findOne
+      .mockResolvedValueOnce(doc) // update() fetch
+      .mockReturnValueOnce(findOnePopulate({ _id: 'iss-1', status: 'RESOLVED' })); // findById re-fetch
+    await service.update('iss-1', 'org-1', { status: IssueStatus.RESOLVED, resolvedAt: '1999-01-01' } as any, false);
+    expect(doc.status).toBe(IssueStatus.RESOLVED);
+    expect(doc.resolvedAt).toBeInstanceOf(Date);
+    expect(doc.resolvedAt.getFullYear()).toBeGreaterThan(2000); // not the client value
+    expect(doc.save).toHaveBeenCalled();
+  });
+
+  it('RESOLVED → CLOSED stamps closedAt', async () => {
+    const doc = makeIssue(IssueStatus.RESOLVED);
+    model.findOne
+      .mockResolvedValueOnce(doc)
+      .mockReturnValueOnce(findOnePopulate({ _id: 'iss-1', status: 'CLOSED' }));
+    await service.update('iss-1', 'org-1', { status: IssueStatus.CLOSED } as any, false);
+    expect(doc.closedAt).toBeInstanceOf(Date);
+  });
+
+  it('bulkUpdate rejects the batch if any selected issue cannot make the transition', async () => {
+    model.find.mockReturnValue(selectLean([{ status: IssueStatus.RESOLVED }, { status: IssueStatus.OPEN }]));
+    await expect(
+      service.bulkUpdate('org-1', false, { ids: ['a', 'b'], status: IssueStatus.CLOSED } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(model.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('bulkUpdate applies a legal status to all and derives the timestamp', async () => {
+    model.find.mockReturnValue(selectLean([{ status: IssueStatus.OPEN }, { status: IssueStatus.IN_PROGRESS }]));
+    await service.bulkUpdate('org-1', false, { ids: ['a', 'b'], status: IssueStatus.RESOLVED } as any);
+    const setArg = model.updateMany.mock.calls[0][1].$set;
+    expect(setArg.status).toBe(IssueStatus.RESOLVED);
+    expect(setArg.resolvedAt).toBeInstanceOf(Date);
   });
 });

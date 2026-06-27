@@ -11,7 +11,8 @@ export class CreateDeliveryDto {
 export class UpdateDeliveryDto {
   @IsOptional() @IsDateString() deliveryDate?: string;
   @IsOptional() @IsEnum(DeliveryStatus) status?: DeliveryStatus;
-  @IsOptional() @IsString() receivedById?: string;
+  // `receivedById` is NOT settable here — it's a server-stamped audit field set
+  // only by confirmDelivery (= caller). With forbidNonWhitelisted, sending it 400s.
   @IsOptional() @IsString() notes?: string;
 }
 

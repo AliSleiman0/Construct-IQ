@@ -101,3 +101,39 @@ PurchaseOrderSchema.index(
   { organizationId: 1, poNumber: 1 },
   { unique: true },
 );
+
+/** Round to 2 decimals, absorbing binary-float dust (0.1 * 3 -> 0.30000000000000004). */
+export const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/**
+ * Server-authoritative money invariant for a purchase order.
+ *
+ * When the PO carries line items, the items are the single source of truth: each
+ * item.totalPrice is recomputed as quantity * unitPrice, and the header totalAmount
+ * is the sum of those lines. Any client-supplied totalPrice / totalAmount is ignored.
+ *
+ * When there are NO line items, the manually-entered lump-sum totalAmount is left
+ * untouched (header-only POs are still allowed).
+ *
+ * Pure and idempotent — re-running it on an unchanged PO is a no-op. Exported so it
+ * can be unit-tested directly without a live Mongoose connection.
+ */
+export function applyPoTotals(po: {
+  items?: PurchaseOrderItem[] | null;
+  totalAmount?: number | null;
+}): void {
+  if (Array.isArray(po.items) && po.items.length > 0) {
+    for (const it of po.items) {
+      it.totalPrice = round2((it.quantity || 0) * (it.unitPrice || 0));
+    }
+    po.totalAmount = round2(po.items.reduce((sum, it) => sum + (it.totalPrice || 0), 0));
+  }
+  // else: no line items → preserve the manual lump-sum totalAmount as-is
+}
+
+// Recompute on every save (create / update / approve / reject all go through .save()),
+// so the header total can never drift from the line items regardless of code path.
+PurchaseOrderSchema.pre('save', function (next) {
+  applyPoTotals(this as unknown as PurchaseOrder);
+  next();
+});

@@ -173,6 +173,36 @@ describe('SurveyorService', () => {
     });
   });
 
+  describe('updateVariation (#26 — status not settable via generic PATCH)', () => {
+    const makeVariation = (over: Partial<any> = {}) => {
+      const doc: any = {
+        title: 'Old', description: 'old', impactAmount: 100,
+        status: VariationStatus.PENDING, approvedById: null, approvedAt: null, ...over,
+      };
+      doc.save = jest.fn().mockResolvedValue(doc);
+      doc.toObject = jest.fn().mockReturnValue(doc);
+      return doc;
+    };
+
+    it('updates only editable fields and never touches status/approver', async () => {
+      const doc = makeVariation();
+      variationModel.findOne.mockResolvedValue(doc);
+      // A tampering caller passes status; the service must ignore it.
+      await service.updateVariation('v-1', 'org-1', { title: 'New', impactAmount: 5000, status: VariationStatus.APPROVED } as any, false);
+      expect(doc.title).toBe('New');
+      expect(doc.impactAmount).toBe(5000);
+      expect(doc.status).toBe(VariationStatus.PENDING); // unchanged
+      expect(doc.approvedById).toBeNull();
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('throws NotFound (org-scoped) when missing', async () => {
+      variationModel.findOne.mockResolvedValue(null);
+      await expect(service.updateVariation('v-1', 'org-1', { title: 'x' } as any, false)).rejects.toBeInstanceOf(NotFoundException);
+      expect(variationModel.findOne).toHaveBeenCalledWith({ _id: 'v-1', organizationId: 'org-1' });
+    });
+  });
+
   describe('approveVariation', () => {
     it('approves a PENDING variation: stamps approver + APPROVED', async () => {
       const doc: any = { status: VariationStatus.PENDING, save: jest.fn(), toObject: () => ({ _id: 'v-1' }) };
@@ -222,6 +252,40 @@ describe('SurveyorService', () => {
         service.createValuation('org-1', { projectId: 'p1', period: 'April 2026', amountUsd: 1000 } as any),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(valuationModel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateValuation (#28 — transition-guarded status)', () => {
+    const makeValuation = (status: ValuationStatus) => {
+      const doc: any = { status, amountUsd: 100, retentionUsd: 0 };
+      doc.save = jest.fn().mockResolvedValue(doc);
+      doc.toObject = jest.fn().mockReturnValue(doc);
+      return doc;
+    };
+
+    it('allows the self-service DRAFT → SUBMITTED move', async () => {
+      const doc = makeValuation(ValuationStatus.DRAFT);
+      valuationModel.findOne.mockResolvedValue(doc);
+      await service.updateValuation('val-1', 'org-1', { status: ValuationStatus.SUBMITTED } as any, false);
+      expect(doc.status).toBe(ValuationStatus.SUBMITTED);
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('rejects DRAFT → CERTIFIED via generic update (must use /certify)', async () => {
+      const doc = makeValuation(ValuationStatus.DRAFT);
+      valuationModel.findOne.mockResolvedValue(doc);
+      await expect(
+        service.updateValuation('val-1', 'org-1', { status: ValuationStatus.CERTIFIED } as any, false),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(doc.save).not.toHaveBeenCalled();
+    });
+
+    it('edits amounts without touching status when status is omitted', async () => {
+      const doc = makeValuation(ValuationStatus.DRAFT);
+      valuationModel.findOne.mockResolvedValue(doc);
+      await service.updateValuation('val-1', 'org-1', { amountUsd: 5000 } as any, false);
+      expect(doc.amountUsd).toBe(5000);
+      expect(doc.status).toBe(ValuationStatus.DRAFT);
     });
   });
 

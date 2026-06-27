@@ -9,11 +9,13 @@ import { useUsers } from '@/features/users/hooks/useUsers';
 import { useBulkUpdateIssues } from '../hooks/useIssueMutations';
 import type { IssueStatus } from '@/types/issue.types';
 
+// CLOSED is intentionally omitted — an issue must be RESOLVED before it can be
+// closed, and bulk-closing a mixed selection would violate that. Close from the
+// issue detail view (RESOLVED → CLOSED) instead.
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
   { value: 'OPEN', label: 'Open' },
   { value: 'IN_PROGRESS', label: 'In progress' },
   { value: 'RESOLVED', label: 'Resolved' },
-  { value: 'CLOSED', label: 'Closed' },
 ];
 
 /** Floating bulk-action bar shown when rows are selected. */

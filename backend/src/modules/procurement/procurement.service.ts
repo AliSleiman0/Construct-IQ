@@ -24,9 +24,26 @@ import { PartialType } from '@nestjs/mapped-types';
 import { PurchaseOrderStatus, MaterialRequestStatus, DeliveryStatus } from '../../common/enums';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { seesAllProjects } from '../../common/util/project-scope.util';
+import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
 
 class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
+
+// Self-service PO transitions via the generic update. APPROVED/REJECTED are
+// dedicated-only (approvePO/rejectPO stamp approvedById/rejectedById).
+const PO_TRANSITIONS: TransitionMap<PurchaseOrderStatus> = {
+  [PurchaseOrderStatus.DRAFT]: [PurchaseOrderStatus.SUBMITTED, PurchaseOrderStatus.CANCELLED],
+  [PurchaseOrderStatus.SUBMITTED]: [PurchaseOrderStatus.CANCELLED],
+  [PurchaseOrderStatus.APPROVED]: [PurchaseOrderStatus.DELIVERED, PurchaseOrderStatus.CANCELLED],
+};
+
+// Self-service delivery transitions. DELIVERED is dedicated-only (confirmDelivery
+// stamps receivedById = caller and enforces the project member-gate).
+const DELIVERY_TRANSITIONS: TransitionMap<DeliveryStatus> = {
+  [DeliveryStatus.PENDING]: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.DELAYED, DeliveryStatus.CANCELLED],
+  [DeliveryStatus.IN_TRANSIT]: [DeliveryStatus.DELAYED, DeliveryStatus.CANCELLED],
+  [DeliveryStatus.DELAYED]: [DeliveryStatus.IN_TRANSIT, DeliveryStatus.CANCELLED],
+};
 
 /** Who is asking — when orgWide is false, results are limited to member projects. */
 export interface DeliveryViewer {
@@ -150,6 +167,8 @@ export class ProcurementService {
       budgetLineId: dto.budgetLineId ?? null,
       poNumber: dto.poNumber,
       status: dto.status ?? PurchaseOrderStatus.DRAFT,
+      // Honored only when there are no line items (lump-sum PO). When items are
+      // present, the schema pre-save hook (applyPoTotals) recomputes this from them.
       totalAmount: dto.totalAmount ?? null,
       currency: dto.currency ?? 'USD',
       orderDate: new Date(dto.orderDate),
@@ -164,7 +183,13 @@ export class ProcurementService {
     const po = await this.poModel.findOne(filter);
     if (!po) throw new NotFoundException('Purchase order not found');
 
-    if (dto.status !== undefined) po.status = dto.status;
+    if (dto.status !== undefined) {
+      // APPROVED/REJECTED go through approvePO/rejectPO only — guard self-service moves.
+      assertStatusTransition('purchase order', po.status, dto.status, PO_TRANSITIONS);
+      po.status = dto.status;
+    }
+    // Accepted for the lump-sum (no-items) case; overridden by the pre-save hook
+    // (applyPoTotals) whenever line items are present.
     if (dto.totalAmount !== undefined) po.totalAmount = dto.totalAmount ?? null;
     if (dto.notes !== undefined) po.notes = dto.notes ?? null;
     if (dto.expectedDeliveryDate !== undefined)
@@ -261,8 +286,12 @@ export class ProcurementService {
 
     if (dto.deliveryDate !== undefined)
       delivery.deliveryDate = dto.deliveryDate ? new Date(dto.deliveryDate) : null;
-    if (dto.status !== undefined) delivery.status = dto.status;
-    if (dto.receivedById !== undefined) delivery.receivedById = dto.receivedById ?? null;
+    if (dto.status !== undefined) {
+      // DELIVERED goes through confirmDelivery only (it stamps receivedById = caller
+      // and enforces the project member-gate). receivedById is no longer client-settable.
+      assertStatusTransition('delivery', delivery.status, dto.status, DELIVERY_TRANSITIONS);
+      delivery.status = dto.status;
+    }
     if (dto.notes !== undefined) delivery.notes = dto.notes ?? null;
 
     await delivery.save();

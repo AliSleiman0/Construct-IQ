@@ -202,7 +202,19 @@ export function CreatePOModal({
 }
 
 // ── Edit Purchase Order ──────────────────────────────────────────────────────
-const PO_STATUSES: PurchaseOrderStatus[] = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'DELIVERED', 'CANCELLED'];
+// Self-service status moves available from the generic edit form. APPROVED/REJECTED
+// are driven by the dedicated Approve/Reject buttons (server rejects them here).
+// Mirrors PO_TRANSITIONS on the backend; the current status is always shown.
+const PO_SELF_SERVICE: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
+  DRAFT: ['SUBMITTED', 'CANCELLED'],
+  SUBMITTED: ['CANCELLED'],
+  APPROVED: ['DELIVERED', 'CANCELLED'],
+  REJECTED: [],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+const poStatusOptions = (current?: PurchaseOrderStatus): PurchaseOrderStatus[] =>
+  current ? Array.from(new Set([current, ...PO_SELF_SERVICE[current]])) : ['DRAFT'];
 
 const editPoSchema = z.object({
   status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'DELIVERED', 'CANCELLED']),
@@ -280,7 +292,7 @@ export function EditPOModal({
         {error && <Alert severity="error">{error}</Alert>}
         <FormSelectField
           name="status" control={control} label="Status"
-          options={PO_STATUSES.map((s) => ({ label: s.charAt(0) + s.slice(1).toLowerCase(), value: s }))}
+          options={poStatusOptions(po?.status).map((s) => ({ label: s.charAt(0) + s.slice(1).toLowerCase(), value: s }))}
         />
         <FormTextField name="expectedDeliveryDate" control={control} label="Expected delivery (optional)" type="date" fullWidth InputLabelProps={{ shrink: true }} />
         <FormTextField name="notes" control={control} label="Notes (optional)" fullWidth multiline minRows={2} />
@@ -383,7 +395,19 @@ export function CreateMaterialRequestModal({
 }
 
 // ── Delivery ─────────────────────────────────────────────────────────────────
-const DELIVERY_STATUSES: DeliveryStatus[] = ['PENDING', 'IN_TRANSIT', 'DELIVERED', 'DELAYED', 'CANCELLED'];
+// DELIVERED is reached only via the dedicated "Confirm received" flow (it stamps
+// who received it). Mirrors DELIVERY_TRANSITIONS on the backend; current is shown.
+const DELIVERY_SELF_SERVICE: Record<DeliveryStatus, DeliveryStatus[]> = {
+  PENDING: ['IN_TRANSIT', 'DELAYED', 'CANCELLED'],
+  IN_TRANSIT: ['DELAYED', 'CANCELLED'],
+  DELAYED: ['IN_TRANSIT', 'CANCELLED'],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+const deliveryStatusOptions = (current?: DeliveryStatus): DeliveryStatus[] => {
+  const from = current ?? 'PENDING';
+  return Array.from(new Set([from, ...DELIVERY_SELF_SERVICE[from]]));
+};
 const deliverySchema = z.object({
   purchaseOrderId: z.string().min(1, 'Select a purchase order'),
   deliveryDate: z.string().optional(),
@@ -436,7 +460,7 @@ export function DeliveryModal({
         <Controller name="status" control={control}
           render={({ field }) => (
             <TextField {...field} select label="Status" fullWidth>
-              {DELIVERY_STATUSES.map((s) => <MenuItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase().replace('_', ' ')}</MenuItem>)}
+              {deliveryStatusOptions(delivery?.status).map((s) => <MenuItem key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase().replace('_', ' ')}</MenuItem>)}
             </TextField>
           )} />
         <FormTextField name="notes" control={control} label="Notes (optional)" fullWidth multiline minRows={2} />
