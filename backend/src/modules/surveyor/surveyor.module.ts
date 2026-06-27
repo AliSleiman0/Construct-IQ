@@ -5,8 +5,10 @@ import {
   ValuationsController,
 } from './surveyor.controller';
 import { SurveyorService } from './surveyor.service';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
+  imports: [AuditModule],
   controllers: [BoqController, VariationsController, ValuationsController],
   providers: [SurveyorService],
   exports: [SurveyorService],

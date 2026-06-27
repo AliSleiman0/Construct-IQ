@@ -1,11 +1,12 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConflictException, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { SurveyorService } from './surveyor.service';
 import { BoqItem } from './schemas/boq-item.schema';
 import { Variation, VariationStatus } from './schemas/variation.schema';
 import { Valuation, ValuationStatus } from './schemas/valuation.schema';
 import { Project } from '../projects/schemas/project.schema';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Unit tests for SurveyorService — the SE-1-class member-scoping on the three
@@ -19,6 +20,7 @@ describe('SurveyorService', () => {
   let variationModel: any;
   let valuationModel: any;
   let projectModel: any;
+  let auditService: any;
 
   // find(...).sort(...).lean()
   const listChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
@@ -44,6 +46,7 @@ describe('SurveyorService', () => {
       create: jest.fn(),
     };
     projectModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
+    auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -52,6 +55,7 @@ describe('SurveyorService', () => {
         { provide: getModelToken(Variation.name), useValue: variationModel },
         { provide: getModelToken(Valuation.name), useValue: valuationModel },
         { provide: getModelToken(Project.name), useValue: projectModel },
+        { provide: AuditService, useValue: auditService },
       ],
     }).compile();
     service = moduleRef.get(SurveyorService);
@@ -161,13 +165,13 @@ describe('SurveyorService', () => {
   });
 
   describe('createVariation', () => {
-    it('defaults status to PENDING with no approver', async () => {
+    it('defaults status to PENDING with no approver and records the creator', async () => {
       variationModel.create.mockResolvedValue({ _id: 'v-1' });
-      await service.createVariation('org-1', { projectId: 'p1', title: 'Extra slab', impactAmount: 1500 } as any);
+      await service.createVariation('org-1', 'qs-1', { projectId: 'p1', title: 'Extra slab', impactAmount: 1500 } as any);
       expect(variationModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           organizationId: 'org-1', projectId: 'p1', title: 'Extra slab', impactAmount: 1500,
-          status: VariationStatus.PENDING, approvedById: null, approvedAt: null,
+          status: VariationStatus.PENDING, createdById: 'qs-1', approvedById: null, approvedAt: null,
         }),
       );
     });
@@ -204,13 +208,39 @@ describe('SurveyorService', () => {
   });
 
   describe('approveVariation', () => {
-    it('approves a PENDING variation: stamps approver + APPROVED', async () => {
-      const doc: any = { status: VariationStatus.PENDING, save: jest.fn(), toObject: () => ({ _id: 'v-1' }) };
+    const pending = (over: any = {}) => ({
+      _id: 'v-1', organizationId: 'org-1', projectId: 'p1', impactAmount: 1500,
+      status: VariationStatus.PENDING, createdById: 'creator-1',
+      save: jest.fn(), toObject: () => ({ _id: 'v-1' }), ...over,
+    });
+
+    it('approves a PENDING variation: stamps approver + APPROVED and audits', async () => {
+      const doc: any = pending({ createdById: 'creator-1' });
       variationModel.findOne.mockResolvedValue(doc);
       await service.approveVariation('v-1', 'org-1', 'qs-1', false);
       expect(doc.status).toBe(VariationStatus.APPROVED);
       expect(doc.approvedById).toBe('qs-1');
       expect(doc.approvedAt).toBeInstanceOf(Date);
+      expect(doc.save).toHaveBeenCalled();
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'APPROVE', entityType: 'VARIATION', actorUserId: 'qs-1', entityId: 'v-1' }),
+      );
+    });
+
+    // #33 segregation of duties
+    it('blocks the creator from approving their own variation (403) and does not save/audit', async () => {
+      const doc: any = pending({ createdById: 'qs-1' });
+      variationModel.findOne.mockResolvedValue(doc);
+      await expect(service.approveVariation('v-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(doc.save).not.toHaveBeenCalled();
+      expect(auditService.log).not.toHaveBeenCalled();
+    });
+
+    it('allows a Super Admin to approve even their own variation', async () => {
+      const doc: any = pending({ createdById: 'sa-1' });
+      variationModel.findOne.mockResolvedValue(doc);
+      await service.approveVariation('v-1', 'org-1', 'sa-1', true);
+      expect(doc.status).toBe(VariationStatus.APPROVED);
       expect(doc.save).toHaveBeenCalled();
     });
 
@@ -223,6 +253,41 @@ describe('SurveyorService', () => {
       variationModel.findOne.mockResolvedValue(null);
       await expect(service.approveVariation('v-1', 'org-1', 'qs-1', false)).rejects.toBeInstanceOf(NotFoundException);
       expect(variationModel.findOne).toHaveBeenCalledWith({ _id: 'v-1', organizationId: 'org-1' });
+    });
+  });
+
+  describe('rejectVariation (#33)', () => {
+    it('rejects a PENDING variation: stamps rejecter + REJECTED + reason and audits', async () => {
+      const doc: any = {
+        _id: 'v-1', organizationId: 'org-1', projectId: 'p1', status: VariationStatus.PENDING,
+        createdById: 'creator-1', save: jest.fn(), toObject: () => ({ _id: 'v-1' }),
+      };
+      variationModel.findOne.mockResolvedValue(doc);
+      await service.rejectVariation('v-1', 'org-1', 'qs-1', 'out of scope', false);
+      expect(doc.status).toBe(VariationStatus.REJECTED);
+      expect(doc.rejectedById).toBe('qs-1');
+      expect(doc.rejectedAt).toBeInstanceOf(Date);
+      expect(doc.rejectionReason).toBe('out of scope');
+      expect(doc.save).toHaveBeenCalled();
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'REJECT', entityType: 'VARIATION', actorUserId: 'qs-1' }),
+      );
+    });
+
+    it('allows the creator to reject (withdraw) their own variation — no SoD on reject', async () => {
+      const doc: any = {
+        status: VariationStatus.PENDING, createdById: 'qs-1', organizationId: 'org-1', projectId: 'p1',
+        save: jest.fn(), toObject: () => ({}),
+      };
+      variationModel.findOne.mockResolvedValue(doc);
+      await service.rejectVariation('v-1', 'org-1', 'qs-1', undefined, false);
+      expect(doc.status).toBe(VariationStatus.REJECTED);
+      expect(doc.rejectionReason).toBeNull();
+    });
+
+    it('rejects rejecting a non-PENDING variation (400)', async () => {
+      variationModel.findOne.mockResolvedValue({ status: VariationStatus.APPROVED });
+      await expect(service.rejectVariation('v-1', 'org-1', 'qs-1', 'x', false)).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -282,14 +347,14 @@ describe('SurveyorService', () => {
 
     it('createVariation rejects a zero impact amount', async () => {
       await expect(
-        service.createVariation('org-1', { projectId: 'p1', title: 'No-op', impactAmount: 0 } as any),
+        service.createVariation('org-1', 'qs-1', { projectId: 'p1', title: 'No-op', impactAmount: 0 } as any),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(variationModel.create).not.toHaveBeenCalled();
     });
 
     it('createVariation accepts a negative (deduction) impact amount', async () => {
       variationModel.create.mockResolvedValue({ _id: 'v-1' });
-      await service.createVariation('org-1', { projectId: 'p1', title: 'Deduct', impactAmount: -500 } as any);
+      await service.createVariation('org-1', 'qs-1', { projectId: 'p1', title: 'Deduct', impactAmount: -500 } as any);
       expect(variationModel.create).toHaveBeenCalled();
     });
   });
@@ -337,6 +402,9 @@ describe('SurveyorService', () => {
       expect(doc.certifiedById).toBe('qs-1');
       expect(doc.certifiedAt).toBeInstanceOf(Date);
       expect(doc.save).toHaveBeenCalled();
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'CERTIFY', entityType: 'VALUATION', actorUserId: 'qs-1' }),
+      );
     });
 
     it('rejects certifying a DRAFT valuation — must be submitted first (400)', async () => {

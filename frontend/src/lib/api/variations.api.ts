@@ -30,6 +30,11 @@ export const variationsApi = {
     return idify(res.data);
   },
 
+  reject: async (id: string, reason?: string): Promise<Variation> => {
+    const res = await apiClient.post<Raw>(`/variations/${id}/reject`, { reason });
+    return idify(res.data);
+  },
+
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/variations/${id}`);
   },

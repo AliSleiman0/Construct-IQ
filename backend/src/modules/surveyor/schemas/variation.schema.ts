@@ -41,11 +41,25 @@ export class Variation {
   })
   status: VariationStatus;
 
+  // The user who raised the variation — used to enforce segregation of duties
+  // (a creator may not approve their own variation). Null on rows predating #33.
+  @Prop({ type: String, ref: 'User', default: null })
+  createdById: string | null;
+
   @Prop({ type: String, ref: 'User', default: null })
   approvedById: string | null;
 
   @Prop({ type: Date, default: null })
   approvedAt: Date | null;
+
+  @Prop({ type: String, ref: 'User', default: null })
+  rejectedById: string | null;
+
+  @Prop({ type: Date, default: null })
+  rejectedAt: Date | null;
+
+  @Prop({ type: String, default: null })
+  rejectionReason: string | null;
 
   deletedAt: Date | null;
   createdAt: Date;

@@ -7,8 +7,9 @@ import { PurchaseOrder, applyPoTotals } from './schemas/purchase-order.schema';
 import { Delivery } from './schemas/delivery.schema';
 import { MaterialRequest } from './schemas/material-request.schema';
 import { Project } from '../projects/schemas/project.schema';
-import { DeliveryStatus } from '../../common/enums';
+import { DeliveryStatus, MaterialRequestStatus, PurchaseOrderStatus } from '../../common/enums';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * Unit tests for the deliveries slice of ProcurementService (SE-7): member-scoped
@@ -20,6 +21,7 @@ describe('ProcurementService — deliveries (SE-7)', () => {
   let deliveryModel: any;
   let poModel: any;
   let projectModel: any;
+  let auditService: any;
 
   const sortLean = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
   const selectLean = (result: any) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
@@ -40,6 +42,7 @@ describe('ProcurementService — deliveries (SE-7)', () => {
     };
     poModel = { find: jest.fn().mockReturnValue(selectLean([])), findOne: jest.fn() };
     projectModel = { find: jest.fn().mockReturnValue(selectLean([])) };
+    auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -49,6 +52,7 @@ describe('ProcurementService — deliveries (SE-7)', () => {
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: projectModel },
+        { provide: AuditService, useValue: auditService },
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -158,6 +162,93 @@ describe('ProcurementService — deliveries (SE-7)', () => {
       expect(res.status).toBe(DeliveryStatus.DELIVERED);
       expect(res.receivedById).toBe('pro-1');
     });
+
+    it('audits the goods-receipt confirmation (#33)', async () => {
+      const doc = makeDelivery();
+      deliveryModel.findOne.mockResolvedValue(doc);
+      await service.confirmDelivery('del-1', procurement, {});
+      expect(auditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'CONFIRM', entityType: 'DELIVERY', actorUserId: 'pro-1', entityId: 'del-1' }),
+      );
+    });
+  });
+});
+
+/**
+ * #33 — segregation of duties + audit logging on material-request review.
+ * A requester may not approve their own MR (Super Admins exempt); approve/reject
+ * both write an audit entry.
+ */
+describe('ProcurementService — material request review (#33)', () => {
+  let service: ProcurementService;
+  let materialRequestModel: any;
+  let auditService: any;
+
+  const makeMr = (over: any = {}) => {
+    const doc: any = {
+      _id: 'mr-1', organizationId: 'org-1', projectId: 'p1',
+      status: MaterialRequestStatus.PENDING, requestedById: 'requester-1', reviewedById: null,
+      reviewedAt: null, reviewNote: null, ...over,
+    };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    doc.toObject = jest.fn().mockReturnValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    materialRequestModel = { findOne: jest.fn() };
+    auditService = { log: jest.fn().mockResolvedValue(undefined) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ProcurementService,
+        { provide: getModelToken(Supplier.name), useValue: {} },
+        { provide: getModelToken(PurchaseOrder.name), useValue: {} },
+        { provide: getModelToken(Delivery.name), useValue: {} },
+        { provide: getModelToken(MaterialRequest.name), useValue: materialRequestModel },
+        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: AuditService, useValue: auditService },
+      ],
+    }).compile();
+    service = moduleRef.get(ProcurementService);
+  });
+
+  it('blocks the requester from approving their own MR (403); no save/audit', async () => {
+    const mr = makeMr({ requestedById: 'requester-1' });
+    materialRequestModel.findOne.mockResolvedValue(mr);
+    await expect(
+      service.approveMaterialRequest('mr-1', 'org-1', 'requester-1', {} as any, false),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(mr.save).not.toHaveBeenCalled();
+    expect(auditService.log).not.toHaveBeenCalled();
+  });
+
+  it('lets a different reviewer approve, stamping review fields and auditing', async () => {
+    const mr = makeMr({ requestedById: 'requester-1' });
+    materialRequestModel.findOne.mockResolvedValue(mr);
+    await service.approveMaterialRequest('mr-1', 'org-1', 'pro-1', { reviewNote: 'ok' } as any, false);
+    expect(mr.status).toBe(MaterialRequestStatus.APPROVED);
+    expect(mr.reviewedById).toBe('pro-1');
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'APPROVE', entityType: 'MATERIAL_REQUEST', actorUserId: 'pro-1' }),
+    );
+  });
+
+  it('lets a Super Admin approve their own MR', async () => {
+    const mr = makeMr({ requestedById: 'sa-1' });
+    materialRequestModel.findOne.mockResolvedValue(mr);
+    await service.approveMaterialRequest('mr-1', 'org-1', 'sa-1', {} as any, true);
+    expect(mr.status).toBe(MaterialRequestStatus.APPROVED);
+    expect(mr.save).toHaveBeenCalled();
+  });
+
+  it('audits a rejection (no SoD on reject — requester may withdraw)', async () => {
+    const mr = makeMr({ requestedById: 'requester-1' });
+    materialRequestModel.findOne.mockResolvedValue(mr);
+    await service.rejectMaterialRequest('mr-1', 'org-1', 'requester-1', {} as any, false);
+    expect(mr.status).toBe(MaterialRequestStatus.REJECTED);
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'REJECT', entityType: 'MATERIAL_REQUEST' }),
+    );
   });
 });
 
@@ -237,6 +328,7 @@ describe('ProcurementService — status transition guards (#28)', () => {
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: {} },
+        { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -284,6 +376,58 @@ describe('ProcurementService — status transition guards (#28)', () => {
 });
 
 /**
+ * #33 — PO approve/reject write an audit entry on the successful state change.
+ */
+describe('ProcurementService — PO approval audit (#33)', () => {
+  let service: ProcurementService;
+  let poModel: any;
+  let auditService: any;
+
+  const makePo = (over: any = {}) => {
+    const doc: any = {
+      _id: 'po-1', organizationId: 'org-1', projectId: 'p1',
+      status: PurchaseOrderStatus.SUBMITTED, ...over,
+    };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    doc.toObject = jest.fn().mockReturnValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    poModel = { findOne: jest.fn() };
+    auditService = { log: jest.fn().mockResolvedValue(undefined) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ProcurementService,
+        { provide: getModelToken(Supplier.name), useValue: {} },
+        { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
+        { provide: getModelToken(Delivery.name), useValue: {} },
+        { provide: getModelToken(MaterialRequest.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: AuditService, useValue: auditService },
+      ],
+    }).compile();
+    service = moduleRef.get(ProcurementService);
+  });
+
+  it('audits a PO approval', async () => {
+    poModel.findOne.mockResolvedValue(makePo());
+    await service.approvePO('po-1', 'org-1', 'pro-1', false);
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'APPROVE', entityType: 'PURCHASE_ORDER', actorUserId: 'pro-1', entityId: 'po-1' }),
+    );
+  });
+
+  it('audits a PO rejection with the reason', async () => {
+    poModel.findOne.mockResolvedValue(makePo());
+    await service.rejectPO('po-1', 'org-1', 'pro-1', 'over budget', false);
+    expect(auditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'REJECT', entityType: 'PURCHASE_ORDER', metadata: expect.objectContaining({ reason: 'over budget' }) }),
+    );
+  });
+});
+
+/**
  * #30 — a PO's expected delivery date can't precede its order date nor sit in the
  * past, and the supplier on-time rate must ignore deliveries lacking a target or
  * actual date (instead of scoring null targets as "on-time").
@@ -322,6 +466,7 @@ describe('ProcurementService — date validation (#30)', () => {
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: {} },
+        { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);

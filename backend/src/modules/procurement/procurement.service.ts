@@ -25,6 +25,7 @@ import { PurchaseOrderStatus, MaterialRequestStatus, DeliveryStatus } from '../.
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { seesAllProjects } from '../../common/util/project-scope.util';
 import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
+import { AuditService } from '../audit/audit.service';
 
 class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
@@ -72,7 +73,13 @@ export class ProcurementService {
     @InjectModel(Delivery.name) private deliveryModel: Model<DeliveryDocument>,
     @InjectModel(MaterialRequest.name) private materialRequestModel: Model<MaterialRequestDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly auditService: AuditService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
 
   /** Project ids the user is a member of, within their org. */
   private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
@@ -235,6 +242,16 @@ export class ProcurementService {
     po.approvedById = approvedById;
     po.approvedAt = new Date();
     await po.save();
+
+    this.audit({
+      organizationId: po.organizationId,
+      actorUserId: approvedById,
+      projectId: po.projectId,
+      action: 'APPROVE',
+      entityType: 'PURCHASE_ORDER',
+      entityId: po._id,
+      metadata: { from: PurchaseOrderStatus.SUBMITTED, to: PurchaseOrderStatus.APPROVED },
+    });
     return po.toObject();
   }
 
@@ -251,6 +268,16 @@ export class ProcurementService {
     po.rejectedAt = new Date();
     po.rejectionReason = reason ?? null;
     await po.save();
+
+    this.audit({
+      organizationId: po.organizationId,
+      actorUserId: rejectedById,
+      projectId: po.projectId,
+      action: 'REJECT',
+      entityType: 'PURCHASE_ORDER',
+      entityId: po._id,
+      metadata: { to: PurchaseOrderStatus.REJECTED, reason: reason ?? null },
+    });
     return po.toObject();
   }
 
@@ -385,12 +412,27 @@ export class ProcurementService {
     if (mr.status !== MaterialRequestStatus.PENDING) {
       throw new BadRequestException('Only PENDING material requests can be approved');
     }
+    // Segregation of duties: the requester may not approve their own request
+    // (Super Admins are exempt). #33
+    if (!isSuperAdmin && mr.requestedById && mr.requestedById === reviewedById) {
+      throw new ForbiddenException('You cannot approve a material request you created');
+    }
 
     mr.status = MaterialRequestStatus.APPROVED;
     mr.reviewedById = reviewedById;
     mr.reviewedAt = new Date();
     mr.reviewNote = dto.reviewNote ?? null;
     await mr.save();
+
+    this.audit({
+      organizationId: mr.organizationId,
+      actorUserId: reviewedById,
+      projectId: mr.projectId,
+      action: 'APPROVE',
+      entityType: 'MATERIAL_REQUEST',
+      entityId: mr._id,
+      metadata: { to: MaterialRequestStatus.APPROVED },
+    });
     return mr.toObject();
   }
 
@@ -407,6 +449,16 @@ export class ProcurementService {
     mr.reviewedAt = new Date();
     mr.reviewNote = dto.reviewNote ?? null;
     await mr.save();
+
+    this.audit({
+      organizationId: mr.organizationId,
+      actorUserId: reviewedById,
+      projectId: mr.projectId,
+      action: 'REJECT',
+      entityType: 'MATERIAL_REQUEST',
+      entityId: mr._id,
+      metadata: { to: MaterialRequestStatus.REJECTED },
+    });
     return mr.toObject();
   }
 
@@ -669,6 +721,15 @@ export class ProcurementService {
     if (dto.notes !== undefined) delivery.notes = dto.notes ?? null;
 
     await delivery.save();
+
+    this.audit({
+      organizationId: delivery.organizationId,
+      actorUserId: user.sub,
+      action: 'CONFIRM',
+      entityType: 'DELIVERY',
+      entityId: delivery._id,
+      metadata: { purchaseOrderId: delivery.purchaseOrderId, to: DeliveryStatus.DELIVERED },
+    });
     return delivery.toObject();
   }
 }

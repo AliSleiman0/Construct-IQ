@@ -3,9 +3,11 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { AuditService } from '../audit/audit.service';
 import { BoqItem, BoqItemDocument } from './schemas/boq-item.schema';
 import { Variation, VariationDocument, VariationStatus } from './schemas/variation.schema';
 import { Valuation, ValuationDocument, ValuationStatus } from './schemas/valuation.schema';
@@ -53,7 +55,13 @@ export class SurveyorService {
     @InjectModel(Variation.name) private variationModel: Model<VariationDocument>,
     @InjectModel(Valuation.name) private valuationModel: Model<ValuationDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly auditService: AuditService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
 
   /** Project ids the user is a member of, within their org. */
   private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
@@ -170,7 +178,7 @@ export class SurveyorService {
     return this.variationModel.find(filter).sort({ createdAt: -1 }).lean();
   }
 
-  async createVariation(organizationId: string, dto: CreateVariationDto): Promise<any> {
+  async createVariation(organizationId: string, createdById: string, dto: CreateVariationDto): Promise<any> {
     if (dto.impactAmount === 0) {
       throw new BadRequestException('Variation impact amount must be non-zero');
     }
@@ -182,6 +190,7 @@ export class SurveyorService {
       impactAmount: dto.impactAmount,
       currency: dto.currency ?? 'USD',
       status: VariationStatus.PENDING,
+      createdById,
       approvedById: null,
       approvedAt: null,
     });
@@ -214,11 +223,52 @@ export class SurveyorService {
     if (variation.status !== VariationStatus.PENDING) {
       throw new BadRequestException('Only PENDING variations can be approved');
     }
+    // Segregation of duties: the creator may not approve their own variation
+    // (Super Admins are exempt as a platform-operator override). #33
+    if (!isSuperAdmin && variation.createdById && variation.createdById === approvedById) {
+      throw new ForbiddenException('You cannot approve a variation you created');
+    }
 
     variation.status = VariationStatus.APPROVED;
     variation.approvedById = approvedById;
     variation.approvedAt = new Date();
     await variation.save();
+
+    this.audit({
+      organizationId: variation.organizationId,
+      actorUserId: approvedById,
+      projectId: variation.projectId,
+      action: 'APPROVE',
+      entityType: 'VARIATION',
+      entityId: variation._id,
+      metadata: { impactAmount: variation.impactAmount, to: VariationStatus.APPROVED },
+    });
+    return variation.toObject();
+  }
+
+  async rejectVariation(id: string, organizationId: string, rejectedById: string, reason: string | undefined, isSuperAdmin: boolean): Promise<any> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const variation = await this.variationModel.findOne(filter);
+    if (!variation) throw new NotFoundException('Variation not found');
+    if (variation.status !== VariationStatus.PENDING) {
+      throw new BadRequestException('Only PENDING variations can be rejected');
+    }
+
+    variation.status = VariationStatus.REJECTED;
+    variation.rejectedById = rejectedById;
+    variation.rejectedAt = new Date();
+    variation.rejectionReason = reason ?? null;
+    await variation.save();
+
+    this.audit({
+      organizationId: variation.organizationId,
+      actorUserId: rejectedById,
+      projectId: variation.projectId,
+      action: 'REJECT',
+      entityType: 'VARIATION',
+      entityId: variation._id,
+      metadata: { to: VariationStatus.REJECTED, reason: reason ?? null },
+    });
     return variation.toObject();
   }
 
@@ -292,6 +342,16 @@ export class SurveyorService {
     valuation.certifiedById = certifiedById;
     valuation.certifiedAt = new Date();
     await valuation.save();
+
+    this.audit({
+      organizationId: valuation.organizationId,
+      actorUserId: certifiedById,
+      projectId: valuation.projectId,
+      action: 'CERTIFY',
+      entityType: 'VALUATION',
+      entityId: valuation._id,
+      metadata: { amountUsd: valuation.amountUsd, to: ValuationStatus.CERTIFIED },
+    });
     return valuation.toObject();
   }
 }
