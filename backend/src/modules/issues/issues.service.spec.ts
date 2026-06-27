@@ -5,6 +5,13 @@ import { IssuesService } from './issues.service';
 import { Issue } from './schemas/issue.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { IssueStatus, IssueSeverity } from '../../common/enums';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
+
+const auditNotifyProviders = () => [
+  { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+  { provide: NotificationsService, useValue: { notifyMany: jest.fn().mockResolvedValue(undefined) } },
+];
 
 /**
  * Unit tests for IssuesService — multi-tenancy scoping + the populate/flatten
@@ -63,6 +70,7 @@ describe('IssuesService', () => {
         IssuesService,
         { provide: getModelToken(Issue.name), useValue: model },
         { provide: getModelToken(Project.name), useValue: projectModel },
+        ...auditNotifyProviders(),
       ],
     }).compile();
     service = moduleRef.get(IssuesService);
@@ -325,6 +333,7 @@ describe('IssuesService — status transition guard (#28)', () => {
         IssuesService,
         { provide: getModelToken(Issue.name), useValue: model },
         { provide: getModelToken(Project.name), useValue: { find: jest.fn() } },
+        ...auditNotifyProviders(),
       ],
     }).compile();
     service = moduleRef.get(IssuesService);
@@ -374,5 +383,65 @@ describe('IssuesService — status transition guard (#28)', () => {
     const setArg = model.updateMany.mock.calls[0][1].$set;
     expect(setArg.status).toBe(IssueStatus.RESOLVED);
     expect(setArg.resolvedAt).toBeInstanceOf(Date);
+  });
+});
+
+/**
+ * #35 — issue resolution + comments emit notifications and audit entries.
+ */
+describe('IssuesService — events (#35)', () => {
+  let service: IssuesService;
+  let model: any;
+  let auditLog: jest.Mock;
+  let notifyMany: jest.Mock;
+
+  const findOnePopulate = (result: any) => ({ populate: () => ({ lean: () => Promise.resolve(result) }) });
+  const makeIssue = (over: any = {}) => {
+    const doc: any = {
+      _id: 'iss-1', organizationId: 'org-1', projectId: 'p-1', title: 'Crack in wall',
+      status: IssueStatus.IN_PROGRESS, createdById: 'creator-1', assignedToId: 'assignee-1',
+      resolvedAt: null, closedAt: null, comments: [], ...over,
+    };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    model = { findOne: jest.fn() };
+    auditLog = jest.fn().mockResolvedValue(undefined);
+    notifyMany = jest.fn().mockResolvedValue(undefined);
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        IssuesService,
+        { provide: getModelToken(Issue.name), useValue: model },
+        { provide: getModelToken(Project.name), useValue: { find: jest.fn() } },
+        { provide: AuditService, useValue: { log: auditLog } },
+        { provide: NotificationsService, useValue: { notifyMany } },
+      ],
+    }).compile();
+    service = moduleRef.get(IssuesService);
+  });
+
+  it('audits + notifies (actor excluded) when an issue is resolved', async () => {
+    const doc = makeIssue();
+    model.findOne
+      .mockResolvedValueOnce(doc)
+      .mockReturnValueOnce(findOnePopulate({ _id: 'iss-1', status: 'RESOLVED' }));
+    await service.update('iss-1', 'org-1', { status: IssueStatus.RESOLVED } as any, false, 'assignee-1');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'UPDATE', entityType: 'ISSUE', entityId: 'iss-1' }),
+    );
+    expect(notifyMany).toHaveBeenCalledWith('org-1', ['creator-1'],
+      expect.objectContaining({ type: 'success', entityType: 'ISSUE' }));
+  });
+
+  it('audits + notifies collaborators on a comment (author excluded)', async () => {
+    model.findOne.mockResolvedValue(makeIssue());
+    await service.addComment('iss-1', 'org-1', 'creator-1', { body: 'looking into it' } as any, false);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'COMMENT', entityType: 'ISSUE' }),
+    );
+    expect(notifyMany).toHaveBeenCalledWith('org-1', ['assignee-1'],
+      expect.objectContaining({ entityType: 'ISSUE' }));
   });
 });

@@ -7,6 +7,7 @@ import { Variation, VariationStatus } from './schemas/variation.schema';
 import { Valuation, ValuationStatus } from './schemas/valuation.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Unit tests for SurveyorService — the SE-1-class member-scoping on the three
@@ -21,6 +22,7 @@ describe('SurveyorService', () => {
   let valuationModel: any;
   let projectModel: any;
   let auditService: any;
+  let notifyMany: jest.Mock;
 
   // find(...).sort(...).lean()
   const listChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
@@ -47,6 +49,7 @@ describe('SurveyorService', () => {
     };
     projectModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
     auditService = { log: jest.fn().mockResolvedValue(undefined) };
+    notifyMany = jest.fn().mockResolvedValue(undefined);
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -56,6 +59,7 @@ describe('SurveyorService', () => {
         { provide: getModelToken(Valuation.name), useValue: valuationModel },
         { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: AuditService, useValue: auditService },
+        { provide: NotificationsService, useValue: { notifyMany } },
       ],
     }).compile();
     service = moduleRef.get(SurveyorService);
@@ -225,6 +229,9 @@ describe('SurveyorService', () => {
       expect(auditService.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'APPROVE', entityType: 'VARIATION', actorUserId: 'qs-1', entityId: 'v-1' }),
       );
+      // #35 — notify the creator (actor excluded)
+      expect(notifyMany).toHaveBeenCalledWith('org-1', ['creator-1'],
+        expect.objectContaining({ type: 'success', entityType: 'VARIATION' }));
     });
 
     // #33 segregation of duties

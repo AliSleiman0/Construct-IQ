@@ -26,6 +26,7 @@ import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { seesAllProjects } from '../../common/util/project-scope.util';
 import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 class UpdateSupplierDto extends PartialType(CreateSupplierDto) {}
 class UpdatePurchaseOrderDto extends PartialType(CreatePurchaseOrderDto) {}
@@ -74,11 +75,27 @@ export class ProcurementService {
     @InjectModel(MaterialRequest.name) private materialRequestModel: Model<MaterialRequestDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** Fire-and-forget audit write — a logging failure must never break the op. */
   private audit(entry: Parameters<AuditService['log']>[0]): void {
     this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
+  }
+
+  /** Member user-ids of a project (notification recipients for project-wide events). */
+  private async projectMemberIds(projectId: string): Promise<string[]> {
+    const project = await this.projectModel.findOne({ _id: projectId }).select('members').lean();
+    return ((project as any)?.members ?? []).map((m: any) => m.userId).filter(Boolean);
   }
 
   /** Project ids the user is a member of, within their org. */
@@ -259,6 +276,14 @@ export class ProcurementService {
       entityId: po._id,
       metadata: { from: PurchaseOrderStatus.SUBMITTED, to: PurchaseOrderStatus.APPROVED },
     });
+    const members = await this.projectMemberIds(po.projectId);
+    this.notify(po.organizationId, members.filter((u) => u !== approvedById), {
+      title: 'Purchase order approved',
+      message: `Purchase order ${po.poNumber} was approved.`,
+      type: 'success',
+      entityType: 'PURCHASE_ORDER',
+      entityId: po._id,
+    });
     return po.toObject();
   }
 
@@ -284,6 +309,14 @@ export class ProcurementService {
       entityType: 'PURCHASE_ORDER',
       entityId: po._id,
       metadata: { to: PurchaseOrderStatus.REJECTED, reason: reason ?? null },
+    });
+    const members = await this.projectMemberIds(po.projectId);
+    this.notify(po.organizationId, members.filter((u) => u !== rejectedById), {
+      title: 'Purchase order rejected',
+      message: `Purchase order ${po.poNumber} was rejected${reason ? `: ${reason}` : ''}.`,
+      type: 'error',
+      entityType: 'PURCHASE_ORDER',
+      entityId: po._id,
     });
     return po.toObject();
   }
@@ -441,6 +474,13 @@ export class ProcurementService {
       entityId: mr._id,
       metadata: { to: MaterialRequestStatus.APPROVED },
     });
+    this.notify(mr.organizationId, [mr.requestedById].filter((u) => u !== reviewedById), {
+      title: 'Material request approved',
+      message: `Your material request "${mr.title}" was approved.`,
+      type: 'success',
+      entityType: 'MATERIAL_REQUEST',
+      entityId: mr._id,
+    });
     return mr.toObject();
   }
 
@@ -466,6 +506,13 @@ export class ProcurementService {
       entityType: 'MATERIAL_REQUEST',
       entityId: mr._id,
       metadata: { to: MaterialRequestStatus.REJECTED },
+    });
+    this.notify(mr.organizationId, [mr.requestedById].filter((u) => u !== reviewedById), {
+      title: 'Material request rejected',
+      message: `Your material request "${mr.title}" was rejected${dto.reviewNote ? `: ${dto.reviewNote}` : ''}.`,
+      type: 'error',
+      entityType: 'MATERIAL_REQUEST',
+      entityId: mr._id,
     });
     return mr.toObject();
   }
@@ -738,6 +785,19 @@ export class ProcurementService {
       entityType: 'DELIVERY',
       entityId: delivery._id,
       metadata: { purchaseOrderId: delivery.purchaseOrderId, to: DeliveryStatus.DELIVERED },
+    });
+    // Deliveries carry no projectId — resolve it via the PO to notify the team.
+    const po = await this.poModel
+      .findOne({ _id: delivery.purchaseOrderId })
+      .select('projectId')
+      .lean();
+    const members = po ? await this.projectMemberIds(String((po as any).projectId)) : [];
+    this.notify(delivery.organizationId, members.filter((u) => u !== user.sub), {
+      title: 'Delivery confirmed',
+      message: 'A purchase-order delivery was confirmed as received.',
+      type: 'success',
+      entityType: 'DELIVERY',
+      entityId: delivery._id,
     });
     return delivery.toObject();
   }

@@ -13,6 +13,8 @@ import { AddIssueCommentDto } from './dto/add-issue-comment.dto';
 import { BulkUpdateIssuesDto } from './dto/bulk-update-issues.dto';
 import { IssueStatus, IssueSeverity } from '../../common/enums';
 import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /** Issues open/in-progress older than this many days are "stale". */
 const STALE_DAYS = 7;
@@ -67,7 +69,23 @@ export class IssuesService {
   constructor(
     @InjectModel(Issue.name) private issueModel: Model<IssueDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
+  }
 
   /** Project ids the user is a member of, within their org. */
   private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
@@ -365,10 +383,14 @@ export class IssuesService {
     organizationId: string,
     dto: UpdateIssueDto,
     isSuperAdmin: boolean,
+    actorUserId?: string,
   ) {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const issue = await this.issueModel.findOne(filter);
     if (!issue) throw new NotFoundException('Issue not found');
+
+    const prevStatus = issue.status;
+    let statusChanged = false;
 
     if (dto.title !== undefined) issue.title = dto.title;
     if (dto.description !== undefined) issue.description = dto.description ?? null;
@@ -379,6 +401,7 @@ export class IssuesService {
       // server-side. Any client-supplied resolvedAt is ignored.
       assertStatusTransition('issue', issue.status, dto.status, ISSUE_TRANSITIONS);
       issue.status = dto.status;
+      statusChanged = true;
       const ts = issueTimestamps(dto.status);
       if (ts.resolvedAt !== undefined) issue.resolvedAt = ts.resolvedAt;
       if (ts.closedAt !== undefined) issue.closedAt = ts.closedAt;
@@ -388,6 +411,27 @@ export class IssuesService {
     if (dto.assignedToId !== undefined) issue.assignedToId = dto.assignedToId ?? null;
 
     await issue.save();
+
+    if (statusChanged) {
+      this.audit({
+        organizationId: issue.organizationId,
+        actorUserId,
+        projectId: issue.projectId,
+        action: 'UPDATE',
+        entityType: 'ISSUE',
+        entityId: issue._id,
+        metadata: { field: 'status', from: prevStatus, to: issue.status },
+      });
+      const resolved = issue.status === IssueStatus.RESOLVED || issue.status === IssueStatus.CLOSED;
+      this.notify(issue.organizationId, [issue.createdById, issue.assignedToId].filter((u) => u !== actorUserId), {
+        title: resolved ? 'Issue resolved' : 'Issue status changed',
+        message: `Issue "${issue.title}" is now ${issue.status}.`,
+        type: resolved ? 'success' : 'info',
+        entityType: 'ISSUE',
+        entityId: issue._id,
+      });
+    }
+
     return this.findById(id, organizationId, isSuperAdmin);
   }
 
@@ -419,6 +463,22 @@ export class IssuesService {
 
     issue.comments.push({ authorId, body: dto.body } as any);
     await issue.save();
+
+    this.audit({
+      organizationId: issue.organizationId,
+      actorUserId: authorId,
+      projectId: issue.projectId,
+      action: 'COMMENT',
+      entityType: 'ISSUE',
+      entityId: issue._id,
+    });
+    this.notify(issue.organizationId, [issue.createdById, issue.assignedToId].filter((u) => u !== authorId), {
+      title: 'New comment on issue',
+      message: `A comment was added to "${issue.title}".`,
+      type: 'info',
+      entityType: 'ISSUE',
+      entityId: issue._id,
+    });
 
     return issue.comments[issue.comments.length - 1];
   }

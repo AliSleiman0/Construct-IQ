@@ -6,6 +6,13 @@ import { Rfi } from './schemas/rfi.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { RfiStatus, RfiDiscipline } from '../../common/enums';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
+
+const auditNotifyProviders = () => [
+  { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+  { provide: NotificationsService, useValue: { notifyMany: jest.fn().mockResolvedValue(undefined) } },
+];
 
 /**
  * Unit tests for RfisService — org + project-membership scoping, the populate/
@@ -52,6 +59,7 @@ describe('RfisService', () => {
         RfisService,
         { provide: getModelToken(Rfi.name), useValue: model },
         { provide: getModelToken(Project.name), useValue: projectModel },
+        ...auditNotifyProviders(),
       ],
     }).compile();
     service = moduleRef.get(RfisService);
@@ -163,25 +171,49 @@ describe('RfisService', () => {
 describe('RfisService — status transition guard (#28)', () => {
   let service: RfisService;
   let model: any;
+  let auditLog: jest.Mock;
+  let notifyMany: jest.Mock;
 
   const findOnePopulate = (result: any) => ({ populate: () => ({ lean: () => Promise.resolve(result) }) });
 
-  const makeRfi = (status: RfiStatus) => {
-    const doc: any = { _id: 'rfi-1', organizationId: 'org-1', status };
+  const makeRfi = (status: RfiStatus, over: any = {}) => {
+    const doc: any = {
+      _id: 'rfi-1', organizationId: 'org-1', projectId: 'p-1', subject: 'Beam detail',
+      createdById: 'creator-1', status, ...over,
+    };
     doc.save = jest.fn().mockResolvedValue(doc);
     return doc;
   };
 
   beforeEach(async () => {
     model = { findOne: jest.fn() };
+    auditLog = jest.fn().mockResolvedValue(undefined);
+    notifyMany = jest.fn().mockResolvedValue(undefined);
     const moduleRef = await Test.createTestingModule({
       providers: [
         RfisService,
         { provide: getModelToken(Rfi.name), useValue: model },
         { provide: getModelToken(Project.name), useValue: { find: jest.fn() } },
+        { provide: AuditService, useValue: { log: auditLog } },
+        { provide: NotificationsService, useValue: { notifyMany } },
       ],
     }).compile();
     service = moduleRef.get(RfisService);
+  });
+
+  it('answer(): audits + notifies the raiser (#35)', async () => {
+    const doc = makeRfi(RfiStatus.OPEN);
+    model.findOne
+      .mockResolvedValueOnce(doc)
+      .mockReturnValueOnce(findOnePopulate({ _id: 'rfi-1', status: 'ANSWERED' }));
+    const user: any = { sub: 'answerer-1', organizationId: 'org-1', isSuperAdmin: false };
+    await service.answer('rfi-1', user, { answer: 'See detail 4.' } as any);
+    expect(doc.status).toBe(RfiStatus.ANSWERED);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ANSWER', entityType: 'RFI', entityId: 'rfi-1' }),
+    );
+    expect(notifyMany).toHaveBeenCalledWith('org-1', ['creator-1'],
+      expect.objectContaining({ type: 'success', entityType: 'RFI' }));
   });
 
   it('rejects OPEN → ANSWERED via generic update (must use the answer endpoint)', async () => {

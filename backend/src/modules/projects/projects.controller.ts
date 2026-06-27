@@ -56,7 +56,7 @@ export class ProjectsController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateProjectDto,
   ) {
-    return this.projectsService.update(id, user.organizationId, dto, user.isSuperAdmin);
+    return this.projectsService.update(id, user.organizationId, dto, user.isSuperAdmin, user.sub);
   }
 
   @Delete(':id')

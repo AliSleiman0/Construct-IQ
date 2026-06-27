@@ -70,6 +70,11 @@ export class Task {
   @Prop({ type: Date, default: null })
   completedAt: Date | null;
 
+  // Stamped once when an overdue alert has been sent for this task, so the daily
+  // sweep never re-notifies. Cleared is the default (null = not yet alerted).
+  @Prop({ type: Date, default: null })
+  overdueNotifiedAt: Date | null;
+
   @Prop({ type: Number, default: 0, min: 0, max: 100 })
   progress: number;
 

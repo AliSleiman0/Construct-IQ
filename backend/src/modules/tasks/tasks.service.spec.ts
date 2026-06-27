@@ -5,6 +5,8 @@ import { TasksService } from './tasks.service';
 import { Task } from '../projects/schemas/task.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { TaskStatus, TaskPriority } from '../../common/enums';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Unit tests for TasksService — multi-tenancy scoping + not-found behaviour.
@@ -14,9 +16,13 @@ describe('TasksService', () => {
   let service: TasksService;
   let model: any;
   let projectModel: any;
+  let auditLog: jest.Mock;
+  let notifyMany: jest.Mock;
 
   // find(...).sort(...).lean() chain
   const findChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
+  // find(...).select(...).lean() chain (overdue sweep)
+  const selectChain = (result: any[]) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
   // projectModel.find(...).select(...).lean() — member-project lookup
   const projectFindChain = (result: any[]) => ({ select: () => ({ lean: () => Promise.resolve(result) }) });
 
@@ -32,11 +38,15 @@ describe('TasksService', () => {
     projectModel = {
       find: jest.fn().mockReturnValue(projectFindChain([])),
     };
+    auditLog = jest.fn().mockResolvedValue(undefined);
+    notifyMany = jest.fn().mockResolvedValue(undefined);
     const moduleRef = await Test.createTestingModule({
       providers: [
         TasksService,
         { provide: getModelToken(Task.name), useValue: model },
         { provide: getModelToken(Project.name), useValue: projectModel },
+        { provide: AuditService, useValue: { log: auditLog } },
+        { provide: NotificationsService, useValue: { notifyMany } },
       ],
     }).compile();
     service = moduleRef.get(TasksService);
@@ -249,6 +259,72 @@ describe('TasksService', () => {
         { dependsOnTaskIds: 't-1' },
         { $pull: { dependsOnTaskIds: 't-1' } },
       );
+    });
+  });
+
+  describe('events (#35)', () => {
+    const makeTask = (over: any = {}) => {
+      const doc: any = {
+        _id: 't-1', organizationId: 'org-1', projectId: 'p-1', status: TaskStatus.TODO,
+        title: 'Pour slab', createdById: 'creator-1', assignedToId: 'assignee-1', completedAt: null,
+        comments: [], ...over,
+      };
+      doc.save = jest.fn().mockResolvedValue(doc);
+      doc.toObject = jest.fn().mockReturnValue(doc);
+      return doc;
+    };
+
+    it('audits + notifies creator/assignee on a status change to DONE (actor excluded)', async () => {
+      model.findOne.mockResolvedValue(makeTask());
+      await service.update('t-1', 'org-1', { status: TaskStatus.DONE } as any, false, 'assignee-1');
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'UPDATE', entityType: 'TASK', entityId: 't-1' }),
+      );
+      // assignee-1 is the actor → excluded; only creator-1 remains.
+      expect(notifyMany).toHaveBeenCalledWith('org-1', ['creator-1'],
+        expect.objectContaining({ type: 'success', entityType: 'TASK' }));
+    });
+
+    it('does not emit when the status is unchanged', async () => {
+      model.findOne.mockResolvedValue(makeTask({ status: TaskStatus.IN_PROGRESS }));
+      await service.update('t-1', 'org-1', { progress: 50 } as any, false, 'u-9');
+      expect(auditLog).not.toHaveBeenCalled();
+      expect(notifyMany).not.toHaveBeenCalled();
+    });
+
+    it('audits + notifies collaborators on a comment (author excluded)', async () => {
+      model.findOne.mockResolvedValue(makeTask());
+      await service.addComment('t-1', 'org-1', 'creator-1', { body: 'hi' } as any, false);
+      expect(auditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'COMMENT', entityType: 'TASK' }),
+      );
+      // author is creator-1 → excluded; only assignee-1 remains.
+      expect(notifyMany).toHaveBeenCalledWith('org-1', ['assignee-1'],
+        expect.objectContaining({ entityType: 'TASK' }));
+    });
+  });
+
+  describe('notifyOverdueTasks cron (#35)', () => {
+    it('notifies assignees of overdue tasks once and stamps overdueNotifiedAt', async () => {
+      model.find.mockReturnValue(selectChain([
+        { _id: 't-1', title: 'Late A', organizationId: 'org-1', assignedToId: 'a-1' },
+        { _id: 't-2', title: 'Late B', organizationId: 'org-2', assignedToId: 'a-2' },
+      ]));
+      const res = await service.notifyOverdueTasks();
+      expect(res).toEqual({ notified: 2 });
+      expect(notifyMany).toHaveBeenCalledWith('org-1', ['a-1'], expect.objectContaining({ type: 'warning' }));
+      expect(model.updateMany).toHaveBeenCalledWith(
+        { _id: { $in: ['t-1', 't-2'] } },
+        { overdueNotifiedAt: expect.any(Date) },
+      );
+    });
+
+    it('no-ops when nothing is overdue', async () => {
+      model.find.mockReturnValue(selectChain([]));
+      const res = await service.notifyOverdueTasks();
+      expect(res).toEqual({ notified: 0 });
+      expect(notifyMany).not.toHaveBeenCalled();
+      expect(model.updateMany).not.toHaveBeenCalled();
     });
   });
 });

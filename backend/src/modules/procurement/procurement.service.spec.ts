@@ -10,6 +10,19 @@ import { Project } from '../projects/schemas/project.schema';
 import { DeliveryStatus, MaterialRequestStatus, PurchaseOrderStatus } from '../../common/enums';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
+
+// Inert NotificationsService provider (notify fan-out is fire-and-forget and
+// covered by its own dedicated tests; here we only need DI to resolve).
+const notifProvider = () => ({
+  provide: NotificationsService,
+  useValue: { notify: jest.fn().mockResolvedValue(undefined), notifyMany: jest.fn().mockResolvedValue(undefined) },
+});
+// A Project mock whose findOne(...).select(...).lean() resolves to no members,
+// so projectMemberIds(...) returns [] (approve/reject/confirm need this).
+const projectWithMembers = (members: any[] = []) => ({
+  findOne: jest.fn().mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ members }) }) }),
+});
 
 /**
  * Unit tests for the deliveries slice of ProcurementService (SE-7): member-scoped
@@ -40,8 +53,14 @@ describe('ProcurementService — deliveries (SE-7)', () => {
       find: jest.fn().mockReturnValue(sortLean([])),
       findOne: jest.fn(),
     };
-    poModel = { find: jest.fn().mockReturnValue(selectLean([])), findOne: jest.fn() };
-    projectModel = { find: jest.fn().mockReturnValue(selectLean([])) };
+    poModel = {
+      find: jest.fn().mockReturnValue(selectLean([])),
+      findOne: jest.fn().mockReturnValue(selectLean({ projectId: 'p1' })),
+    };
+    projectModel = {
+      find: jest.fn().mockReturnValue(selectLean([])),
+      findOne: jest.fn().mockReturnValue({ select: () => ({ lean: () => Promise.resolve({ members: [] }) }) }),
+    };
     auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
@@ -53,6 +72,7 @@ describe('ProcurementService — deliveries (SE-7)', () => {
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: projectModel },
         { provide: AuditService, useValue: auditService },
+        notifProvider(),
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -157,7 +177,8 @@ describe('ProcurementService — deliveries (SE-7)', () => {
       const doc = makeDelivery();
       deliveryModel.findOne.mockResolvedValue(doc);
       const res = await service.confirmDelivery('del-1', procurement, {});
-      expect(poModel.findOne).not.toHaveBeenCalled();
+      // The member-gate (projectModel.find) is skipped for an orgWide caller. The
+      // PO is still looked up afterwards to resolve notification recipients (#35).
       expect(projectModel.find).not.toHaveBeenCalled();
       expect(res.status).toBe(DeliveryStatus.DELIVERED);
       expect(res.receivedById).toBe('pro-1');
@@ -205,8 +226,9 @@ describe('ProcurementService — material request review (#33)', () => {
         { provide: getModelToken(PurchaseOrder.name), useValue: {} },
         { provide: getModelToken(Delivery.name), useValue: {} },
         { provide: getModelToken(MaterialRequest.name), useValue: materialRequestModel },
-        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: projectWithMembers() },
         { provide: AuditService, useValue: auditService },
+        notifProvider(),
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -327,8 +349,9 @@ describe('ProcurementService — status transition guards (#28)', () => {
         { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
-        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: projectWithMembers() },
         { provide: AuditService, useValue: { log: jest.fn() } },
+        notifProvider(),
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -403,8 +426,9 @@ describe('ProcurementService — PO approval audit (#33)', () => {
         { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
         { provide: getModelToken(Delivery.name), useValue: {} },
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
-        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: projectWithMembers() },
         { provide: AuditService, useValue: auditService },
+        notifProvider(),
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -451,8 +475,9 @@ describe('ProcurementService — delete integrity (#34)', () => {
         { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
         { provide: getModelToken(MaterialRequest.name), useValue: materialRequestModel },
-        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: projectWithMembers() },
         { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        notifProvider(),
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);
@@ -525,8 +550,9 @@ describe('ProcurementService — date validation (#30)', () => {
         { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
         { provide: getModelToken(MaterialRequest.name), useValue: {} },
-        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: projectWithMembers() },
         { provide: AuditService, useValue: { log: jest.fn() } },
+        notifProvider(),
       ],
     }).compile();
     service = moduleRef.get(ProcurementService);

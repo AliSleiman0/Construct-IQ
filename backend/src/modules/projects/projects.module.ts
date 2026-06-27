@@ -9,9 +9,10 @@ import { PublicProjectsController } from './public-projects.controller';
 import { PublicAutocadController } from './public-autocad.controller';
 import { ApsModule } from '../aps/aps.module';
 import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [ApsModule, AuditModule],
+  imports: [ApsModule, AuditModule, NotificationsModule],
   controllers: [
     ProjectsController,
     PhasesController,

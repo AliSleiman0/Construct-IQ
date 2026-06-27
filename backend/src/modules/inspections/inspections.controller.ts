@@ -62,7 +62,7 @@ export class InspectionsController {
     @CurrentUser() user: JwtPayload,
     @Body() dto: UpdateInspectionDto,
   ) {
-    return this.inspectionsService.update(id, user.organizationId, dto, user.isSuperAdmin);
+    return this.inspectionsService.update(id, user.organizationId, dto, user.isSuperAdmin, user.sub);
   }
 
   @Delete(':id')

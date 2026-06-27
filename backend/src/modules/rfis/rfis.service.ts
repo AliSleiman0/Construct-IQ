@@ -3,6 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Rfi, RfiDocument } from './schemas/rfi.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
+import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateRfiDto } from './dto/create-rfi.dto';
 import { UpdateRfiDto } from './dto/update-rfi.dto';
 import { AnswerRfiDto } from './dto/answer-rfi.dto';
@@ -35,7 +37,23 @@ export class RfisService {
   constructor(
     @InjectModel(Rfi.name) private rfiModel: Model<RfiDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
+
+  /** Fire-and-forget notification fan-out — a delivery failure must never break the op. */
+  private notify(
+    organizationId: string,
+    userIds: (string | null | undefined)[],
+    payload: Parameters<NotificationsService['notifyMany']>[2],
+  ): void {
+    this.notificationsService.notifyMany(organizationId, userIds, payload).catch(() => undefined);
+  }
 
   private static readonly POPULATE = [
     { path: 'projectId', select: 'name' },
@@ -176,6 +194,23 @@ export class RfisService {
     doc.status = RfiStatus.ANSWERED;
 
     await doc.save();
+
+    this.audit({
+      organizationId: doc.organizationId,
+      actorUserId: user.sub,
+      projectId: doc.projectId,
+      action: 'ANSWER',
+      entityType: 'RFI',
+      entityId: doc._id,
+      metadata: { to: RfiStatus.ANSWERED },
+    });
+    this.notify(doc.organizationId, [doc.createdById].filter((u) => u !== user.sub), {
+      title: 'RFI answered',
+      message: `Your RFI "${doc.subject}" was answered.`,
+      type: 'success',
+      entityType: 'RFI',
+      entityId: doc._id,
+    });
     return this.findById(id, user.organizationId, user.isSuperAdmin);
   }
 
