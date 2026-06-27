@@ -8,6 +8,15 @@ import { UpdateRfiDto } from './dto/update-rfi.dto';
 import { AnswerRfiDto } from './dto/answer-rfi.dto';
 import { RfiStatus, RfiDiscipline } from '../../common/enums';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
+import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
+
+// Self-service RFI transitions. ANSWERED is dedicated-only (answer() stamps
+// answeredById/At) — it can't be reached through the generic update.
+const RFI_TRANSITIONS: TransitionMap<RfiStatus> = {
+  [RfiStatus.OPEN]: [RfiStatus.CLOSED],
+  [RfiStatus.ANSWERED]: [RfiStatus.CLOSED, RfiStatus.OPEN],
+  [RfiStatus.CLOSED]: [RfiStatus.OPEN],
+};
 
 export interface RfiListParams {
   projectId?: string;
@@ -145,7 +154,11 @@ export class RfisService {
     if (dto.discipline !== undefined) doc.discipline = dto.discipline;
     if (dto.respondentId !== undefined) doc.respondentId = dto.respondentId ?? null;
     if (dto.dueBy !== undefined) doc.dueBy = dto.dueBy ? new Date(dto.dueBy) : null;
-    if (dto.status !== undefined) doc.status = dto.status;
+    if (dto.status !== undefined) {
+      // ANSWERED goes through the dedicated answer() endpoint only — guard the rest.
+      assertStatusTransition('RFI', doc.status, dto.status, RFI_TRANSITIONS);
+      doc.status = dto.status;
+    }
 
     await doc.save();
     return this.findById(id, organizationId, isSuperAdmin);

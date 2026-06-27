@@ -255,6 +255,40 @@ describe('SurveyorService', () => {
     });
   });
 
+  describe('updateValuation (#28 — transition-guarded status)', () => {
+    const makeValuation = (status: ValuationStatus) => {
+      const doc: any = { status, amountUsd: 100, retentionUsd: 0 };
+      doc.save = jest.fn().mockResolvedValue(doc);
+      doc.toObject = jest.fn().mockReturnValue(doc);
+      return doc;
+    };
+
+    it('allows the self-service DRAFT → SUBMITTED move', async () => {
+      const doc = makeValuation(ValuationStatus.DRAFT);
+      valuationModel.findOne.mockResolvedValue(doc);
+      await service.updateValuation('val-1', 'org-1', { status: ValuationStatus.SUBMITTED } as any, false);
+      expect(doc.status).toBe(ValuationStatus.SUBMITTED);
+      expect(doc.save).toHaveBeenCalled();
+    });
+
+    it('rejects DRAFT → CERTIFIED via generic update (must use /certify)', async () => {
+      const doc = makeValuation(ValuationStatus.DRAFT);
+      valuationModel.findOne.mockResolvedValue(doc);
+      await expect(
+        service.updateValuation('val-1', 'org-1', { status: ValuationStatus.CERTIFIED } as any, false),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(doc.save).not.toHaveBeenCalled();
+    });
+
+    it('edits amounts without touching status when status is omitted', async () => {
+      const doc = makeValuation(ValuationStatus.DRAFT);
+      valuationModel.findOne.mockResolvedValue(doc);
+      await service.updateValuation('val-1', 'org-1', { amountUsd: 5000 } as any, false);
+      expect(doc.amountUsd).toBe(5000);
+      expect(doc.status).toBe(ValuationStatus.DRAFT);
+    });
+  });
+
   describe('certifyValuation', () => {
     it('certifies a SUBMITTED valuation: stamps certifier + CERTIFIED', async () => {
       const doc: any = { status: ValuationStatus.SUBMITTED, save: jest.fn(), toObject: () => ({ _id: 'val-1' }) };

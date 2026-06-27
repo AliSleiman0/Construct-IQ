@@ -12,9 +12,30 @@ import { UpdateIssueDto } from './dto/update-issue.dto';
 import { AddIssueCommentDto } from './dto/add-issue-comment.dto';
 import { BulkUpdateIssuesDto } from './dto/bulk-update-issues.dto';
 import { IssueStatus, IssueSeverity } from '../../common/enums';
+import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
 
 /** Issues open/in-progress older than this many days are "stale". */
 const STALE_DAYS = 7;
+
+// Issue lifecycle: OPEN → IN_PROGRESS → RESOLVED → CLOSED, with reopen paths.
+// Blocks closing without first resolving (the "skip RESOLVED" bug).
+const ISSUE_TRANSITIONS: TransitionMap<IssueStatus> = {
+  [IssueStatus.OPEN]: [IssueStatus.IN_PROGRESS, IssueStatus.RESOLVED],
+  [IssueStatus.IN_PROGRESS]: [IssueStatus.RESOLVED, IssueStatus.OPEN],
+  [IssueStatus.RESOLVED]: [IssueStatus.CLOSED, IssueStatus.IN_PROGRESS, IssueStatus.OPEN],
+  [IssueStatus.CLOSED]: [IssueStatus.OPEN],
+};
+
+/**
+ * Server-authoritative resolution timestamps for a target status:
+ * resolving stamps resolvedAt; closing stamps closedAt; reopening clears both.
+ * Client-supplied timestamps are never trusted.
+ */
+function issueTimestamps(status: IssueStatus): Partial<Record<'resolvedAt' | 'closedAt', Date | null>> {
+  if (status === IssueStatus.RESOLVED) return { resolvedAt: new Date() };
+  if (status === IssueStatus.CLOSED) return { closedAt: new Date() };
+  return { resolvedAt: null, closedAt: null };
+}
 
 export interface IssueListParams {
   projectId?: string;
@@ -285,23 +306,24 @@ export class IssuesService {
   /** Bulk reassign and/or status-change. Org-scoped; stamps resolved/closed timestamps. */
   async bulkUpdate(organizationId: string, isSuperAdmin: boolean, dto: BulkUpdateIssuesDto): Promise<{ modified: number }> {
     if (!dto.ids?.length) return { modified: 0 };
-    const set: Record<string, unknown> = {};
-    if (dto.assignedToId !== undefined) set.assignedToId = dto.assignedToId || null;
-    if (dto.status !== undefined) {
-      set.status = dto.status;
-      if (dto.status === IssueStatus.RESOLVED) set.resolvedAt = new Date();
-      else if (dto.status === IssueStatus.CLOSED) set.closedAt = new Date();
-      else {
-        // Reopen (OPEN / IN_PROGRESS) clears the resolution timestamps.
-        set.resolvedAt = null;
-        set.closedAt = null;
-      }
-    }
-    if (Object.keys(set).length === 0) return { modified: 0 };
-
     const filter = isSuperAdmin
       ? { _id: { $in: dto.ids } }
       : { _id: { $in: dto.ids }, organizationId };
+
+    const set: Record<string, unknown> = {};
+    if (dto.assignedToId !== undefined) set.assignedToId = dto.assignedToId || null;
+    if (dto.status !== undefined) {
+      // Validate the transition for every affected issue's current status before
+      // applying. One illegal move (e.g. an OPEN issue → CLOSED) fails the whole batch.
+      const targets = await this.issueModel.find(filter).select('status').lean();
+      for (const t of targets) {
+        assertStatusTransition('issue', (t as any).status, dto.status, ISSUE_TRANSITIONS);
+      }
+      set.status = dto.status;
+      Object.assign(set, issueTimestamps(dto.status));
+    }
+    if (Object.keys(set).length === 0) return { modified: 0 };
+
     const res = await this.issueModel.updateMany(filter, { $set: set });
     return { modified: (res as any).modifiedCount ?? 0 };
   }
@@ -352,12 +374,18 @@ export class IssuesService {
     if (dto.description !== undefined) issue.description = dto.description ?? null;
     if (dto.type !== undefined) issue.type = dto.type;
     if (dto.severity !== undefined) issue.severity = dto.severity;
-    if (dto.status !== undefined) issue.status = dto.status;
+    if (dto.status !== undefined && dto.status !== issue.status) {
+      // Enforce the lifecycle (no skipping RESOLVED) and derive timestamps
+      // server-side. Any client-supplied resolvedAt is ignored.
+      assertStatusTransition('issue', issue.status, dto.status, ISSUE_TRANSITIONS);
+      issue.status = dto.status;
+      const ts = issueTimestamps(dto.status);
+      if (ts.resolvedAt !== undefined) issue.resolvedAt = ts.resolvedAt;
+      if (ts.closedAt !== undefined) issue.closedAt = ts.closedAt;
+    }
     if (dto.location !== undefined) issue.location = dto.location ?? null;
     if (dto.trade !== undefined) issue.trade = dto.trade ?? null;
     if (dto.assignedToId !== undefined) issue.assignedToId = dto.assignedToId ?? null;
-    if (dto.resolvedAt !== undefined)
-      issue.resolvedAt = dto.resolvedAt ? new Date(dto.resolvedAt) : null;
 
     await issue.save();
     return this.findById(id, organizationId, isSuperAdmin);

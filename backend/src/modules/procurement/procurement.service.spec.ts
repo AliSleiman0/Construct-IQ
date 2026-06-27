@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { ProcurementService } from './procurement.service';
 import { Supplier } from './schemas/supplier.schema';
 import { PurchaseOrder, applyPoTotals } from './schemas/purchase-order.schema';
@@ -206,5 +206,79 @@ describe('PurchaseOrder totals invariant — applyPoTotals', () => {
     const po: any = { totalAmount: 750, items: null };
     applyPoTotals(po);
     expect(po.totalAmount).toBe(750);
+  });
+});
+
+/**
+ * #28 — PO and Delivery generic updates are transition-guarded. Privileged moves
+ * (PO →APPROVED/REJECTED, Delivery →DELIVERED) are reachable only through their
+ * dedicated endpoints; receivedById is no longer client-settable on a delivery.
+ */
+describe('ProcurementService — status transition guards (#28)', () => {
+  let service: ProcurementService;
+  let poModel: any;
+  let deliveryModel: any;
+
+  const makeDoc = (over: any) => {
+    const doc: any = { ...over };
+    doc.save = jest.fn().mockResolvedValue(doc);
+    doc.toObject = jest.fn().mockReturnValue(doc);
+    return doc;
+  };
+
+  beforeEach(async () => {
+    poModel = { findOne: jest.fn() };
+    deliveryModel = { findOne: jest.fn() };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ProcurementService,
+        { provide: getModelToken(Supplier.name), useValue: {} },
+        { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
+        { provide: getModelToken(Delivery.name), useValue: deliveryModel },
+        { provide: getModelToken(MaterialRequest.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(ProcurementService);
+  });
+
+  it('PO: allows DRAFT → SUBMITTED', async () => {
+    const po = makeDoc({ status: 'DRAFT' });
+    poModel.findOne.mockResolvedValue(po);
+    await service.updatePO('po-1', 'org-1', { status: 'SUBMITTED' } as any, false);
+    expect(po.status).toBe('SUBMITTED');
+    expect(po.save).toHaveBeenCalled();
+  });
+
+  it('PO: rejects SUBMITTED → APPROVED via generic update (must use /approve)', async () => {
+    const po = makeDoc({ status: 'SUBMITTED' });
+    poModel.findOne.mockResolvedValue(po);
+    await expect(
+      service.updatePO('po-1', 'org-1', { status: 'APPROVED' } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(po.save).not.toHaveBeenCalled();
+  });
+
+  it('Delivery: allows PENDING → IN_TRANSIT', async () => {
+    const d = makeDoc({ status: DeliveryStatus.PENDING });
+    deliveryModel.findOne.mockResolvedValue(d);
+    await service.updateDelivery('d-1', 'org-1', { status: DeliveryStatus.IN_TRANSIT } as any, false);
+    expect(d.status).toBe(DeliveryStatus.IN_TRANSIT);
+  });
+
+  it('Delivery: rejects → DELIVERED via generic update (must use /confirm)', async () => {
+    const d = makeDoc({ status: DeliveryStatus.PENDING });
+    deliveryModel.findOne.mockResolvedValue(d);
+    await expect(
+      service.updateDelivery('d-1', 'org-1', { status: DeliveryStatus.DELIVERED } as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(d.save).not.toHaveBeenCalled();
+  });
+
+  it('Delivery: receivedById is not assignable through the generic update', async () => {
+    const d = makeDoc({ status: DeliveryStatus.PENDING, receivedById: null });
+    deliveryModel.findOne.mockResolvedValue(d);
+    await service.updateDelivery('d-1', 'org-1', { receivedById: 'attacker' } as any, false);
+    expect(d.receivedById).toBeNull();
   });
 });

@@ -18,8 +18,16 @@ import {
   UpdateValuationDto,
 } from './dto/create-surveyor.dto';
 import { PartialType } from '@nestjs/mapped-types';
+import { assertStatusTransition, TransitionMap } from '../../common/util/status-transition.util';
 
 class UpdateBoqItemDto extends PartialType(CreateBoqItemDto) {}
+
+// Self-service valuation transitions allowed through the generic update.
+// DRAFT→SUBMITTED is the "submit for certification" step (no dedicated endpoint).
+// SUBMITTED→CERTIFIED is dedicated-only (certifyValuation stamps certifiedById/At).
+const VALUATION_TRANSITIONS: TransitionMap<ValuationStatus> = {
+  [ValuationStatus.DRAFT]: [ValuationStatus.SUBMITTED],
+};
 
 /**
  * Who is asking. When `orgWide` is false the caller only sees cost rows for the
@@ -238,7 +246,15 @@ export class SurveyorService {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const valuation = await this.valuationModel.findOne(filter);
     if (!valuation) throw new NotFoundException('Valuation not found');
-    Object.assign(valuation, dto);
+
+    // Explicit assignment only — status is transition-guarded, never blindly copied.
+    if (dto.amountUsd !== undefined) valuation.amountUsd = dto.amountUsd;
+    if (dto.retentionUsd !== undefined) valuation.retentionUsd = dto.retentionUsd;
+    if (dto.status !== undefined) {
+      assertStatusTransition('valuation', valuation.status, dto.status, VALUATION_TRANSITIONS);
+      valuation.status = dto.status;
+    }
+
     await valuation.save();
     return valuation.toObject();
   }
