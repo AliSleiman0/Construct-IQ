@@ -172,3 +172,56 @@ describe('BudgetService.addLine (#29 allocation cap)', () => {
     expect(lineModel.create).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * #31 — an expense's optional budgetLineId must belong to the SAME budget, so a
+ * line from another budget (or tenant) can't be linked. Line lookup is mocked.
+ */
+describe('BudgetService.addExpense (#31 line-ownership)', () => {
+  let service: BudgetService;
+  let budgetModel: any;
+  let lineModel: any;
+  let expenseModel: any;
+
+  const leanOnce = (result: any) => ({ lean: () => Promise.resolve(result) });
+  const expenseDto = (over: any = {}) => ({ description: 'Cement', amount: 100, date: '2026-06-27', ...over });
+
+  beforeEach(async () => {
+    budgetModel = { findOne: jest.fn().mockReturnValue(leanOnce({ _id: 'b-1', organizationId: 'org-1' })) };
+    lineModel = { findOne: jest.fn() };
+    expenseModel = { create: jest.fn().mockImplementation((d) => Promise.resolve({ _id: 'e-1', ...d })) };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        BudgetService,
+        { provide: getModelToken(Budget.name), useValue: budgetModel },
+        { provide: getModelToken(BudgetLine.name), useValue: lineModel },
+        { provide: getModelToken(Expense.name), useValue: expenseModel },
+        { provide: getModelToken(PurchaseOrder.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(BudgetService);
+  });
+
+  it('rejects a budgetLineId that belongs to another budget', async () => {
+    lineModel.findOne.mockReturnValue(leanOnce(null)); // no line with {_id, budgetId: 'b-1'}
+    await expect(
+      service.addExpense('b-1', 'org-1', expenseDto({ budgetLineId: 'l-foreign' }) as any, false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(lineModel.findOne).toHaveBeenCalledWith({ _id: 'l-foreign', budgetId: 'b-1' });
+    expect(expenseModel.create).not.toHaveBeenCalled();
+  });
+
+  it('creates the expense when the line belongs to this budget', async () => {
+    lineModel.findOne.mockReturnValue(leanOnce({ _id: 'l-1', budgetId: 'b-1' }));
+    await service.addExpense('b-1', 'org-1', expenseDto({ budgetLineId: 'l-1' }) as any, false);
+    expect(expenseModel.create).toHaveBeenCalledTimes(1);
+    expect(expenseModel.create.mock.calls[0][0].budgetLineId).toBe('l-1');
+  });
+
+  it('creates the expense without a line lookup when budgetLineId is omitted', async () => {
+    await service.addExpense('b-1', 'org-1', expenseDto() as any, false);
+    expect(lineModel.findOne).not.toHaveBeenCalled();
+    expect(expenseModel.create).toHaveBeenCalledTimes(1);
+    expect(expenseModel.create.mock.calls[0][0].budgetLineId).toBeNull();
+  });
+});

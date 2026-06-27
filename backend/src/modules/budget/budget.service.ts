@@ -112,6 +112,13 @@ export class BudgetService {
     const budget = await this.budgetModel.findOne(filter).lean();
     if (!budget) throw new NotFoundException('Budget not found');
 
+    // A linked budget line must belong to THIS budget — otherwise an expense
+    // could reference a line from another budget (or another tenant). (#31)
+    if (dto.budgetLineId) {
+      const line = await this.lineModel.findOne({ _id: dto.budgetLineId, budgetId }).lean();
+      if (!line) throw new BadRequestException('Budget line does not belong to this budget');
+    }
+
     return this.expenseModel.create({
       organizationId,
       budgetId,
