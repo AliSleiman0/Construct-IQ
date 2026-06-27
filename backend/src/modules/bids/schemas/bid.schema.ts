@@ -55,6 +55,12 @@ export class Bid {
   @Prop({ type: String, ref: 'DocumentEntity', required: true })
   sourceDocumentId: string;
 
+  // Original uploaded filename — used to reject re-uploading the same file for
+  // the same project + trade package (multiple distinct competing bids are still
+  // allowed; only exact re-uploads are blocked). #30
+  @Prop({ type: String, default: null })
+  sourceFileName: string | null;
+
   @Prop({
     type: String,
     enum: Object.values(BidExtractionStatus),

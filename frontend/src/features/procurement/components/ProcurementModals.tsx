@@ -102,6 +102,17 @@ const poSchema = z.object({
     unitPrice: num,
     unit: z.string().optional(),
   })).optional(),
+}).superRefine((v, ctx) => {
+  // Mirror the backend rule (#30): expected delivery can't precede the order
+  // date nor sit in the past. Backend stays authoritative; this is inline UX.
+  if (!v.expectedDeliveryDate) return;
+  if (v.orderDate && v.expectedDeliveryDate < v.orderDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['expectedDeliveryDate'], message: 'Cannot be before the order date' });
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (v.expectedDeliveryDate < today) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['expectedDeliveryDate'], message: 'Cannot be in the past' });
+  }
 });
 export type POFormValues = z.infer<typeof poSchema>;
 

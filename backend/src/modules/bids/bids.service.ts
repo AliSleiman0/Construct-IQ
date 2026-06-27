@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
@@ -62,6 +63,8 @@ export class BidsService {
 
     await this.ensureProjectAccessible(dto.projectId, organizationId, isSuperAdmin);
 
+    await this.assertNoDuplicateBids(organizationId, dto, files);
+
     const tasks = files.map((file) => () =>
       this.processSingleBid(organizationId, userId, dto, file),
     );
@@ -120,6 +123,49 @@ export class BidsService {
     }
   }
 
+  /**
+   * Rejects re-uploading the same file for a given project + trade package.
+   * Multiple distinct competing bids per trade remain allowed (bid leveling);
+   * only an exact filename match against the incoming batch or an existing
+   * (non-deleted) bid is treated as a duplicate. #30
+   */
+  private async assertNoDuplicateBids(
+    organizationId: string,
+    dto: UploadBidsDto,
+    files: UploadedFile[],
+  ): Promise<void> {
+    const incoming = files.map((f) => f.originalname);
+
+    // Within the batch itself.
+    const seen = new Set<string>();
+    for (const name of incoming) {
+      if (seen.has(name)) {
+        throw new ConflictException(
+          `Duplicate file "${name}" in this upload for trade package "${dto.tradePackage}".`,
+        );
+      }
+      seen.add(name);
+    }
+
+    // Against existing bids for the same project + trade package.
+    const existing = await this.bidModel
+      .find({
+        organizationId,
+        projectId: dto.projectId,
+        tradePackage: dto.tradePackage,
+        sourceFileName: { $in: incoming },
+      })
+      .select('sourceFileName')
+      .lean();
+
+    if (existing.length > 0) {
+      const names = existing.map((b: any) => b.sourceFileName).join(', ');
+      throw new ConflictException(
+        `A bid for "${names}" already exists for trade package "${dto.tradePackage}".`,
+      );
+    }
+  }
+
   private async processSingleBid(
     organizationId: string,
     userId: string,
@@ -143,6 +189,7 @@ export class BidsService {
       projectId: dto.projectId,
       tradePackage: dto.tradePackage,
       sourceDocumentId: document._id,
+      sourceFileName: file.originalname,
       uploadedById: userId,
       extractionStatus: BidExtractionStatus.PENDING,
     });

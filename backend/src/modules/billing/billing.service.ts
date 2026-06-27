@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Invoice, InvoiceDocument } from './schemas/invoice.schema';
@@ -15,6 +15,13 @@ const INVOICE_TRANSITIONS: TransitionMap<InvoiceStatus> = {
   [InvoiceStatus.ISSUED]: [InvoiceStatus.PAID, InvoiceStatus.OVERDUE, InvoiceStatus.VOID],
   [InvoiceStatus.OVERDUE]: [InvoiceStatus.PAID, InvoiceStatus.VOID],
 };
+
+// #30 — an invoice's due date may equal but never precede its issue date.
+function assertDueAfterIssued(issuedAt: Date, dueAt: Date): void {
+  if (dueAt < issuedAt) {
+    throw new BadRequestException('Invoice due date cannot be earlier than the issue date');
+  }
+}
 
 @Injectable()
 export class BillingService {
@@ -40,6 +47,8 @@ export class BillingService {
     // Per-org numbering (compound index + migration) is tracked in issue #31.
     const existing = await this.invoiceModel.findOne({ number: dto.number });
     if (existing) throw new ConflictException('Invoice number already exists');
+
+    assertDueAfterIssued(new Date(dto.issuedAt), new Date(dto.dueAt));
 
     return this.invoiceModel.create({
       organizationId: dto.organizationId,
@@ -72,6 +81,15 @@ export class BillingService {
       if (dto.status === InvoiceStatus.PAID && !invoice.paidAt) {
         invoice.paidAt = new Date();
       }
+    }
+    // Either date may be edited in isolation — validate the effective pair so a
+    // lone dueAt edit can't slip below the stored issuedAt (and vice versa).
+    if (dto.issuedAt !== undefined || dto.dueAt !== undefined) {
+      const effectiveIssued = dto.issuedAt !== undefined ? new Date(dto.issuedAt) : invoice.issuedAt;
+      const effectiveDue = dto.dueAt !== undefined ? new Date(dto.dueAt) : invoice.dueAt;
+      assertDueAfterIssued(effectiveIssued, effectiveDue);
+      if (dto.issuedAt !== undefined) invoice.issuedAt = effectiveIssued;
+      if (dto.dueAt !== undefined) invoice.dueAt = effectiveDue;
     }
     if (dto.notes !== undefined) invoice.notes = dto.notes ?? null;
 
