@@ -123,6 +123,24 @@ export class UsersService {
     return this.toUserResponse(user as any, roles as any);
   }
 
+  /**
+   * Org-scoped single-user read for the public `GET /users/:id` route. Unlike
+   * findById (used by self/auth flows), this filters by organizationId so a
+   * regular user can never read a user in another tenant — they get a 404, not
+   * the foreign record. Super Admins are exempt and may read across orgs. (#31)
+   */
+  async findByIdScoped(
+    id: string,
+    organizationId: string,
+    isSuperAdmin: boolean,
+  ): Promise<UserResponse> {
+    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+    const user = await this.userModel.findOne(filter).lean();
+    if (!user) throw new NotFoundException('User not found');
+    const roles = await this.loadRolesForUser(user.roleIds ?? []);
+    return this.toUserResponse(user as any, roles as any);
+  }
+
   /** Returns the raw user doc — used by auth flows that need passwordHash etc. */
   async findByEmail(email: string): Promise<User | null> {
     return this.userModel

@@ -94,9 +94,9 @@ export class UsersController {
 
   @Get(':id')
   @RequirePermissions(PERMISSIONS.USERS.READ)
-  @ApiOperation({ summary: 'Get a single user by ID' })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  @ApiOperation({ summary: 'Get a single user by ID (own organization)' })
+  findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.usersService.findByIdScoped(id, user.organizationId, user.isSuperAdmin);
   }
 
   @Post()
