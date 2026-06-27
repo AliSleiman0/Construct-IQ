@@ -24,8 +24,8 @@ export class BillingController {
 
   @Post()
   @RequirePermissions(PERMISSIONS.ALL)
-  create(@Body() dto: CreateInvoiceDto): Promise<any> {
-    return this.billingService.create(dto);
+  create(@CurrentUser() user: JwtPayload, @Body() dto: CreateInvoiceDto): Promise<any> {
+    return this.billingService.create(dto, user.isSuperAdmin);
   }
 
   @Patch(':id')

@@ -40,6 +40,7 @@ export class AiController {
     return this.orchestrator.route(dto.message, {
       userId: user.sub,
       organizationId: user.organizationId,
+      isSuperAdmin: user.isSuperAdmin,
       sessionId: dto.sessionId,
       projectId: dto.projectId,
     });
@@ -50,7 +51,9 @@ export class AiController {
   @RequirePermissions(PERMISSIONS.AI.USE)
   @RequireAiFeature(AI_FEATURES.AI_REPORT_SUMMARY.key)
   @ApiOperation({ summary: 'Generate and save an AI summary for a daily report' })
-  summarizeReport(@Param('reportId') reportId: string) {
-    return this.reportSummaryAgent.summarize(reportId).then((summary) => ({ summary }));
+  summarizeReport(@Param('reportId') reportId: string, @CurrentUser() user: JwtPayload) {
+    return this.reportSummaryAgent
+      .summarize(reportId, user.organizationId, user.isSuperAdmin)
+      .then((summary) => ({ summary }));
   }
 }

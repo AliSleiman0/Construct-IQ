@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Invoice, InvoiceDocument } from './schemas/invoice.schema';
@@ -19,7 +19,17 @@ export class BillingService {
     return this.invoiceModel.find(filter).sort({ issuedAt: -1 }).lean();
   }
 
-  async create(dto: CreateInvoiceDto): Promise<any> {
+  async create(dto: CreateInvoiceDto, isSuperAdmin: boolean): Promise<any> {
+    // Platform subscription invoices are issued by the platform operator only.
+    // The endpoint requires manage:all, but the PermissionsGuard's manage:company
+    // bypass would otherwise let an Org Admin through and write an invoice for ANY
+    // org via dto.organizationId — this explicit gate closes that cross-tenant hole.
+    if (!isSuperAdmin) {
+      throw new ForbiddenException('Only platform administrators can create invoices');
+    }
+
+    // Global uniqueness matches the schema's global unique index on `number`.
+    // Per-org numbering (compound index + migration) is tracked in issue #31.
     const existing = await this.invoiceModel.findOne({ number: dto.number });
     if (existing) throw new ConflictException('Invoice number already exists');
 

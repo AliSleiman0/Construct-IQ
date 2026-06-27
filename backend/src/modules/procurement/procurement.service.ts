@@ -150,6 +150,8 @@ export class ProcurementService {
       budgetLineId: dto.budgetLineId ?? null,
       poNumber: dto.poNumber,
       status: dto.status ?? PurchaseOrderStatus.DRAFT,
+      // Honored only when there are no line items (lump-sum PO). When items are
+      // present, the schema pre-save hook (applyPoTotals) recomputes this from them.
       totalAmount: dto.totalAmount ?? null,
       currency: dto.currency ?? 'USD',
       orderDate: new Date(dto.orderDate),
@@ -165,6 +167,8 @@ export class ProcurementService {
     if (!po) throw new NotFoundException('Purchase order not found');
 
     if (dto.status !== undefined) po.status = dto.status;
+    // Accepted for the lump-sum (no-items) case; overridden by the pre-save hook
+    // (applyPoTotals) whenever line items are present.
     if (dto.totalAmount !== undefined) po.totalAmount = dto.totalAmount ?? null;
     if (dto.notes !== undefined) po.notes = dto.notes ?? null;
     if (dto.expectedDeliveryDate !== undefined)

@@ -3,8 +3,9 @@ import { getModelToken } from '@nestjs/mongoose';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { ProcurementService } from './procurement.service';
 import { Supplier } from './schemas/supplier.schema';
-import { PurchaseOrder } from './schemas/purchase-order.schema';
+import { PurchaseOrder, applyPoTotals } from './schemas/purchase-order.schema';
 import { Delivery } from './schemas/delivery.schema';
+import { MaterialRequest } from './schemas/material-request.schema';
 import { Project } from '../projects/schemas/project.schema';
 import { DeliveryStatus } from '../../common/enums';
 import { JwtPayload } from '../../common/interfaces/jwt-payload.interface';
@@ -46,6 +47,7 @@ describe('ProcurementService — deliveries (SE-7)', () => {
         { provide: getModelToken(Supplier.name), useValue: {} },
         { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
         { provide: getModelToken(Delivery.name), useValue: deliveryModel },
+        { provide: getModelToken(MaterialRequest.name), useValue: {} },
         { provide: getModelToken(Project.name), useValue: projectModel },
       ],
     }).compile();
@@ -156,5 +158,53 @@ describe('ProcurementService — deliveries (SE-7)', () => {
       expect(res.status).toBe(DeliveryStatus.DELIVERED);
       expect(res.receivedById).toBe('pro-1');
     });
+  });
+});
+
+/**
+ * PO money invariant (issue #22): totalAmount must always be derived from line items.
+ * applyPoTotals is the pure core the schema pre-save hook runs on every PO save, so
+ * testing it directly exercises the exact logic without a live Mongoose connection.
+ */
+describe('PurchaseOrder totals invariant — applyPoTotals', () => {
+  const item = (over: Partial<any> = {}) => ({
+    description: 'x', quantity: 1, unitPrice: 0, totalPrice: 0, unit: null, notes: null, ...over,
+  });
+
+  it('overrides a tampered header totalAmount with the sum of line items (create path)', () => {
+    const po: any = {
+      totalAmount: 999999,
+      items: [item({ quantity: 2, unitPrice: 300 }), item({ quantity: 1, unitPrice: 400 })],
+    };
+    applyPoTotals(po);
+    expect(po.totalAmount).toBe(1000);
+    expect(po.items[0].totalPrice).toBe(600);
+    expect(po.items[1].totalPrice).toBe(400);
+  });
+
+  it('recomputes the header when items are replaced, ignoring a stale totalAmount (update path)', () => {
+    const po: any = { totalAmount: 600, items: [item({ quantity: 5, unitPrice: 50 })] };
+    applyPoTotals(po);
+    expect(po.totalAmount).toBe(250);
+    expect(po.items[0].totalPrice).toBe(250);
+  });
+
+  it('rounds binary-float dust to 2 decimals (3 x 0.1 = 0.3, not 0.30000000000000004)', () => {
+    const po: any = { totalAmount: 0, items: [item({ quantity: 3, unitPrice: 0.1 })] };
+    applyPoTotals(po);
+    expect(po.items[0].totalPrice).toBe(0.3);
+    expect(po.totalAmount).toBe(0.3);
+  });
+
+  it('preserves a manual lump-sum totalAmount when there are no line items', () => {
+    const po: any = { totalAmount: 500, items: [] };
+    applyPoTotals(po);
+    expect(po.totalAmount).toBe(500);
+  });
+
+  it('also preserves a lump-sum total when items is null/absent', () => {
+    const po: any = { totalAmount: 750, items: null };
+    applyPoTotals(po);
+    expect(po.totalAmount).toBe(750);
   });
 });

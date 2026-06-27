@@ -16,6 +16,7 @@ interface OrchestratorDecision {
 export interface OrchestratorContext {
   userId: string;
   organizationId: string;
+  isSuperAdmin?: boolean;
   sessionId?: string;
   projectId?: string;
 }
@@ -95,7 +96,11 @@ Use conversation history to resolve follow-up intents.`,
       case 'report-summary': {
         const reportId = decision.payload?.reportId ?? context.projectId;
         if (!reportId) throw new BadRequestException('reportId is required for report summarization');
-        replyText = await this.reportSummaryAgent.summarize(reportId);
+        replyText = await this.reportSummaryAgent.summarize(
+          reportId,
+          context.organizationId,
+          context.isSuperAdmin ?? false,
+        );
         break;
       }
 

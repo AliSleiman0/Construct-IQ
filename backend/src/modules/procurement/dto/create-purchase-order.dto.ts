@@ -17,6 +17,9 @@ export class PurchaseOrderItemDto {
   @IsNumber() @Min(0) quantity!: number;
   @IsOptional() @IsString() unit?: string;
   @IsNumber() @Min(0) unitPrice!: number;
+  // Server-derived: recomputed as quantity * unitPrice by the PO pre-save hook
+  // (applyPoTotals). Kept in the DTO so existing clients don't trip
+  // forbidNonWhitelisted; any value sent here is ignored.
   @IsNumber() @Min(0) totalPrice!: number;
   @IsOptional() @IsString() notes?: string;
 }
@@ -31,6 +34,8 @@ export class CreatePurchaseOrderDto {
   @IsOptional() @IsString() budgetLineId?: string;
   @IsString() @MaxLength(50) poNumber!: string;
   @IsOptional() @IsEnum(PurchaseOrderStatus) status?: PurchaseOrderStatus;
+  // Honored only for lump-sum POs with no line items. When items are present the
+  // pre-save hook (applyPoTotals) derives this from sum(items.totalPrice).
   @IsOptional() @IsNumber() @Min(0) totalAmount?: number;
   @IsOptional() @IsString() currency?: string;
   @IsDateString() orderDate!: string;
