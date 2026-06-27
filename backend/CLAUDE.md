@@ -102,7 +102,47 @@ The semantic response shape (`UserResponse`) merges defaults into the subdocs (`
 - `AuditLog` schema: `organizationId`, `actorUserId`, `projectId`, `action`, `entityType`, `entityId`, `metadata`, `ipAddress`, `userAgent`, `createdAt`.
 - `AuditService.log(entry)` — write-only.
 - `AuditService.findAll(orgId, isSuperAdmin, filters)` — paginated read for the audit page (Super Admin sees everything; org admins see their org only).
-- `AuditModule` is globally registered (`app.module.ts`). Other modules just import it and inject the service.
+- `AuditModule` is **not** `@Global` — every consumer must `imports: [AuditModule]` in its own module (despite being listed in `app.module`). Same rule for `NotificationsModule`.
+
+## Notifications module (`src/modules/notifications/`)
+
+- `Notification` schema: `organizationId`, `userId`, `title`, `message`, `type`, `entityType`, `entityId`, `isRead`, `metadata`, `createdAt`. In-app only (no email/SMS/websocket yet).
+- `NotificationsService.notify(dto)` — one row; `notifyMany(orgId, userIds[], payload)` — fans out, de-dupes, drops falsy ids (so callers pass `[createdById, assignedToId]` and filter the actor at the call site).
+- `type` ∈ `success | error | warning | info` — matches the frontend bell's colour map.
+- Endpoints: `GET /notifications`, `PATCH /notifications/:id/read`, `POST /notifications/mark-all-read`.
+
+## Domain events: emit notifications + audit on state changes
+
+Key state changes fire a notification **and** an audit entry, both **fire-and-forget** so a logging/delivery failure never breaks the operation. Each consuming service holds two private helpers:
+```ts
+private audit(e)  { this.auditService.log(e).catch(() => undefined); }
+private notify(orgId, ids, p) { this.notificationsService.notifyMany(orgId, ids, p).catch(() => undefined); }
+```
+Wired at: PO/MR/variation approve+reject, delivery confirm, RFI answer, inspection result, task/issue status + comments, project status, bid award. Recipients = the tracked creator/requester where one exists, else the project's members; **always exclude the actor**. To add a new event, inject `AuditService`+`NotificationsService` (import both modules) and call the helpers after the successful `save()`.
+
+**Segregation of duties (#33):** a creator may not approve their own variation / material request (`createdById`/`requestedById` === actor → `ForbiddenException`); Super Admins are exempt. Self-rejection stays allowed.
+
+**Inspection FAILED → auto-Issue:** `InspectionsService.update` calls `IssuesService.create({ inspectionId, … })` when status transitions to `FAILED` (the Issue schema has `inspectionId`).
+
+**Bid award → PO (#36):** `BidsService.awardBid()` validates the supplier then calls the exported `ProcurementService.createPO()` to make a DRAFT PO seeded from the bid's extracted total/currency, stamps the bid (`awardedAt`/`purchaseOrderId`), and awards once (409 on retry). `BidsModule` imports `ProcurementModule`.
+
+## Soft-delete, cascades & referential integrity (#34)
+
+- `softDeletePlugin` (`database/mongoose/plugins/soft-delete.plugin.ts`) adds `deletedAt` + auto-filters `deletedAt: null` on **reads/updates only** — it does **not** intercept deletes. So soft-delete = `updateOne({_id}, {deletedAt: new Date()})`; `deleteOne()`/`findOneAndDelete()` are **hard** deletes. `{deletedAt: null}` matches missing fields, so adding the plugin to a populated collection is safe.
+- **Cascade:** `cascadeSoftDelete(connection, scopeField, id, now)` (`database/mongoose/cascade.util.ts`) sweeps every registered model with both the scope path (`projectId`/`organizationId`) **and** a `deletedAt` path. Used by project soft-delete and the super-admin org delete (`DELETE /organizations/:id`); collections without the plugin (e.g. `audit_logs`) are skipped automatically.
+- **Guards:** deleting a financial parent throws `ConflictException` (409) when live dependents exist — supplier→POs, budget-line→POs/expenses, unit→payments.
+- Deleting a task/milestone/phase `$pull`s its id from sibling `dependsOn*` arrays.
+
+## Scheduler (`@nestjs/schedule`)
+
+- `ScheduleModule.forRoot()` is registered in `app.module`; add a `@Cron(CronExpression.…)` method to any provider.
+- Existing crons: `TasksService.notifyOverdueTasks` (daily 8am — alerts assignees once via `overdueNotifiedAt`); `DashboardService.refreshOrgSnapshots` (every 10 min — warms the org dashboard snapshot).
+- **Install note:** the npm registry sits behind a TLS-intercepting corporate proxy — `npm install` may fail with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`; prefix with `NODE_OPTIONS=--use-system-ca`.
+
+## Dashboard snapshot (#36)
+
+- `DashboardService.getOrgDashboard` is a read-through cache backed by the `dashboard_snapshots` collection: serve a snapshot when `computedAt` is within `SNAPSHOT_TTL_MS` (15 min), else compute live + upsert. The 10-min cron keeps it warm.
+- **Org dashboard only** — the per-user PM/site-eng/surveyor dashboards stay read-time (member-scoped).
 
 ## AI module (`src/modules/ai/`)
 
@@ -133,4 +173,6 @@ The semantic response shape (`UserResponse`) merges defaults into the subdocs (`
 - **Nested DTO validation**: requires `@ValidateNested()` + `@Type(() => Inner)` and `transform: true` on the global pipe (already set in `main.ts`).
 - **Module cycles**: when a service is consumed by both `AuthModule` and `UsersModule`, isolate it in its own slim module (see `PasswordPolicyModule`).
 - **CommonJS-only deps**: `ip-range-check` is published as `export =`. Use `require()` interop, not default import — tsconfig has no `esModuleInterop`.
-- **Audit writes must not throw**: wrap the `AuditService.log()` call in `.catch(() => {})` from the consumer side so an audit failure doesn't break the user-facing operation.
+- **Audit/notify writes must not throw**: wrap `AuditService.log()` / `NotificationsService.notifyMany()` in `.catch(() => undefined)` from the consumer side (use the private `audit()`/`notify()` helpers) so a logging/delivery failure doesn't break the user-facing operation.
+- **PartialType + `forbidNonWhitelisted`**: an update DTO declared as `PartialType(CreateXDto)` only whitelists the create fields — any field the update needs but create lacks (e.g. `status`, `paidAmountUsd`) is **stripped/rejected** by the global pipe before reaching the service. Define those update DTOs explicitly (see `UpdatePaymentDto`).
+- **Pre-existing red suites (#43)**: `reports.service.spec.ts` fails to run on `main` (a tsc error in the spec). `ts-jest` runs `isolatedModules`, so a spec tsc error fails only that suite, not the others — `npx jest` is otherwise green. Don't mistake it for a regression.

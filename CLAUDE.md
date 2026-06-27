@@ -48,7 +48,9 @@ All service queries must filter by `organizationId`. The `OrgContextInterceptor`
 - **Permissions**: backend permission keys live in `backend/src/common/constants/permissions.ts`; frontend mirrors live in `frontend/src/constants/`. Always reference constants, never raw strings.
 - **DTOs use class-validator + class-transformer**; the global `ValidationPipe` is `{ whitelist: true, forbidNonWhitelisted: true, transform: true, enableImplicitConversion: true }` — so unknown fields are stripped, nested DTOs are class-validated, and string→number transforms happen for free.
 - **Auth-gated TanStack Query**: any `useQuery` that mounts inside a Provider (above `(auth)`) must pass `enabled: isAuthenticated` to avoid a 401 → refresh-fail → `/login` redirect loop. See `useOrgSettings` and `useMe` for the pattern.
-- **Audit logging**: org-settings changes are diffed and written to the `audit_logs` collection via `AuditService.log()`. New "shared-config" mutations should follow that pattern (fire-and-forget; audit failure must not surface to the user).
+- **Audit logging**: significant state changes are written to the `audit_logs` collection via `AuditService.log()` (org-settings diffs, plus approvals/results/deletes across procurement, surveyor, projects, tasks, issues, etc.). New mutations of record should follow the pattern (fire-and-forget; failure must not surface to the user).
+- **Domain events → notifications**: those same state changes also emit in-app notifications via `NotificationsService.notifyMany()` (fire-and-forget). The frontend bell reads `/notifications`. See `backend/CLAUDE.md` → "Domain events" for the recipient + helper conventions.
+- **Soft-delete & cascades**: every entity soft-deletes (`deletedAt`); deleting a project/org cascades via `cascadeSoftDelete`, and deleting a financial parent with live dependents is blocked (409). See `backend/CLAUDE.md` → "Soft-delete, cascades & referential integrity".
 
 ## Commands
 
@@ -102,7 +104,7 @@ npm run type-check            # tsc --noEmit
 | 5 | ⏳ | Budget, Procurement, Purchase Orders |
 | 6 | ⏳ | Documents, Dashboard, File Storage (S3) |
 | 7 | 🟡 | AI Layer — orchestrator + navigation + report-summary agents + chat session persistence shipped |
-| 8 | ⏳ | Hardening, Deployment (real SSO, multi-device sessions, 2FA enrollment all deferred to this phase) |
+| 8 | 🟡 | Hardening, Deployment — **Pre-pilot hardening** milestone complete: business-logic audit remediation (#28–#36) landed cross-cutting integrity (tenant scoping, money invariants, status guards), segregation of duties + audit logging on approvals, soft-delete cascades + referential-integrity guards, domain-event notifications, an overdue-task / dashboard-snapshot scheduler, and the bid-award→PO seam. Real SSO, multi-device sessions, 2FA enrollment still deferred. |
 
 All Mongoose schemas for future phases are already defined under `backend/src/modules/*/schemas/`.
 

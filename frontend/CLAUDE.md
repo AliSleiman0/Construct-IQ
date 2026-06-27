@@ -95,6 +95,7 @@ The page collects two parallel payloads (`orgPayload` for the Organization updat
 - `useOrgSettings()` / `useUpdateOrgSettings()` — `src/features/settings/hooks/`. Same gating pattern.
 - `useCurrentOrg()` / `useUpdateOrganization()` / `useUploadOrgLogo()` — `src/features/organizations/hooks/`.
 - `useAiChat()` — `src/features/ai/`. Auto-navigates on `action.type === 'navigate'`.
+- `useNotifications()` / `useMarkNotificationRead()` / `useMarkAllNotificationsRead()` — `src/features/notifications/hooks/`. Gated on `isAuthenticated`, polls hourly; drives the header bell (`components/shared/Header.tsx`) off the real `/notifications` API. Backend rows are `{ _id, title, message, type, isRead, createdAt }`; `type` ∈ `success|error|warning|info` maps to the chip colour.
 
 When adding a new "current user / current org" hook, follow the gating pattern verbatim — drop the `enabled: isAuthenticated` line and the `/login` redirect loop comes back immediately.
 
@@ -106,7 +107,9 @@ When adding a new "current user / current org" hook, follow the gating pattern v
 
 ## Features directory
 
-`src/features/` — one subdir per feature area (ai, audit, auth, billing, construction-progress, dashboard, issues, org-features, organizations, payments, placeholders, plans, platform-features, projects, reports, settings, site-issues, site-reports, tasks, tickets, units, users). Each typically has `components/`, `hooks/`, sometimes `utils/`. Cross-feature shared chrome lives under `src/components/shared/` (PageHeader, Sidebar, AppLayout, …).
+`src/features/` — one subdir per feature area (ai, audit, auth, billing, construction-progress, dashboard, issues, notifications, org-features, organizations, payments, placeholders, plans, platform-features, projects, reports, settings, site-issues, site-reports, tasks, tickets, units, users). Each typically has `components/`, `hooks/`, sometimes `utils/`. Cross-feature shared chrome lives under `src/components/shared/` (PageHeader, Sidebar, AppLayout, …).
+
+Note: `PaymentStatus` (`src/mocks/payments.mock.ts`) now includes `PARTIAL` (part-paid installments) — keep the `PaymentCard` colour/label maps in sync if the union changes.
 
 ## Common pitfalls
 
