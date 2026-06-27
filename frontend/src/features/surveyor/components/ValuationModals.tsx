@@ -18,6 +18,9 @@ const valuationSchema = z.object({
   period: z.string().min(1, 'Period is required').max(50, 'Max 50 characters'),
   amountUsd: money,
   retentionUsd: money,
+}).refine((v) => v.retentionUsd <= v.amountUsd, {
+  message: 'Retention cannot exceed the amount',
+  path: ['retentionUsd'],
 });
 export type ValuationFormValues = z.infer<typeof valuationSchema>;
 

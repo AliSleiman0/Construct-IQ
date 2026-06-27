@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UnitsService } from './units.service';
 import { Unit } from './schemas/unit.schema';
 import { Payment } from './schemas/payment.schema';
@@ -67,5 +68,56 @@ describe('UnitsService.findPhotos', () => {
     const res = await service.findPhotos('org-1', false, undefined, { userId: 'eng-1', orgWide: false });
     expect(res).toEqual([]);
     expect(photoModel.find).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #29 — unit payment installments may not collectively exceed the unit price.
+ */
+describe('UnitsService.createPayment (#29 bounds)', () => {
+  let service: UnitsService;
+  let unitModel: any;
+  let paymentModel: any;
+
+  const leanOnce = (result: any) => ({ lean: () => Promise.resolve(result) });
+
+  const dto = (amountUsd: number) => ({
+    unitId: 'u-1', buyerId: 'b-1', installmentNo: 1, totalInstallments: 4,
+    label: 'Down', amountUsd, dueDate: '2026-07-01',
+  });
+
+  beforeEach(async () => {
+    unitModel = { findOne: jest.fn().mockReturnValue(leanOnce({ _id: 'u-1', priceUsd: 1000 })) };
+    paymentModel = {
+      aggregate: jest.fn().mockResolvedValue([{ total: 0 }]),
+      create: jest.fn().mockImplementation((d) => Promise.resolve({ _id: 'pay-1', ...d })),
+    };
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        UnitsService,
+        { provide: getModelToken(Unit.name), useValue: unitModel },
+        { provide: getModelToken(Payment.name), useValue: paymentModel },
+        { provide: getModelToken(ProgressPhoto.name), useValue: {} },
+        { provide: getModelToken(Project.name), useValue: {} },
+      ],
+    }).compile();
+    service = moduleRef.get(UnitsService);
+  });
+
+  it('accepts an installment that keeps the running total within the unit price', async () => {
+    paymentModel.aggregate.mockResolvedValue([{ total: 600 }]); // 600 + 400 = 1000 (== price, ok)
+    await service.createPayment('org-1', dto(400) as any);
+    expect(paymentModel.create).toHaveBeenCalled();
+  });
+
+  it('rejects an installment that would push the total over the unit price', async () => {
+    paymentModel.aggregate.mockResolvedValue([{ total: 800 }]); // 800 + 300 = 1100 > 1000
+    await expect(service.createPayment('org-1', dto(300) as any)).rejects.toBeInstanceOf(BadRequestException);
+    expect(paymentModel.create).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFound when the unit does not exist (org-scoped)', async () => {
+    unitModel.findOne.mockReturnValue(leanOnce(null));
+    await expect(service.createPayment('org-1', dto(100) as any)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

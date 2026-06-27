@@ -14,7 +14,8 @@ import type { Variation } from '@/types/variation.types';
 const variationSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  impactAmount: z.coerce.number({ invalid_type_error: 'Enter a number' }),
+  impactAmount: z.coerce.number({ invalid_type_error: 'Enter a number' })
+    .refine((n) => n !== 0, 'Impact amount must be non-zero'),
 });
 export type VariationFormValues = z.infer<typeof variationSchema>;
 

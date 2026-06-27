@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Unit, UnitDocument } from './schemas/unit.schema';
@@ -103,7 +103,26 @@ export class UnitsService {
     return this.paymentModel.find(filter).sort({ installmentNo: 1 }).lean();
   }
 
+  /** Sum of existing installment amounts booked against a unit (org-scoped). */
+  private async sumPaymentsForUnit(unitId: string, organizationId: string): Promise<number> {
+    const [agg] = await this.paymentModel.aggregate([
+      { $match: { unitId, organizationId } },
+      { $group: { _id: null, total: { $sum: '$amountUsd' } } },
+    ]);
+    return agg?.total ?? 0;
+  }
+
   async createPayment(organizationId: string, dto: CreatePaymentDto): Promise<any> {
+    // Installments may not collectively exceed the unit's sale price.
+    const unit = await this.unitModel.findOne({ _id: dto.unitId, organizationId }).lean();
+    if (!unit) throw new NotFoundException('Unit not found');
+    const existing = await this.sumPaymentsForUnit(dto.unitId, organizationId);
+    if (existing + dto.amountUsd > (unit as any).priceUsd) {
+      throw new BadRequestException(
+        'Payment installments would exceed the unit price',
+      );
+    }
+
     return this.paymentModel.create({
       organizationId,
       unitId: dto.unitId,
