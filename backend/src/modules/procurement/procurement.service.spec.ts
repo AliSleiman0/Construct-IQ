@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ProcurementService } from './procurement.service';
 import { Supplier } from './schemas/supplier.schema';
 import { PurchaseOrder, applyPoTotals } from './schemas/purchase-order.schema';
@@ -424,6 +424,66 @@ describe('ProcurementService — PO approval audit (#33)', () => {
     expect(auditService.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'REJECT', entityType: 'PURCHASE_ORDER', metadata: expect.objectContaining({ reason: 'over budget' }) }),
     );
+  });
+});
+
+/**
+ * #34 — delete referential integrity: a supplier with live POs can't be deleted;
+ * delivery and material-request deletes are now soft-deletes (was hard deleteOne).
+ */
+describe('ProcurementService — delete integrity (#34)', () => {
+  let service: ProcurementService;
+  let supplierModel: any;
+  let poModel: any;
+  let deliveryModel: any;
+  let materialRequestModel: any;
+
+  beforeEach(async () => {
+    supplierModel = { findOne: jest.fn(), updateOne: jest.fn().mockResolvedValue({}) };
+    poModel = { countDocuments: jest.fn() };
+    deliveryModel = { findOne: jest.fn(), updateOne: jest.fn().mockResolvedValue({}), deleteOne: jest.fn() };
+    materialRequestModel = { findOne: jest.fn(), updateOne: jest.fn().mockResolvedValue({}), deleteOne: jest.fn() };
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        ProcurementService,
+        { provide: getModelToken(Supplier.name), useValue: supplierModel },
+        { provide: getModelToken(PurchaseOrder.name), useValue: poModel },
+        { provide: getModelToken(Delivery.name), useValue: deliveryModel },
+        { provide: getModelToken(MaterialRequest.name), useValue: materialRequestModel },
+        { provide: getModelToken(Project.name), useValue: {} },
+        { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+      ],
+    }).compile();
+    service = moduleRef.get(ProcurementService);
+  });
+
+  it('deleteSupplier: blocks when live purchase orders reference the supplier', async () => {
+    supplierModel.findOne.mockResolvedValue({ _id: 's-1' });
+    poModel.countDocuments.mockResolvedValue(1);
+    await expect(service.deleteSupplier('s-1', 'org-1', false)).rejects.toBeInstanceOf(ConflictException);
+    expect(supplierModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('deleteSupplier: soft-deletes when no POs reference it', async () => {
+    supplierModel.findOne.mockResolvedValue({ _id: 's-1' });
+    poModel.countDocuments.mockResolvedValue(0);
+    await service.deleteSupplier('s-1', 'org-1', false);
+    expect(supplierModel.updateOne).toHaveBeenCalledWith({ _id: 's-1' }, { deletedAt: expect.any(Date) });
+  });
+
+  it('deleteDelivery: soft-deletes (no hard deleteOne)', async () => {
+    deliveryModel.findOne.mockResolvedValue({ _id: 'd-1' });
+    await service.deleteDelivery('d-1', 'org-1', false);
+    expect(deliveryModel.updateOne).toHaveBeenCalledWith({ _id: 'd-1' }, { deletedAt: expect.any(Date) });
+    expect(deliveryModel.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it('deleteMaterialRequest: soft-deletes (no hard deleteOne)', async () => {
+    materialRequestModel.findOne.mockResolvedValue({ _id: 'mr-1' });
+    await service.deleteMaterialRequest('mr-1', 'org-1', false);
+    expect(materialRequestModel.updateOne).toHaveBeenCalledWith({ _id: 'mr-1' }, { deletedAt: expect.any(Date) });
+    expect(materialRequestModel.deleteOne).not.toHaveBeenCalled();
   });
 });
 

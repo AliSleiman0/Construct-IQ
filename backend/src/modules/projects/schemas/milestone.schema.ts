@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 import { MilestoneStatus } from '../../../common/enums';
 
 export type MilestoneDocument = CuidHydratedDocument<Milestone>;
@@ -50,10 +51,12 @@ export class Milestone {
   @Prop({ type: [String], ref: 'Milestone', default: [] })
   dependsOnMilestoneIds: string[];
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const MilestoneSchema = SchemaFactory.createForClass(Milestone);
 
+MilestoneSchema.plugin(softDeletePlugin);
 MilestoneSchema.index({ projectId: 1, targetDate: 1 });

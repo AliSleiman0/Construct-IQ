@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, UseGuards, ForbiddenException,
+  Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, ForbiddenException,
   UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -85,6 +85,16 @@ export class OrganizationsController {
       throw new ForbiddenException('Only Super Admins can change organization status');
     }
     return this.organizationsService.setActive(id, dto.isActive);
+  }
+
+  /** Super Admin only — delete a tenant (soft-delete + cascade to all its data) */
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.ORGANIZATIONS.MANAGE)
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    if (!user.isSuperAdmin) {
+      throw new ForbiddenException('Only Super Admins can delete an organization');
+    }
+    return this.organizationsService.softDelete(id, user.sub);
   }
 
   /** Assign a subscription plan. Super Admin: any org. Org Admin: own org only. */

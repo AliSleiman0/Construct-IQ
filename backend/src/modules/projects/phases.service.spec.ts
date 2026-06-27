@@ -20,6 +20,7 @@ describe('PhasesService', () => {
       find: jest.fn().mockReturnValue(findChain([])),
       findOne: jest.fn(),
       findOneAndDelete: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({}),
       create: jest.fn(),
     };
     const moduleRef = await Test.createTestingModule({
@@ -100,6 +101,15 @@ describe('PhasesService', () => {
       model.findOneAndDelete.mockResolvedValue(null);
       await expect(service.remove('ph-1', 'proj-1', 'org-1', false)).rejects.toBeInstanceOf(NotFoundException);
       expect(model.findOneAndDelete).toHaveBeenCalledWith({ _id: 'ph-1', projectId: 'proj-1', organizationId: 'org-1' });
+    });
+
+    it('drops the deleted phase from sibling dependency lists (#34)', async () => {
+      model.findOneAndDelete.mockResolvedValue({ _id: 'ph-1' });
+      await service.remove('ph-1', 'proj-1', 'org-1', false);
+      expect(model.updateMany).toHaveBeenCalledWith(
+        { dependsOnPhaseIds: 'ph-1' },
+        { $pull: { dependsOnPhaseIds: 'ph-1' } },
+      );
     });
   });
 });

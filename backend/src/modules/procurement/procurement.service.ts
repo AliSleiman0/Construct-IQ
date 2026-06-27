@@ -157,6 +157,13 @@ export class ProcurementService {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const supplier = await this.supplierModel.findOne(filter);
     if (!supplier) throw new NotFoundException('Supplier not found');
+    // Referential integrity: refuse to orphan live purchase orders.
+    const pos = await this.poModel.countDocuments({ supplierId: id });
+    if (pos > 0) {
+      throw new ConflictException(
+        'Cannot delete supplier with active purchase orders. Cancel or reassign them first.',
+      );
+    }
     await this.supplierModel.updateOne({ _id: id }, { deletedAt: new Date() });
     return { message: 'Supplier deleted successfully' };
   }
@@ -352,7 +359,8 @@ export class ProcurementService {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const delivery = await this.deliveryModel.findOne(filter);
     if (!delivery) throw new NotFoundException('Delivery not found');
-    await this.deliveryModel.deleteOne({ _id: id });
+    // Soft-delete for consistency with the rest of the platform (was a hard delete).
+    await this.deliveryModel.updateOne({ _id: id }, { deletedAt: new Date() });
     return { message: 'Delivery deleted successfully' };
   }
 
@@ -483,7 +491,8 @@ export class ProcurementService {
     const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
     const mr = await this.materialRequestModel.findOne(filter);
     if (!mr) throw new NotFoundException('Material request not found');
-    await this.materialRequestModel.deleteOne({ _id: id });
+    // Soft-delete for consistency with the rest of the platform (was a hard delete).
+    await this.materialRequestModel.updateOne({ _id: id }, { deletedAt: new Date() });
     return { message: 'Material request deleted successfully' };
   }
 

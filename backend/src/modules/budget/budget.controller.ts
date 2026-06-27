@@ -50,6 +50,12 @@ export class BudgetController {
     return this.budgetService.update(id, user.organizationId, dto, user.isSuperAdmin);
   }
 
+  @Delete(':id')
+  @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
+  remove(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
+    return this.budgetService.deleteBudget(id, user.organizationId, user.isSuperAdmin, user.sub);
+  }
+
   @Post(':id/lines')
   @RequirePermissions(PERMISSIONS.BUDGET.MANAGE)
   addLine(@Param('id') id: string, @CurrentUser() user: JwtPayload, @Body() dto: CreateBudgetLineDto): Promise<any> {

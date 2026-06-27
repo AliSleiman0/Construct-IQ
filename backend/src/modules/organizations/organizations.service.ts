@@ -26,6 +26,8 @@ import { AiPlan, AiPlanDocument } from '../ai-plans/schemas/ai-plan.schema';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { ProjectStatus, UserStatus } from '../../common/enums';
+import { AuditService } from '../audit/audit.service';
+import { cascadeSoftDelete } from '../../database/mongoose/cascade.util';
 
 // All roles provisioned for every new organization, with their permission sets.
 // Permissions are global (no org scope) so we look them up by name at creation time.
@@ -239,7 +241,13 @@ export class OrganizationsService {
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
     @InjectModel(AiPlan.name) private aiPlanModel: Model<AiPlanDocument>,
     @InjectConnection() private connection: Connection,
+    private readonly auditService: AuditService,
   ) {}
+
+  /** Fire-and-forget audit write — a logging failure must never break the op. */
+  private audit(entry: Parameters<AuditService['log']>[0]): void {
+    this.auditService.log(entry).catch(() => undefined);
+  }
 
   private async withCounts(
     org: OrganizationDocument | (Organization & { _id: string }),
@@ -427,6 +435,31 @@ export class OrganizationsService {
     await org.save();
 
     return { id: org._id, name: org.name, isActive: org.isActive };
+  }
+
+  /**
+   * Super Admin only — delete a tenant. Soft-deletes the organization and
+   * cascade soft-deletes every org-scoped, soft-deletable entity in one sweep.
+   * Collections without the soft-delete plugin (e.g. audit_logs) are preserved.
+   */
+  async softDelete(id: string, actorUserId?: string) {
+    const org = await this.organizationModel.findOne({ _id: id });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const now = new Date();
+    await this.organizationModel.updateOne({ _id: id }, { deletedAt: now });
+    const cascade = await cascadeSoftDelete(this.connection, 'organizationId', id, now);
+
+    this.audit({
+      organizationId: id,
+      actorUserId,
+      action: 'DELETE',
+      entityType: 'ORGANIZATION',
+      entityId: id,
+      metadata: { cascade },
+    });
+
+    return { message: 'Organization deleted successfully' };
   }
 
   async update(

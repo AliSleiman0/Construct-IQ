@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { CuidHydratedDocument } from '../../../database/mongoose/base/types';
+import { softDeletePlugin } from '../../../database/mongoose/plugins/soft-delete.plugin';
 import { PaymentStatus } from '../../../common/enums';
 
 export type PaymentDocument = CuidHydratedDocument<Payment>;
@@ -49,11 +50,14 @@ export class Payment {
   @Prop({ type: String, default: null })
   invoiceNumber: string | null;
 
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);
+
+PaymentSchema.plugin(softDeletePlugin);
 
 // One installment number per unit — enforces no duplicate schedule entries
 PaymentSchema.index({ unitId: 1, installmentNo: 1 }, { unique: true });

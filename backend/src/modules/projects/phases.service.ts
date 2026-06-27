@@ -62,6 +62,11 @@ export class PhasesService {
     if (!isSuperAdmin) filter.organizationId = organizationId;
     const phase = await this.phaseModel.findOneAndDelete(filter);
     if (!phase) throw new NotFoundException('Phase not found');
+    // Referential integrity: drop this phase from sibling dependency lists.
+    await this.phaseModel.updateMany(
+      { dependsOnPhaseIds: phaseId },
+      { $pull: { dependsOnPhaseIds: phaseId } },
+    );
     return { message: 'Phase deleted successfully' };
   }
 }

@@ -8,9 +8,10 @@ import { MilestonesService } from './milestones.service';
 import { PublicProjectsController } from './public-projects.controller';
 import { PublicAutocadController } from './public-autocad.controller';
 import { ApsModule } from '../aps/aps.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [ApsModule],
+  imports: [ApsModule, AuditModule],
   controllers: [
     ProjectsController,
     PhasesController,
