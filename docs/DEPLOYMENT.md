@@ -22,7 +22,7 @@ Deploys are automated via GitHub Actions (`.github/workflows/`):
   `next lint` + `tsc --noEmit` + vitest + `next build`.
 - **`deploy.yml`** — every push/merge to `main` (or manually via *Run
   workflow*): re-runs CI, builds the `backend`, `frontend`, and `backend-seed`
-  images, pushes them to GHCR (`ghcr.io/ayman-sbeity/construct-iq/*`, tagged
+  images, pushes them to GHCR (`ghcr.io/alisleiman0/construct-iq/*`, tagged
   `sha-<shortsha>` + `latest`), then SSHes into the droplet, copies
   `docker-compose.prod.yml` + the nginx conf to `/opt/constructiq/`, pulls the
   new images, `up -d`, and health-checks `https://constructiq.site/api/v1/health`.

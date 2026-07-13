@@ -61,8 +61,8 @@ jobs:
           target: ${{ matrix.target }}
           push: true
           tags: |
-            ghcr.io/ayman-sbeity/construct-iq/${{ matrix.image }}:${{ steps.tag.outputs.tag }}
-            ghcr.io/ayman-sbeity/construct-iq/${{ matrix.image }}:latest
+            ghcr.io/alisleiman0/construct-iq/${{ matrix.image }}:${{ steps.tag.outputs.tag }}
+            ghcr.io/alisleiman0/construct-iq/${{ matrix.image }}:latest
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 

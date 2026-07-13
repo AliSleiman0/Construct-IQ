@@ -88,7 +88,7 @@ services:
       - constructiq
 
   backend:
-    image: ghcr.io/ayman-sbeity/construct-iq/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/alisleiman0/construct-iq/backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: runtime
@@ -105,7 +105,7 @@ services:
       - constructiq
 
   frontend:
-    image: ghcr.io/ayman-sbeity/construct-iq/frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/alisleiman0/construct-iq/frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       target: runtime
@@ -127,7 +127,7 @@ services:
   # `build` image target, which carries ts-node + scripts/. Run with
   # `--profile seed run --rm backend-seed`.
   backend-seed:
-    image: ghcr.io/ayman-sbeity/construct-iq/backend-seed:${IMAGE_TAG:-latest}
+    image: ghcr.io/alisleiman0/construct-iq/backend-seed:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: build
