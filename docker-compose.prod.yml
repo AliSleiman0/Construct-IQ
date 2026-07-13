@@ -1,8 +1,14 @@
 # Production stack for a single DigitalOcean droplet (all-in-one).
-# Only nginx is published to the host (port 80). Everything else talks over the
-# internal `constructiq` network by service name.
+# Only nginx is published to the host (ports 80/443). Everything else talks over
+# the internal `constructiq` network by service name.
 #
-#   docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod up -d --build
+# App images are built by CI (.github/workflows/deploy.yml) and pulled from
+# GHCR — set IMAGE_TAG to pin a build (defaults to `latest`):
+#
+#   IMAGE_TAG=sha-abc1234 docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod up -d
+#
+# The manual build-on-droplet path still works by adding --build. One-off jobs:
+#
 #   docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod --profile init up minio-init
 #   docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod --profile seed run --rm backend-seed
 #
@@ -82,6 +88,7 @@ services:
       - constructiq
 
   backend:
+    image: ghcr.io/ayman-sbeity/construct-iq/backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: runtime
@@ -98,6 +105,7 @@ services:
       - constructiq
 
   frontend:
+    image: ghcr.io/ayman-sbeity/construct-iq/frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       target: runtime
@@ -119,6 +127,7 @@ services:
   # `build` image target, which carries ts-node + scripts/. Run with
   # `--profile seed run --rm backend-seed`.
   backend-seed:
+    image: ghcr.io/ayman-sbeity/construct-iq/backend-seed:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: build
@@ -139,8 +148,13 @@ services:
     restart: unless-stopped
     ports:
       - '80:80'
+      - '443:443'
     volumes:
       - ./deploy/nginx/constructiq.conf:/etc/nginx/conf.d/default.conf:ro
+      # Let's Encrypt certs live on the host (issued/renewed by host certbot).
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Webroot for ACME http-01 renewals (certbot -w /opt/constructiq/certbot-www).
+      - ./certbot-www:/var/www/certbot:ro
     depends_on:
       - frontend
       - backend
