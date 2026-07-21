@@ -1,0 +1,132 @@
+# Production deployment: build images in CI, push to GHCR, deploy to the
+# DigitalOcean droplet over SSH (registry pull — the droplet never builds).
+#
+# Required repository secrets:
+#   DEPLOY_HOST     droplet IP or hostname
+#   DEPLOY_USER     ssh user (root)
+#   DEPLOY_SSH_KEY  private key whose public half is in the droplet's authorized_keys
+#
+# The droplet needs /opt/constructiq/deploy/.env.prod (secrets) and TLS certs
+# under /etc/letsencrypt to already exist — see docs/DEPLOYMENT.md.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build-push:
+    name: Build & push ${{ matrix.image }}
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: backend
+            context: ./backend
+            target: runtime
+          - image: frontend
+            context: ./frontend
+            target: runtime
+          # `build` target carries ts-node + scripts/ — used by the one-off
+          # seed profile so the droplet never compiles TypeScript.
+          - image: backend-seed
+            context: ./backend
+            target: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image tag
+        id: tag
+        run: echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: |
+            ghcr.io/alisleiman0/construct-iq/${{ matrix.image }}:${{ steps.tag.outputs.tag }}
+            ghcr.io/alisleiman0/construct-iq/${{ matrix.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: Deploy to droplet
+    needs: build-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copy deploy assets
+        run: |
+          scp -i ~/.ssh/deploy_key docker-compose.prod.yml \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/constructiq/docker-compose.prod.yml"
+          scp -i ~/.ssh/deploy_key deploy/nginx/constructiq.conf \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/constructiq/deploy/nginx/constructiq.conf"
+
+      - name: Pull images and restart stack
+        run: |
+          IMAGE_TAG="sha-$(git rev-parse --short HEAD)"
+          # GITHUB_TOKEN is ephemeral (expires with the run) — used for the
+          # registry pull so no long-lived PAT lives on the server.
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "set -e
+             cd /opt/constructiq
+             echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+             export IMAGE_TAG='$IMAGE_TAG'
+             docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod pull
+             docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod up -d --remove-orphans
+             docker logout ghcr.io"
+
+      - name: Health check
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "set -e
+             # 1. Wait for the backend container's own HEALTHCHECK to go healthy.
+             for i in \$(seq 1 36); do
+               status=\$(docker inspect --format '{{.State.Health.Status}}' constructiq_backend 2>/dev/null || echo missing)
+               [ \"\$status\" = healthy ] && break
+               sleep 5
+             done
+             if [ \"\$status\" != healthy ]; then
+               echo \"backend never became healthy (status=\$status)\"
+               docker compose -f /opt/constructiq/docker-compose.prod.yml --env-file /opt/constructiq/deploy/.env.prod ps
+               docker logs --tail 100 constructiq_backend || true
+               exit 1
+             fi
+             # 2. Verify the full public path (nginx + TLS + backend).
+             curl -fsS --resolve constructiq.site:443:127.0.0.1 https://constructiq.site/api/v1/health
+             echo
+             echo 'deploy healthy'"
+
+      - name: Prune old images
+        if: success()
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "docker image prune -f >/dev/null && echo pruned"

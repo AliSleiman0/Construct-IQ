@@ -1,0 +1,53 @@
+# CI gate: lint, type-check, unit tests, and compile checks for both apps.
+# Runs on every PR, and is reused as the gate job by deploy.yml (workflow_call).
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+jobs:
+  backend:
+    name: Backend (lint · build · test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        # package.json's `lint` script runs eslint --fix; CI must check, not rewrite.
+        run: npx eslint "{src,apps,libs,test}/**/*.ts"
+      - name: Build
+        run: npm run build
+      - name: Unit tests
+        run: npm test
+
+  frontend:
+    name: Frontend (lint · type-check · test · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npm run type-check
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build

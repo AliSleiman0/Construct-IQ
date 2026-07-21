@@ -2,17 +2,46 @@
 
 Stands the full ConstructIQ stack (nginx · Next.js · NestJS · MongoDB · Redis ·
 MinIO) up on a **single droplet** via `docker-compose.prod.yml`, served over
-**plain HTTP on the droplet IP**. TLS is a documented follow-up at the end.
+**HTTPS at https://constructiq.site** (Let's Encrypt).
 
 ```
-Browser ──HTTP:80──> nginx ──/api/v1/──> backend:4000 (NestJS)
-                          ├──/──────────> frontend:3000 (Next.js)
-                          └──/storage/──> minio:9000 (uploaded files)
+Browser ──HTTPS:443──> nginx ──/api/v1/──> backend:4000 (NestJS)
+                            ├──/──────────> frontend:3000 (Next.js)
+                            └──/storage/──> minio:9000 (uploaded files)
 backend ──> mongo:27017 (rs0) · redis:6379 · minio:9000
 ```
 
-Only nginx (port 80) is exposed to the host; everything else is internal to the
-`constructiq` Docker network.
+Only nginx (ports 80/443) is exposed to the host; everything else is internal
+to the `constructiq` Docker network.
+
+## 0. CI/CD (how deploys happen now)
+
+Deploys are automated via GitHub Actions (`.github/workflows/`):
+
+- **`ci.yml`** — every PR: backend eslint + `nest build` + jest; frontend
+  `next lint` + `tsc --noEmit` + vitest + `next build`.
+- **`deploy.yml`** — every push/merge to `main` (or manually via *Run
+  workflow*): re-runs CI, builds the `backend`, `frontend`, and `backend-seed`
+  images, pushes them to GHCR (`ghcr.io/alisleiman0/construct-iq/*`, tagged
+  `sha-<shortsha>` + `latest`), then SSHes into the droplet, copies
+  `docker-compose.prod.yml` + the nginx conf to `/opt/constructiq/`, pulls the
+  new images, `up -d`, and health-checks `https://constructiq.site/api/v1/health`.
+
+The droplet **never builds images** (it's a small box) — it only pulls.
+Registry auth on the droplet uses the run's ephemeral `GITHUB_TOKEN`; no PAT is
+stored on the server.
+
+Required repo secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY` (a
+dedicated CI keypair — public half in the droplet's `authorized_keys`).
+
+**Rollback** (sha tags are immutable):
+```bash
+cd /opt/constructiq
+IMAGE_TAG=sha-<previous> docker compose -f docker-compose.prod.yml --env-file deploy/.env.prod up -d
+```
+
+The sections below document the underlying setup — needed once per server, and
+as the manual fallback path.
 
 ---
 
@@ -81,7 +110,8 @@ $COMPOSE ps                     # status
 $COMPOSE restart backend        # restart one service
 ```
 
-**Redeploy after a code change:**
+**Redeploy after a code change:** merge to `main` — `deploy.yml` does the rest
+(see §0). Manual fallback on the droplet:
 ```bash
 git pull
 $COMPOSE up -d --build          # rebuilds changed images, recreates containers
@@ -96,19 +126,30 @@ $COMPOSE exec mongo mongodump --archive=/data/db/backup-$(date +%F).gz --gzip
 
 ---
 
-## 6. Add HTTPS (when a domain is ready)
+## 6. HTTPS (implemented for constructiq.site)
 
-1. Point a DNS **A record** at the droplet IP.
-2. Obtain a Let's Encrypt cert for the domain (host `certbot`, or a certbot
-   container) and make `/etc/letsencrypt` available to the nginx container
-   (add a volume mount in `docker-compose.prod.yml`).
-3. In `deploy/nginx/constructiq.conf`, set `server_name` and uncomment the
-   `listen 443 ssl` block at the bottom.
-4. In `deploy/.env.prod` set:
-   - `COOKIE_SECURE=true`
-   - `FRONTEND_URL=https://app.example.com`
-   - `S3_PUBLIC_URL=https://app.example.com/storage/constructiq`
-5. `$COMPOSE up -d --build` to apply.
+TLS is live: `deploy/nginx/constructiq.conf` serves
+`constructiq.site` + `www.constructiq.site` on :443 (www → apex redirect,
+HTTP → HTTPS redirect), and `docker-compose.prod.yml` mounts `/etc/letsencrypt`
+(read-only) plus the ACME webroot into nginx.
+
+One-time setup on a fresh server (certs must exist **before** nginx first starts,
+or nginx exits on the missing cert files):
+
+```bash
+# DNS A records for @ and www must already point at the droplet
+apt install -y certbot
+certbot certonly --standalone -d constructiq.site -d www.constructiq.site   # port 80 must be free
+```
+
+Renewals run via certbot's systemd timer in **webroot** mode (no downtime) —
+`/opt/constructiq/certbot-www` is served by nginx at `/.well-known/acme-challenge/`,
+and a deploy hook reloads nginx. Verify with `certbot renew --dry-run`.
+
+`deploy/.env.prod` on the server uses the HTTPS origin:
+- `COOKIE_SECURE=true`
+- `FRONTEND_URL=https://constructiq.site`
+- `S3_PUBLIC_URL=https://constructiq.site/storage/constructiq`
 
 ---
 
