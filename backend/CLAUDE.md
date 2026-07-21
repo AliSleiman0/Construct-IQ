@@ -152,6 +152,22 @@ Wired at: PO/MR/variation approve+reject, delivery confirm, RFI answer, inspecti
 
 **Pattern**: `OrchestratorService` classifies user intent via OpenAI and dispatches to a specialized `@Injectable()` agent under `agents/`.
 
+### Per-user scoping — the assistant only does what the caller's role can do
+
+The assistant is available to every internal staff role that has a UI of its own (`use:ai` is seeded on PM, PROCUREMENT, SURVEYOR, SITE_ENG; ORG_ADMIN inherits it from `manage:company`). PLANNING_ENG and FINANCE_VIEWER are withheld — they have no route prefix in `frontend/src/config/roles.ts`, so `(app)/layout.tsx` logs them out on sight; grant them `use:ai` when those sections ship. What it will *do* is then derived from that caller's permissions — a Site Engineer is never offered, navigated to, or answered about budget.
+
+Two registries plus one enforcement point:
+
+- **`capabilities/ai-capabilities.ts`** — which agents a caller may reach. Each entry carries `requires: string[]`; `resolveCapabilities(permissions)` filters. `report-summary` requires `read:reports`.
+- **`tools/navigation-catalog.ts`** — which pages the assistant may offer. A destination is real for a caller only when their **primary role has a route for it** *and* their permissions satisfy `requires`. Routes are role-prefixed (`/pm/budget`, `/site-eng/reports`) because `(app)/layout.tsx` bounces anyone off another role's prefix — never emit a bare `/section`. **Keep in lockstep with `frontend/src/config/sidebar-nav.ts`**, which stays the UI source of truth.
+- **`OrchestratorService.route()`** — builds the classifier prompt *from the caller's capabilities* (an agent they can't use is never described), then **re-checks `decision.agent` against that same list before dispatching**. The prompt is a hint; this check is the enforcement. `NavigationAgent` re-validates the model's tool call against the scope too, and refuses rather than emitting an unreachable route.
+
+Both resolvers and `PermissionsGuard` share `common/util/permission-check.util.ts` (`satisfiesPermission` / `satisfiesAll`) so the AI can never advertise something the API would refuse. `PermissionsGuard` populates `request.user.permissions` **and** `request.user.roles`; the AI controller forwards both into `OrchestratorContext`.
+
+Adding an agent: one entry in `AI_CAPABILITIES` with the permissions it reads, a provider in `ai.module.ts`, a `case` in the switch. Scoping then comes for free.
+
+**Existing DBs**: role docs are per-org, so editing `STANDARD_ROLES` only affects new orgs. Run `scripts/backfill-ai-permissions.ts` to push `use:ai` into roles that already exist. The org-level `AiFeatureGuard` gate is independent and still applies.
+
 **Current agents**:
 - `NavigationAgent` — natural language → app routes via OpenAI tool-calling. Returns `{ action: { type: 'navigate', route } }`.
 - `ReportSummaryAgent` — fetches a `DailyReport`, summarizes via OpenAI, persists to `DailyReport.aiSummary`.

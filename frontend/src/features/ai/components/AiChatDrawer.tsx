@@ -21,6 +21,8 @@ import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { theme as baseTheme } from '@/constants/theme';
+import { useAuthStore } from '@/store/auth.store';
+import { SIDEBAR_BY_ROLE } from '@/config/sidebar-nav';
 import { useAiChatStore } from '../store/ai-chat.store';
 import { useAiChat } from '../hooks/useAiChat';
 import { AiMessageBubble } from './AiMessageBubble';
@@ -36,6 +38,16 @@ export function AiChatDrawer() {
   const chatMutation = useAiChat();
   const listEndRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
+  const role = useAuthStore((s) => s.role);
+
+  // The assistant is scoped to the caller's role on the backend, so the
+  // suggestion has to be too — "take me to users" is meaningless to a Site
+  // Engineer. Use the first non-dashboard item of their own sidebar.
+  const exampleDestination = useMemo(() => {
+    const items = role ? SIDEBAR_BY_ROLE[role] : undefined;
+    const item = items?.find((i) => i.label !== 'Dashboard') ?? items?.[0];
+    return item?.label.toLowerCase() ?? 'my dashboard';
+  }, [role]);
 
   const floatTheme = useMemo(() => {
     const isDark = chatMode === 'dark';
@@ -154,7 +166,7 @@ export function AiChatDrawer() {
           <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
             Ask me to navigate or summarize a report.
             <br />
-            e.g. &quot;take me to users&quot;
+            e.g. &quot;take me to {exampleDestination}&quot;
           </Typography>
         )}
 

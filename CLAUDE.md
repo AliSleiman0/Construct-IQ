@@ -51,6 +51,7 @@ All service queries must filter by `organizationId`. The `OrgContextInterceptor`
 - **Audit logging**: significant state changes are written to the `audit_logs` collection via `AuditService.log()` (org-settings diffs, plus approvals/results/deletes across procurement, surveyor, projects, tasks, issues, etc.). New mutations of record should follow the pattern (fire-and-forget; failure must not surface to the user).
 - **Domain events → notifications**: those same state changes also emit in-app notifications via `NotificationsService.notifyMany()` (fire-and-forget). The frontend bell reads `/notifications`. See `backend/CLAUDE.md` → "Domain events" for the recipient + helper conventions.
 - **Soft-delete & cascades**: every entity soft-deletes (`deletedAt`); deleting a project/org cascades via `cascadeSoftDelete`, and deleting a financial parent with live dependents is blocked (409). See `backend/CLAUDE.md` → "Soft-delete, cascades & referential integrity".
+- **AI is scoped to the caller's role**: the assistant is open to every internal staff role, but what it will do is derived from that user's permissions — a Site Engineer is never offered budget, a Procurement officer is never offered report summaries. Never hardcode an AI scope per role; add `requires: [PERMISSIONS…]` to the capability/destination registries instead. The backend navigation catalog (`backend/src/modules/ai/tools/navigation-catalog.ts`) must be kept **in lockstep with `frontend/src/config/sidebar-nav.ts`**, and every route it emits is role-prefixed (`/pm/budget`, `/site-eng/reports`) because `(app)/layout.tsx` bounces users off another role's prefix. See `backend/CLAUDE.md` → "Per-user scoping".
 
 ## Commands
 
@@ -103,7 +104,7 @@ npm run type-check            # tsc --noEmit
 | 4 | ⏳ | Daily Reports, Issues, Blockers |
 | 5 | ⏳ | Budget, Procurement, Purchase Orders |
 | 6 | ⏳ | Documents, Dashboard, File Storage (S3) |
-| 7 | 🟡 | AI Layer — orchestrator + navigation + report-summary agents + chat session persistence shipped |
+| 7 | 🟡 | AI Layer — orchestrator + navigation + report-summary agents + chat session persistence shipped; assistant open to all internal staff roles and permission-scoped per user |
 | 8 | 🟡 | Hardening, Deployment — **Pre-pilot hardening** milestone complete: business-logic audit remediation (#28–#36) landed cross-cutting integrity (tenant scoping, money invariants, status guards), segregation of duties + audit logging on approvals, soft-delete cascades + referential-integrity guards, domain-event notifications, an overdue-task / dashboard-snapshot scheduler, and the bid-award→PO seam. Real SSO, multi-device sessions, 2FA enrollment still deferred. |
 
 All Mongoose schemas for future phases are already defined under `backend/src/modules/*/schemas/`.

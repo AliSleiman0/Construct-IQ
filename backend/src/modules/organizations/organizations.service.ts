@@ -38,7 +38,17 @@ import { cascadeSoftDelete } from '../../database/mongoose/cascade.util';
 // labels live in `description` (and frontend ROLE_LABELS). The trailing three
 // roles (PLANNING_ENG / FINANCE_VIEWER / SUPPLIER) have no frontend section yet;
 // they remain available for assignment but route to the default fallback.
-const STANDARD_ROLES: Array<{
+//
+// `use:ai` is granted to every internal staff role that has a UI of its own —
+// the assistant then scopes itself to whatever else that role can read (see
+// modules/ai/capabilities). ORG_ADMIN needs no explicit grant: `manage:company`
+// is a wildcard. External roles (CLIENT / SUPPLIER / SUBCONTRACTOR) deliberately
+// get no AI access. PLANNING_ENG / FINANCE_VIEWER are withheld for a different
+// reason: they have no route prefix in frontend/src/config/roles.ts, so
+// `roleFromUser()` returns null and (app)/layout.tsx logs them straight back
+// out — an assistant would have nowhere to navigate. Grant `use:ai` to them at
+// the same time those sections ship.
+export const STANDARD_ROLES: Array<{
   name: string;
   description: string;
   permissions: string[];
@@ -71,6 +81,9 @@ const STANDARD_ROLES: Array<{
       'read:suppliers',
       'read:purchase_orders',
       'approve:purchase_orders',
+      'reject:purchase_orders',
+      'read:material_requests',
+      'create:material_requests',
       'read:deliveries',
       'manage:documents',
       'read:dashboard',
@@ -107,6 +120,7 @@ const STANDARD_ROLES: Array<{
       'read:documents',
       'upload:documents',
       'read:ai',
+      'use:ai',
       'read:dashboard',
     ],
   },
@@ -145,6 +159,7 @@ const STANDARD_ROLES: Array<{
       'read:documents',
       'read:dashboard',
       'read:ai',
+      'use:ai',
     ],
   },
   {
@@ -157,11 +172,13 @@ const STANDARD_ROLES: Array<{
       'read:budget',
       'manage:suppliers',
       'manage:purchase_orders',
+      'manage:material_requests',
       'manage:deliveries',
       'update:deliveries',
       'read:documents',
       'upload:documents',
       'read:ai',
+      'use:ai',
       'manage:bids',
     ],
   },

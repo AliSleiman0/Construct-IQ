@@ -194,6 +194,9 @@ async function main() {
   console.log(`Permissions: ${permissionDefs.length} created/verified`);
 
   // ── Roles (scoped to Company A — shared by all demo users) ────────────────
+  // `use:ai` goes to every internal staff role; the assistant then scopes
+  // itself to whatever else the role can read. Keep in sync with
+  // STANDARD_ROLES in organizations.service.ts.
   const rolePermissionMap: Record<string, string[]> = {
     SUPER_ADMIN: ['manage:all'],
     SUPPORT_AGENT: ['read:organizations', 'read:users', 'read:tickets', 'manage:tickets'],
@@ -224,14 +227,14 @@ async function main() {
       'approve:purchase_orders', 'reject:purchase_orders', 'manage:purchase_orders',
       'read:material_requests', 'create:material_requests', 'approve:material_requests', 'manage:material_requests',
       'update:deliveries', 'manage:deliveries', 'read:deliveries',
-      'read:documents', 'upload:documents', 'read:ai',
+      'read:documents', 'upload:documents', 'read:ai', 'use:ai',
       'manage:bids',
     ],
     SURVEYOR: [
       'read:projects', 'read:users', 'read:tasks',
       'read:phases', 'read:milestones', 'read:reports', 'read:issues',
       'manage:budget', 'read:purchase_orders', 'read:deliveries', 'read:suppliers',
-      'read:documents', 'read:dashboard', 'read:ai',
+      'read:documents', 'read:dashboard', 'read:ai', 'use:ai',
     ],
     SITE_ENG: [
       'read:projects', 'read:users',
@@ -242,7 +245,7 @@ async function main() {
       'create:rfis', 'read:rfis', 'update:rfis',
       'read:phases', 'read:milestones',
       'read:deliveries', 'confirm:deliveries',
-      'read:documents', 'upload:documents', 'read:ai',
+      'read:documents', 'upload:documents', 'read:ai', 'use:ai',
       'read:dashboard',
     ],
     CLIENT: ['read:projects', 'read:milestones', 'read:issues', 'read:reports', 'read:documents'],

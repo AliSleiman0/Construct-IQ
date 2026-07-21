@@ -43,12 +43,18 @@ export class AiController {
       isSuperAdmin: user.isSuperAdmin,
       sessionId: dto.sessionId,
       projectId: dto.projectId,
+      // Resolved per-request by PermissionsGuard. These scope what the
+      // assistant will do for this caller — see ai-capabilities.ts.
+      permissions: user.permissions ?? [],
+      roles: user.roles ?? [],
     });
   }
 
   @Post('summarize-report/:reportId')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(PERMISSIONS.AI.USE)
+  // read:reports as well as use:ai — summarizing a report is reading it, so the
+  // direct route must demand the same permission the chat path scopes on.
+  @RequirePermissions(PERMISSIONS.AI.USE, PERMISSIONS.REPORTS.READ)
   @RequireAiFeature(AI_FEATURES.AI_REPORT_SUMMARY.key)
   @ApiOperation({ summary: 'Generate and save an AI summary for a daily report' })
   summarizeReport(@Param('reportId') reportId: string, @CurrentUser() user: JwtPayload) {

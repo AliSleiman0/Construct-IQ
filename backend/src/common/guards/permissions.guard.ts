@@ -12,6 +12,7 @@ import {
   RoleDocument,
 } from '../../modules/users/schemas/role.schema';
 import { RequestWithUser } from '../interfaces/request-with-user.interface';
+import { satisfiesPermission } from '../util/permission-check.util';
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -47,37 +48,22 @@ export class PermissionsGuard implements CanActivate {
     if (!userDoc || userDoc.roleIds.length === 0) return false;
 
     const roles = await this.roleModel
-      .find({ _id: { $in: userDoc.roleIds } }, { permissionKeys: 1 })
+      .find({ _id: { $in: userDoc.roleIds } }, { permissionKeys: 1, name: 1 })
       .lean();
 
     const permissionNames = roles.flatMap((r) => r.permissionKeys ?? []);
 
-    // Expose the resolved permissions on the request so controllers/services can
-    // make scoping decisions (e.g. member-scoped vs org-wide list queries)
-    // without re-querying. The JWT itself does not carry permissions.
+    // Expose the resolved permissions and role names on the request so
+    // controllers/services can make scoping decisions (e.g. member-scoped vs
+    // org-wide list queries, or which AI capabilities a caller may reach)
+    // without re-querying. The JWT itself carries neither.
     (user as { permissions?: string[] }).permissions = permissionNames;
+    (user as { roles?: string[] }).roles = roles.map((r) => r.name);
 
-    // Super Admin with manage:all bypasses every permission check
-    if (permissionNames.includes('manage:all')) {
-      return true;
-    }
-
-    // Company Admin with manage:company bypasses all checks within their org
-    // (org scoping is enforced at service layer, not here)
-    if (permissionNames.includes('manage:company')) {
-      return true;
-    }
-
-    // Hierarchical check: manage:<resource> satisfies read/create/update/delete:<resource>
-    const satisfies = (required: string): boolean => {
-      if (permissionNames.includes(required)) return true;
-      const match = required.match(
-        /^(?:read|create|update|delete|assign|approve|confirm|upload|use):(.+)$/,
-      );
-      if (match) return permissionNames.includes(`manage:${match[1]}`);
-      return false;
-    };
-
-    return requiredPermissions.every(satisfies);
+    // Wildcards (manage:all / manage:company) and the manage:<resource>
+    // hierarchy are handled by the shared helper — see permission-check.util.
+    return requiredPermissions.every((required) =>
+      satisfiesPermission(permissionNames, required),
+    );
   }
 }

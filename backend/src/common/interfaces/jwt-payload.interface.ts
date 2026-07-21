@@ -9,6 +9,12 @@ export interface JwtPayload {
    * scoping decisions. Undefined on routes that skip the guard.
    */
   permissions?: string[];
+  /**
+   * Resolved role names for the caller (e.g. `['PM']`). NOT part of the signed
+   * token — populated per-request by `PermissionsGuard` alongside `permissions`.
+   * Undefined on routes that skip the guard.
+   */
+  roles?: string[];
   iat?: number;
   exp?: number;
 }
