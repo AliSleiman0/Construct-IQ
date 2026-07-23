@@ -11,6 +11,14 @@ import { TicketsService } from '../tickets/tickets.service';
 import { CreateTicketDto } from '../tickets/dto/create-ticket.dto';
 import { UpdateTicketDto } from '../tickets/dto/update-ticket.dto';
 import { AddTicketCommentDto } from '../tickets/dto/add-ticket-comment.dto';
+import { satisfiesPermission } from '../../common/util/permission-check.util';
+import type { TicketViewer } from '../tickets/tickets.service';
+
+/** Same reporter-scoping as TicketsController — see TicketViewer. */
+const ticketViewer = (user: JwtPayload): TicketViewer => ({
+  userId: user.sub,
+  canTriage: satisfiesPermission(user.permissions ?? [], PERMISSIONS.TICKETS.MANAGE),
+});
 
 @Controller('support-tickets')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -23,17 +31,22 @@ export class SupportTicketsController {
     return this.ticketsService.findAll(
       user.organizationId,
       user.isSuperAdmin,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ticketViewer(user),
     );
   }
 
   @Get(':id')
   @RequirePermissions(PERMISSIONS.TICKETS.READ)
   findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.ticketsService.findById(id, user.organizationId, user.isSuperAdmin);
+    return this.ticketsService.findById(id, user.organizationId, user.isSuperAdmin, ticketViewer(user));
   }
 
   @Post()
-  @RequirePermissions(PERMISSIONS.TICKETS.MANAGE)
+  @RequirePermissions(PERMISSIONS.TICKETS.CREATE)
   create(@Body() dto: CreateTicketDto, @CurrentUser() user: JwtPayload) {
     return this.ticketsService.create(user.organizationId, user.sub, dto);
   }

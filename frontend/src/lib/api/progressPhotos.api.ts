@@ -1,8 +1,9 @@
 import apiClient from './client';
+import type { ProgressPhoto } from '@/types/unit.types';
 
 export const progressPhotosApi = {
-  list: async (params?: { projectId?: string }): Promise<any[]> => {
-    const res = await apiClient.get<any[]>('/progress-photos', { params });
+  list: async (params?: { projectId?: string }): Promise<ProgressPhoto[]> => {
+    const res = await apiClient.get<ProgressPhoto[]>('/progress-photos', { params });
     return res.data;
   },
 
@@ -12,8 +13,8 @@ export const progressPhotosApi = {
     takenAt: string;
     milestoneId?: string;
     caption?: string;
-  }): Promise<any> => {
-    const res = await apiClient.post<any>('/progress-photos', payload);
+  }): Promise<ProgressPhoto> => {
+    const res = await apiClient.post<ProgressPhoto>('/progress-photos', payload);
     return res.data;
   },
 

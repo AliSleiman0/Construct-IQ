@@ -49,8 +49,11 @@ export const ROLE_PRECEDENCE: readonly string[] = [
  * navigation) must be built from this taxonomy, never from a bare `/section`.
  * Mirrors `ROLE_HOME` in frontend/src/config/roles.ts.
  *
- * Roles absent from this map have no UI of their own yet (PLANNING_ENG,
- * FINANCE_VIEWER, SUPPLIER, SUBCONTRACTOR).
+ * Roles absent from this map have no UI of their own yet (SUPPLIER,
+ * SUBCONTRACTOR) and MUST NOT appear in STANDARD_ROLES — a provisioned role
+ * with no landing route makes `roleFromUser()` return null, and
+ * (app)/layout.tsx then bounces the user to /api/auth/clear, i.e. the account
+ * cannot log in at all. `standard-roles.spec.ts` enforces that pairing.
  */
 export const ROLE_HOME: Partial<Record<string, string>> = {
   [ROLES.SUPER_ADMIN]: '/super-admin/dashboard',
@@ -59,7 +62,9 @@ export const ROLE_HOME: Partial<Record<string, string>> = {
   [ROLES.PROJECT_MANAGER]: '/pm/dashboard',
   [ROLES.PROCUREMENT_OFFICER]: '/procurement/dashboard',
   [ROLES.QUANTITY_SURVEYOR]: '/surveyor/dashboard',
+  [ROLES.PLANNING_ENGINEER]: '/planning-eng/dashboard',
   [ROLES.SITE_ENGINEER]: '/site-eng/dashboard',
+  [ROLES.FINANCE_VIEWER]: '/finance/dashboard',
   [ROLES.CLIENT_VIEWER]: '/client/dashboard',
 };
 

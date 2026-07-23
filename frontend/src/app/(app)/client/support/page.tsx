@@ -1,25 +1,23 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Box } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
+import { AppLoader } from '@/components/ui/AppLoader';
+import { AppErrorState } from '@/components/ui/AppErrorState';
 import { TicketTable } from '@/features/tickets/components/TicketTable';
 import { NewTicketModal } from '@/features/tickets/components/NewTicketModal';
-import { useMockState } from '@/store/mock-state.store';
-import { useAuthStore } from '@/store/auth.store';
+import { useTickets } from '@/features/tickets/hooks/useTickets';
 
 export default function ClientSupportPage() {
-  const tickets = useMockState((s) => s.tickets);
-  const user = useAuthStore((s) => s.user);
+  const { data: tickets, isLoading, isError, refetch } = useTickets();
   const [open, setOpen] = useState(false);
 
-  const myTickets = useMemo(
-    () => tickets.filter((t) => t.reporterId === user?.id),
-    [tickets, user],
-  );
-
+  // No client-side reporter filter: GET /tickets is reporter-scoped server-side
+  // for anyone without `manage:tickets`, so a customer only ever receives their
+  // own cases. Filtering here as well would just hide a scoping bug.
   return (
     <Box>
       <PageHeader
@@ -31,7 +29,11 @@ export default function ClientSupportPage() {
           </AppButton>
         }
       />
-      <TicketTable tickets={myTickets} detailBasePath="/client/support" hideOrgColumn />
+      {isLoading && <AppLoader />}
+      {isError && <AppErrorState onRetry={refetch} />}
+      {!isLoading && !isError && (
+        <TicketTable tickets={tickets ?? []} detailBasePath="/client/support" hideOrgColumn />
+      )}
       <NewTicketModal open={open} onClose={() => setOpen(false)} />
     </Box>
   );

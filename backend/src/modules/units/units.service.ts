@@ -15,6 +15,27 @@ export interface PhotoViewer {
   orgWide: boolean;
 }
 
+/**
+ * Who is asking about units and payments.
+ *
+ * `GET /units` and `GET /payments` are gated on `read:projects`, which CLIENT
+ * carries — so org-scoping alone let any buyer enumerate every unit in the
+ * building and, by passing `?buyerId=`, read another buyer's payment schedule.
+ * `orgWide` comes from `seesAllProjects(...)`, the same helper the issue/report/
+ * task list endpoints use, so a restricted caller is narrowed to:
+ *
+ *   - units they personally own (`buyerId === userId`), plus
+ *   - units in projects they are a member of (staff without `manage:projects`).
+ *
+ * A buyer belongs to no project, so they collapse to "my own units" — which is
+ * the whole point. A client-supplied `buyerId` is intersected with this filter,
+ * never trusted on its own.
+ */
+export interface UnitViewer {
+  userId: string;
+  orgWide: boolean;
+}
+
 class UpdateUnitDto extends PartialType(CreateUnitDto) {}
 
 @Injectable()
@@ -25,6 +46,44 @@ export class UnitsService {
     @InjectModel(ProgressPhoto.name) private photoModel: Model<ProgressPhotoDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
   ) {}
+
+  /**
+   * The `$or` branches a restricted caller may match on units: their own
+   * purchases, plus anything in a project they staff. Returns null when the
+   * caller is unrestricted (super admin, or holds a broad enough `manage:*`).
+   */
+  private async unitVisibility(
+    organizationId: string,
+    isSuperAdmin: boolean,
+    viewer?: UnitViewer,
+  ): Promise<Record<string, unknown>[] | null> {
+    if (isSuperAdmin || !viewer || viewer.orgWide) return null;
+    const projectIds = await this.memberProjectIds(organizationId, viewer.userId);
+    const branches: Record<string, unknown>[] = [{ buyerId: viewer.userId }];
+    if (projectIds.length > 0) branches.push({ projectId: { $in: projectIds } });
+    return branches;
+  }
+
+  /** Unit ids a restricted caller may see, used to scope payments. */
+  private async visibleUnitIds(
+    organizationId: string,
+    branches: Record<string, unknown>[],
+  ): Promise<string[]> {
+    const units = await this.unitModel
+      .find({ organizationId, $or: branches })
+      .select('_id')
+      .lean();
+    return units.map((u: any) => String(u._id));
+  }
+
+  /** Project ids the user has bought a unit in, within their org. */
+  private async buyerProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const units = await this.unitModel
+      .find({ organizationId, buyerId: userId })
+      .select('projectId')
+      .lean();
+    return Array.from(new Set(units.map((u: any) => String(u.projectId))));
+  }
 
   /** Project ids the user is a member of, within their org. */
   private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
@@ -40,15 +99,32 @@ export class UnitsService {
     isSuperAdmin: boolean,
     projectId?: string,
     status?: UnitStatus,
+    viewer?: UnitViewer,
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (projectId) filter.projectId = projectId;
     if (status) filter.status = status;
+
+    const branches = await this.unitVisibility(organizationId, isSuperAdmin, viewer);
+    if (branches) filter.$or = branches;
+
     return this.unitModel.find(filter).sort({ floor: 1, label: 1 }).lean();
   }
 
-  async findUnitById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
-    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+  async findUnitById(
+    id: string,
+    organizationId: string,
+    isSuperAdmin: boolean,
+    viewer?: UnitViewer,
+  ): Promise<any> {
+    const filter: Record<string, unknown> = isSuperAdmin
+      ? { _id: id }
+      : { _id: id, organizationId };
+
+    // A buyer must 404 on someone else's unit, not read it.
+    const branches = await this.unitVisibility(organizationId, isSuperAdmin, viewer);
+    if (branches) filter.$or = branches;
+
     const unit = await this.unitModel.findOne(filter).lean();
     if (!unit) throw new NotFoundException('Unit not found');
     return unit;
@@ -102,10 +178,24 @@ export class UnitsService {
     isSuperAdmin: boolean,
     buyerId?: string,
     unitId?: string,
+    viewer?: UnitViewer,
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (buyerId) filter.buyerId = buyerId;
     if (unitId) filter.unitId = unitId;
+
+    // The `buyerId` query param is a filter, never an authorization claim: it
+    // is intersected with what this caller may see, so passing someone else's
+    // id narrows the result rather than widening it.
+    const branches = await this.unitVisibility(organizationId, isSuperAdmin, viewer);
+    if (branches) {
+      const allowedUnitIds = await this.visibleUnitIds(organizationId, branches);
+      filter.$or = [
+        { buyerId: viewer!.userId },
+        ...(allowedUnitIds.length > 0 ? [{ unitId: { $in: allowedUnitIds } }] : []),
+      ];
+    }
+
     return this.paymentModel.find(filter).sort({ installmentNo: 1 }).lean();
   }
 
@@ -194,7 +284,14 @@ export class UnitsService {
     if (projectId) filter.projectId = projectId;
 
     if (viewer && !viewer.orgWide && !isSuperAdmin) {
-      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      // Progress photos are project-level, and a buyer is not a project member
+      // — so their own units' projects count as visible too. Without this a
+      // client sees an empty gallery for the building they bought into.
+      const [memberIds, ownedIds] = await Promise.all([
+        this.memberProjectIds(organizationId, viewer.userId),
+        this.buyerProjectIds(organizationId, viewer.userId),
+      ]);
+      const restrictIds = Array.from(new Set([...memberIds, ...ownedIds]));
       if (restrictIds.length === 0) return [];
       // Honour an explicit project filter only if the caller is a member.
       filter.projectId =

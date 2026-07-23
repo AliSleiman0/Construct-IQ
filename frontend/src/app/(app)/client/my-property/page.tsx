@@ -5,16 +5,31 @@ import EventIcon from '@mui/icons-material/Event';
 import KeyIcon from '@mui/icons-material/Key';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { useAuthStore } from '@/store/auth.store';
-import { findUnitForBuyer } from '@/mocks/units.mock';
-import { paymentsForBuyer } from '@/mocks/payments.mock';
-import { mockMilestones } from '@/mocks/progress.mock';
+import { AppLoader } from '@/components/ui/AppLoader';
+import { AppErrorState } from '@/components/ui/AppErrorState';
 import { UnitDetail } from '@/features/units/components/UnitDetail';
+import { useMyUnit } from '@/features/units/hooks/useUnits';
+import { usePayments } from '@/features/payments/hooks/usePayments';
+import { useMilestones } from '@/features/projects/hooks/useMilestones';
+import { useProject } from '@/features/projects/hooks/useProjects';
+import type { UnitStatus } from '@/types/unit.types';
 import dayjs from 'dayjs';
 
+const STATUS_CHIP: Record<UnitStatus, { label: string; color: 'success' | 'warning' | 'default' }> = {
+  AVAILABLE: { label: 'Available', color: 'success' },
+  RESERVED: { label: 'Reserved', color: 'warning' },
+  SOLD: { label: 'Sold', color: 'default' },
+};
+
 export default function MyPropertyPage() {
-  const user = useAuthStore((s) => s.user);
-  const unit = user ? findUnitForBuyer(user.id) : undefined;
+  // Buyer-scoped server-side — no need to pass the user's own id.
+  const { data: unit, isLoading, isError, refetch } = useMyUnit();
+  const { data: payments } = usePayments({ unitId: unit?.id });
+  const { data: milestones } = useMilestones(unit?.projectId ?? null);
+  const { data: project } = useProject(unit?.projectId ?? null);
+
+  if (isLoading) return <AppLoader />;
+  if (isError) return <AppErrorState onRetry={refetch} />;
 
   if (!unit) {
     return (
@@ -22,25 +37,39 @@ export default function MyPropertyPage() {
         <PageHeader title="My Property" />
         <Paper elevation={0} sx={{ p: 4, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
           <Typography variant="body1">
-            You don't have a reserved unit yet. Browse the building to find one.
+            You don&apos;t have a reserved unit yet. Browse the building to find one.
           </Typography>
         </Paper>
       </Box>
     );
   }
 
-  const payments = paymentsForBuyer(user!.id);
-  const paid = payments.filter((p) => p.status === 'PAID').reduce((s, p) => s + p.amountUsd, 0);
-  const total = payments.reduce((s, p) => s + p.amountUsd, 0);
-  const nextDue = payments.find((p) => p.status === 'DUE');
-  const nextMilestone = mockMilestones.find((m) => m.status === 'IN_PROGRESS') ?? mockMilestones.find((m) => m.status === 'UPCOMING');
+  const schedule = payments ?? [];
+  // PARTIAL installments contribute what was actually received.
+  const paid = schedule.reduce(
+    (s, p) => s + (p.status === 'PAID' ? p.amountUsd : p.paidAmountUsd ?? 0),
+    0,
+  );
+  const total = schedule.reduce((s, p) => s + p.amountUsd, 0);
+
+  // "Next due" is the earliest still-open installment — there is no `DUE`
+  // status server-side, so it is derived from the schedule order.
+  const nextDue = schedule
+    .filter((p) => p.status === 'PENDING' || p.status === 'PARTIAL' || p.status === 'OVERDUE')
+    .sort((a, b) => dayjs(a.dueDate).valueOf() - dayjs(b.dueDate).valueOf())[0];
+
+  const list = milestones ?? [];
+  const nextMilestone =
+    list.find((m) => m.status === 'IN_PROGRESS') ?? list.find((m) => m.status === 'PENDING');
+
+  const chip = STATUS_CHIP[unit.status];
 
   return (
     <Box>
       <PageHeader
         title="My Property"
-        subtitle={`Tower Heights · Unit ${unit.label}`}
-        actions={<Chip label="Reserved" color="warning" sx={{ fontWeight: 600 }} />}
+        subtitle={`${project?.name ?? 'Your project'} · Unit ${unit.label}`}
+        actions={<Chip label={chip.label} color={chip.color} sx={{ fontWeight: 600 }} />}
       />
 
       <Stack gap={3}>
@@ -53,20 +82,24 @@ export default function MyPropertyPage() {
         >
           <KeyDate
             icon={EventIcon}
-            label="Reserved on"
-            value={dayjs(unit.id).isValid() ? '—' : dayjs('2026-01-15').format('MMM D, YYYY')}
-            hint="Down payment received"
+            label="Contract value"
+            value={`$${unit.priceUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+            hint={`${schedule.length} installment${schedule.length === 1 ? '' : 's'}`}
           />
           <KeyDate
             icon={ConstructionIcon}
             label="Next milestone"
-            value={nextMilestone ? nextMilestone.label : 'On schedule'}
-            hint={nextMilestone ? `Target ${dayjs(nextMilestone.scheduledDate).format('MMM D, YYYY')}` : ''}
+            value={nextMilestone?.name ?? 'On schedule'}
+            hint={
+              nextMilestone?.targetDate
+                ? `Target ${dayjs(nextMilestone.targetDate).format('MMM D, YYYY')}`
+                : ''
+            }
           />
           <KeyDate
             icon={KeyIcon}
             label="Anticipated handover"
-            value={dayjs('2027-04-30').format('MMM D, YYYY')}
+            value={project?.endDate ? dayjs(project.endDate).format('MMM D, YYYY') : '—'}
             hint="Subject to inspection"
           />
         </Box>

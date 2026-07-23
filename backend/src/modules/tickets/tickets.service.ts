@@ -7,6 +7,16 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { AddTicketCommentDto } from './dto/add-ticket-comment.dto';
 import { TicketStatus, TicketPriority } from '../../common/enums';
 
+/**
+ * Who is asking. `canTriage` is "holds manage:tickets" — support agents, org
+ * admins (via the manage:company wildcard) and super admins. Everyone else,
+ * notably external CLIENT accounts, only ever sees the tickets they raised.
+ */
+export interface TicketViewer {
+  userId: string;
+  canTriage: boolean;
+}
+
 @Injectable()
 export class TicketsService {
   constructor(
@@ -20,17 +30,36 @@ export class TicketsService {
     priority?: TicketPriority,
     reporterId?: string,
     assigneeId?: string,
+    viewer?: TicketViewer,
   ): Promise<any[]> {
     const filter: Record<string, unknown> = isSuperAdmin ? {} : { organizationId };
     if (status) filter.status = status;
     if (priority) filter.priority = priority;
     if (reporterId) filter.reporterId = reporterId;
     if (assigneeId) filter.assigneeId = assigneeId;
+
+    // A customer holds read:tickets so they can follow their own cases — not
+    // so they can read the whole company's support queue. Anyone without
+    // manage:tickets is pinned to the tickets they raised.
+    if (viewer && !viewer.canTriage && !isSuperAdmin) {
+      filter.reporterId = viewer.userId;
+    }
+
     return this.ticketModel.find(filter).sort({ createdAt: -1 }).lean();
   }
 
-  async findById(id: string, organizationId: string, isSuperAdmin: boolean): Promise<any> {
-    const filter = isSuperAdmin ? { _id: id } : { _id: id, organizationId };
+  async findById(
+    id: string,
+    organizationId: string,
+    isSuperAdmin: boolean,
+    viewer?: TicketViewer,
+  ): Promise<any> {
+    const filter: Record<string, unknown> = isSuperAdmin
+      ? { _id: id }
+      : { _id: id, organizationId };
+    if (viewer && !viewer.canTriage && !isSuperAdmin) {
+      filter.reporterId = viewer.userId;
+    }
     const ticket = await this.ticketModel.findOne(filter).lean();
     if (!ticket) throw new NotFoundException('Ticket not found');
     return ticket;

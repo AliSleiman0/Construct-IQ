@@ -41,3 +41,19 @@ export function useDeactivateUser() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 }
+
+export function useAssignRole(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (roleId: string) => usersApi.assignRole(userId, roleId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+export function useRemoveRole(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (roleId: string) => usersApi.removeRole(userId, roleId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+}

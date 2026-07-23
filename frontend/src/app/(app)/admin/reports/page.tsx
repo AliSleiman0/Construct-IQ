@@ -31,7 +31,7 @@ export default function AdminReportsPage() {
   return (
     <Box>
       <PageHeader
-        title="Reports"
+        title="Analytics"
         subtitle="Cross-project analytics roll-up for your organization."
         actions={
           <Box sx={{ display: 'flex', gap: 1 }}>

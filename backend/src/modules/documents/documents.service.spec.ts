@@ -4,6 +4,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { DocumentsService } from './documents.service';
 import { DocumentEntity } from './schemas/document.schema';
 import { Project } from '../projects/schemas/project.schema';
+import { Unit } from '../units/schemas/unit.schema';
 import { S3Service } from '../uploads/s3.service';
 import { DocumentType } from '../../common/enums';
 
@@ -15,6 +16,7 @@ describe('DocumentsService', () => {
   let service: DocumentsService;
   let model: any;
   let projectModel: any;
+  let unitModel: any;
   let s3: { uploadFile: jest.Mock };
 
   const findChain = (result: any[]) => ({ sort: () => ({ lean: () => Promise.resolve(result) }) });
@@ -32,11 +34,15 @@ describe('DocumentsService', () => {
     };
     s3 = { uploadFile: jest.fn().mockResolvedValue('http://minio/key') };
     projectModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
+    // Buyers are members of no project, so findAll also consults the units they
+    // own — otherwise a client sees none of their own contract documents.
+    unitModel = { find: jest.fn().mockReturnValue(projectFindChain([])) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         DocumentsService,
         { provide: getModelToken(DocumentEntity.name), useValue: model },
         { provide: getModelToken(Project.name), useValue: projectModel },
+        { provide: getModelToken(Unit.name), useValue: unitModel },
         { provide: S3Service, useValue: s3 },
       ],
     }).compile();

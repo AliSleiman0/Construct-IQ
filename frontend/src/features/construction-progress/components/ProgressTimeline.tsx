@@ -1,15 +1,23 @@
 'use client';
 
 import { Box, Paper, Typography, LinearProgress } from '@mui/material';
-import { mockMilestones } from '@/mocks/progress.mock';
+import { useMilestones } from '@/features/projects/hooks/useMilestones';
 
-export function ProgressTimeline() {
+interface ProgressTimelineProps {
+  /** Derived from the buyer's own unit — null until that resolves. */
+  projectId: string | null;
+  projectName?: string;
+}
+
+export function ProgressTimeline({ projectId, projectName }: ProgressTimelineProps) {
+  const { data: milestones, isLoading } = useMilestones(projectId);
+
+  const list = milestones ?? [];
   const overall =
-    Math.round(
-      mockMilestones.reduce((sum, m) => sum + m.percentComplete, 0) / mockMilestones.length,
-    );
-  const inProgressLabel =
-    mockMilestones.find((m) => m.status === 'IN_PROGRESS')?.label ?? 'On schedule';
+    list.length === 0
+      ? 0
+      : Math.round(list.reduce((sum, m) => sum + (m.percentComplete ?? 0), 0) / list.length);
+  const inProgress = list.find((m) => m.status === 'IN_PROGRESS');
 
   return (
     <Paper
@@ -19,10 +27,16 @@ export function ProgressTimeline() {
       <Box display="flex" alignItems="baseline" justifyContent="space-between" mb={1.5}>
         <Box>
           <Typography variant="subtitle1" fontWeight={600}>
-            Tower Heights · overall progress
+            {projectName ? `${projectName} · overall progress` : 'Overall progress'}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Currently building: <strong>{inProgressLabel}</strong>
+          <Typography variant="caption" color="text.secondary" component="div">
+            {isLoading && 'Loading…'}
+            {!isLoading && list.length === 0 && 'No milestones published yet'}
+            {!isLoading && list.length > 0 && (
+              <>
+                Currently building: <strong>{inProgress?.name ?? 'On schedule'}</strong>
+              </>
+            )}
           </Typography>
         </Box>
         <Typography variant="h4" fontWeight={700} color="primary.main">

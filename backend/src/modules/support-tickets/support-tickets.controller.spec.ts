@@ -4,18 +4,21 @@ import { PERMISSIONS_KEY } from '../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../common/constants/permissions';
 
 /**
- * Permission-metadata guard test for issue #32: the mutating support-ticket
- * endpoints (create, add-comment) must require TICKETS.MANAGE, not TICKETS.READ.
- * Reads stay on TICKETS.READ. Asserted via route metadata so no Nest bootstrap
- * is needed; locks the convention against silent regressions.
+ * Mirrors `tickets.controller.spec.ts` — this controller is an alias over the
+ * same TicketsService and must gate identically. `create` sits on
+ * TICKETS.CREATE so a customer can raise a case without holding a triage
+ * permission; everything that touches another person's ticket stays on MANAGE.
  */
 const perms = (fn: any): string[] => Reflect.getMetadata(PERMISSIONS_KEY, fn);
 
-describe('SupportTicketsController — route permissions (#32)', () => {
-  it('gates mutations behind MANAGE', () => {
-    expect(perms(SupportTicketsController.prototype.create)).toEqual([PERMISSIONS.TICKETS.MANAGE]);
+describe('SupportTicketsController — route permissions', () => {
+  it('keeps triage actions behind MANAGE', () => {
     expect(perms(SupportTicketsController.prototype.addComment)).toEqual([PERMISSIONS.TICKETS.MANAGE]);
     expect(perms(SupportTicketsController.prototype.update)).toEqual([PERMISSIONS.TICKETS.MANAGE]);
+  });
+
+  it('lets a customer raise a ticket without holding a triage permission', () => {
+    expect(perms(SupportTicketsController.prototype.create)).toEqual([PERMISSIONS.TICKETS.CREATE]);
   });
 
   it('keeps reads on READ', () => {

@@ -15,7 +15,9 @@ export const ROLES = [
   'PM',
   'PROCUREMENT',
   'SURVEYOR',
+  'PLANNING_ENG',
   'SITE_ENG',
+  'FINANCE_VIEWER',
   'CLIENT',
 ] as const;
 
@@ -33,7 +35,9 @@ export const ROLE_PRECEDENCE: readonly Role[] = [
   'PM',
   'PROCUREMENT',
   'SURVEYOR',
+  'PLANNING_ENG',
   'SITE_ENG',
+  'FINANCE_VIEWER',
   'CLIENT',
 ];
 
@@ -44,7 +48,9 @@ export const ROLE_PREFIX: Record<Role, string> = {
   PM: '/pm',
   PROCUREMENT: '/procurement',
   SURVEYOR: '/surveyor',
+  PLANNING_ENG: '/planning-eng',
   SITE_ENG: '/site-eng',
+  FINANCE_VIEWER: '/finance',
   CLIENT: '/client',
 };
 
@@ -55,7 +61,9 @@ export const ROLE_HOME: Record<Role, string> = {
   PM: '/pm/dashboard',
   PROCUREMENT: '/procurement/dashboard',
   SURVEYOR: '/surveyor/dashboard',
+  PLANNING_ENG: '/planning-eng/dashboard',
   SITE_ENG: '/site-eng/dashboard',
+  FINANCE_VIEWER: '/finance/dashboard',
   CLIENT: '/client/dashboard',
 };
 
@@ -66,7 +74,9 @@ export const ROLE_LABELS: Record<Role, string> = {
   PM: 'Project Manager',
   PROCUREMENT: 'Procurement',
   SURVEYOR: 'Quantity Surveyor',
+  PLANNING_ENG: 'Planning Engineer',
   SITE_ENG: 'Site Engineer',
+  FINANCE_VIEWER: 'Finance Viewer',
   CLIENT: 'Client Viewer',
 };
 

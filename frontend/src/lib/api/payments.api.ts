@@ -1,8 +1,9 @@
 import apiClient from './client';
+import type { Payment, PaymentStatus } from '@/types/unit.types';
 
 export const paymentsApi = {
-  list: async (params?: { buyerId?: string; unitId?: string }): Promise<any[]> => {
-    const res = await apiClient.get<any[]>('/payments', { params });
+  list: async (params?: { buyerId?: string; unitId?: string }): Promise<Payment[]> => {
+    const res = await apiClient.get<Payment[]>('/payments', { params });
     return res.data;
   },
 
@@ -15,13 +16,16 @@ export const paymentsApi = {
     amountUsd: number;
     dueDate: string;
     invoiceNumber?: string;
-  }): Promise<any> => {
-    const res = await apiClient.post<any>('/payments', payload);
+  }): Promise<Payment> => {
+    const res = await apiClient.post<Payment>('/payments', payload);
     return res.data;
   },
 
-  update: async (id: string, payload: { status?: string; dueDate?: string; invoiceNumber?: string }): Promise<any> => {
-    const res = await apiClient.patch<any>(`/payments/${id}`, payload);
+  update: async (
+    id: string,
+    payload: { status?: PaymentStatus; paidAmountUsd?: number; dueDate?: string; invoiceNumber?: string },
+  ): Promise<Payment> => {
+    const res = await apiClient.patch<Payment>(`/payments/${id}`, payload);
     return res.data;
   },
 };

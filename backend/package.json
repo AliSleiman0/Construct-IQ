@@ -19,7 +19,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node scripts/seed.ts",
     "seed:site-eng": "ts-node scripts/seed-site-eng.ts",
-    "seed:surveyor": "ts-node scripts/seed-surveyor.ts"
+    "seed:surveyor": "ts-node scripts/seed-surveyor.ts",
+    "sync:roles": "ts-node scripts/sync-role-permissions.ts",
+    "sync:roles:dry": "ts-node scripts/sync-role-permissions.ts --dry-run"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",

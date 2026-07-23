@@ -1,11 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ticketsApi } from '@/lib/api/tickets.api';
+import { useAuthStore } from '@/store/auth.store';
 import { useSnackbar } from 'notistack';
 
+/**
+ * Reporter-scoped server-side: a caller without `manage:tickets` only ever
+ * receives the tickets they raised, so the client portal needs no filter.
+ */
 export function useTickets(params?: { status?: string; priority?: string; reporterId?: string; assigneeId?: string }) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery({
     queryKey: ['tickets', params],
     queryFn: () => ticketsApi.list(params),
+    enabled: isAuthenticated,
   });
 }
 

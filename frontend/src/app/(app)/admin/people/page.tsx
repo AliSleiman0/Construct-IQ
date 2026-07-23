@@ -21,10 +21,19 @@ import dayjs from 'dayjs';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { AppButton } from '@/components/ui/AppButton';
 import { useUsers, useRoles } from '@/features/users/hooks/useUsers';
-import { useCreateUser } from '@/features/users/hooks/useUserMutations';
-import { CreateUserModal, type CreateFormValues } from '@/features/users/components/UserModals';
+import {
+  useCreateUser,
+  useUpdateUser,
+  useAssignRole,
+  useRemoveRole,
+} from '@/features/users/hooks/useUserMutations';
+import {
+  CreateUserModal,
+  EditUserModal,
+  type CreateFormValues,
+} from '@/features/users/components/UserModals';
 import { useAuthStore } from '@/store/auth.store';
-import type { CreateUserPayload } from '@/types/user.types';
+import type { CreateUserPayload, UpdateUserPayload, User } from '@/types/user.types';
 
 export default function AdminPeoplePage() {
   const { enqueueSnackbar } = useSnackbar();
@@ -34,6 +43,46 @@ export default function AdminPeoplePage() {
   const createUser = useCreateUser();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Edit flow — the modal already exists (UserModals.EditUserModal) with role
+  // assign/remove; it was just never mounted here.
+  const [editTarget, setEditTarget] = useState<User | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const editId = editTarget?.id ?? '';
+  const updateUser = useUpdateUser(editId);
+  const assignRole = useAssignRole(editId);
+  const removeRole = useRemoveRole(editId);
+
+  const handleUpdate = (values: UpdateUserPayload) => {
+    if (!editTarget) return;
+    setEditError(null);
+    updateUser.mutate(values, {
+      onSuccess: () => {
+        enqueueSnackbar('Member updated.', { variant: 'success' });
+        setEditTarget(null);
+      },
+      onError: (err: any) => {
+        const raw = err?.response?.data?.message ?? 'Failed to update member.';
+        const msg = Array.isArray(raw) ? raw.join(', ') : String(raw);
+        setEditError(msg);
+        enqueueSnackbar(msg, { variant: 'error' });
+      },
+    });
+  };
+
+  const handleAssignRole = (roleId: string) => {
+    assignRole.mutate(roleId, {
+      onSuccess: () => enqueueSnackbar('Role assigned.', { variant: 'success' }),
+      onError: () => enqueueSnackbar('Failed to assign role.', { variant: 'error' }),
+    });
+  };
+
+  const handleRemoveRole = (roleId: string) => {
+    removeRole.mutate(roleId, {
+      onSuccess: () => enqueueSnackbar('Role removed.', { variant: 'success' }),
+      onError: () => enqueueSnackbar('Failed to remove role.', { variant: 'error' }),
+    });
+  };
 
   const handleInvite = (values: CreateFormValues) => {
     setInviteError(null);
@@ -93,7 +142,15 @@ export default function AdminPeoplePage() {
             </TableHead>
             <TableBody>
               {(users as any[]).map((u) => (
-                <TableRow key={u.id} hover>
+                <TableRow
+                  key={u.id}
+                  hover
+                  onClick={() => {
+                    setEditError(null);
+                    setEditTarget(u as User);
+                  }}
+                  sx={{ cursor: 'pointer' }}
+                >
                   <TableCell>
                     <Box display="flex" alignItems="center" gap={1.5}>
                       <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem' }}>
@@ -143,6 +200,23 @@ export default function AdminPeoplePage() {
         error={inviteError}
         onClose={() => setInviteOpen(false)}
         onSubmit={handleInvite}
+      />
+
+      <EditUserModal
+        open={!!editTarget}
+        // Re-read from the refreshed list so role assign/remove reflects live.
+        user={
+          editTarget
+            ? ((users as User[]).find((u) => u.id === editTarget.id) ?? editTarget)
+            : null
+        }
+        roles={roles}
+        isLoading={updateUser.isPending}
+        error={editError}
+        onClose={() => setEditTarget(null)}
+        onSubmit={handleUpdate}
+        onAssignRole={handleAssignRole}
+        onRemoveRole={handleRemoveRole}
       />
     </Box>
   );

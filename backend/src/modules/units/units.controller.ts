@@ -20,8 +20,19 @@ import { CreateUnitDto, CreatePaymentDto, CreateProgressPhotoDto, UpdatePaymentD
 import { UnitStatus } from '../../common/enums';
 import { PartialType } from '@nestjs/mapped-types';
 import { seesAllProjects } from '../../common/util/project-scope.util';
+import type { UnitViewer } from './units.service';
 
 class UpdateUnitDto extends PartialType(CreateUnitDto) {}
+
+/**
+ * These endpoints are gated on `read:projects`, which external CLIENT accounts
+ * hold — so org scoping alone is not enough. Everything below narrows reads to
+ * the caller's own purchases plus their member projects; see `UnitViewer`.
+ */
+const unitViewer = (user: JwtPayload): UnitViewer => ({
+  userId: user.sub,
+  orgWide: seesAllProjects(user.isSuperAdmin, user.permissions, 'projects'),
+});
 
 @Controller('units')
 @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -31,7 +42,13 @@ export class UnitsController {
   @Get()
   @RequirePermissions(PERMISSIONS.PROJECTS.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('projectId') projectId?: string, @Query('status') status?: UnitStatus): Promise<any> {
-    return this.unitsService.findAllUnits(user.organizationId, user.isSuperAdmin, projectId, status);
+    return this.unitsService.findAllUnits(
+      user.organizationId,
+      user.isSuperAdmin,
+      projectId,
+      status,
+      unitViewer(user),
+    );
   }
 
   @Post()
@@ -43,7 +60,12 @@ export class UnitsController {
   @Get(':id')
   @RequirePermissions(PERMISSIONS.PROJECTS.READ)
   findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload): Promise<any> {
-    return this.unitsService.findUnitById(id, user.organizationId, user.isSuperAdmin);
+    return this.unitsService.findUnitById(
+      id,
+      user.organizationId,
+      user.isSuperAdmin,
+      unitViewer(user),
+    );
   }
 
   @Patch(':id')
@@ -67,7 +89,13 @@ export class PaymentsController {
   @Get()
   @RequirePermissions(PERMISSIONS.PROJECTS.READ)
   findAll(@CurrentUser() user: JwtPayload, @Query('buyerId') buyerId?: string, @Query('unitId') unitId?: string): Promise<any> {
-    return this.unitsService.findPayments(user.organizationId, user.isSuperAdmin, buyerId, unitId);
+    return this.unitsService.findPayments(
+      user.organizationId,
+      user.isSuperAdmin,
+      buyerId,
+      unitId,
+      unitViewer(user),
+    );
   }
 
   @Post()

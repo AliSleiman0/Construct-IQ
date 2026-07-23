@@ -14,6 +14,12 @@ import { AI_FEATURES } from '../src/common/constants/ai-features';
 /**
  * Idempotent one-shot backfill for the Subcontractor Bid Analyzer feature.
  *
+ * NOTE: steps 1 and 2 are now redundant — `scripts/sync-role-permissions.ts`
+ * (npm run sync:roles) reconciles PERMISSION_CATALOG and STANDARD_ROLES for
+ * every org generically. They are kept here only so this script stays runnable
+ * standalone against an old database. Steps 3 and 4 are unique to this script:
+ * nothing else attaches an AI feature key to existing AI plans.
+ *
  * Run after deploying the feature to push:
  *   1. New `bids` permission docs into the global `permissions` collection.
  *   2. `manage:bids` into every existing PM and PROCUREMENT role document.

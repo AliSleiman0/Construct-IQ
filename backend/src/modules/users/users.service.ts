@@ -424,13 +424,33 @@ export class UsersService {
   async findAllRoles(organizationId: string, isSuperAdmin = false) {
     const filter = isSuperAdmin ? {} : { organizationId };
     const roles = await this.roleModel
-      .find(filter, { _id: 1, name: 1, description: 1 })
+      .find(filter, {
+        _id: 1,
+        name: 1,
+        description: 1,
+        permissionKeys: 1,
+        isSystem: 1,
+      })
       .sort({ name: 1 })
       .lean();
+
+    // How many users hold each role — feeds the org-admin Roles reference page.
+    const counts = await this.userModel.aggregate([
+      { $match: isSuperAdmin ? {} : { organizationId } },
+      { $unwind: '$roleIds' },
+      { $group: { _id: '$roleIds', count: { $sum: 1 } } },
+    ]);
+    const countByRole = new Map<string, number>(
+      counts.map((c: any) => [String(c._id), c.count]),
+    );
+
     return roles.map((r) => ({
       id: r._id,
       name: r.name,
       description: r.description,
+      permissionKeys: (r as any).permissionKeys ?? [],
+      isSystem: (r as any).isSystem ?? false,
+      userCount: countByRole.get(String(r._id)) ?? 0,
     }));
   }
 }

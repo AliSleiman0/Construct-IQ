@@ -14,11 +14,27 @@ import {
 } from '@mui/material';
 import dayjs from 'dayjs';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { mockOrgs } from '@/mocks/orgs.mock';
-import { useMockState } from '@/store/mock-state.store';
+import { AppLoader } from '@/components/ui/AppLoader';
+import { AppErrorState } from '@/components/ui/AppErrorState';
+import { useOrganizations } from '@/features/organizations/hooks/useOrganizations';
+import { useTickets } from '@/features/tickets/hooks/useTickets';
 
 export default function SupportAgentCustomersPage() {
-  const tickets = useMockState((s) => s.tickets);
+  // Platform-staff view — the org list endpoint now admits Support Agents, not
+  // just Super Admins. Open-ticket counts come from the tickets they can see.
+  const { data: orgs, isLoading, isError, refetch } = useOrganizations();
+  const { data: tickets } = useTickets();
+
+  const openByOrg = new Map<string, number>();
+  for (const t of (tickets ?? []) as any[]) {
+    if (t.status !== 'CLOSED' && t.status !== 'RESOLVED') {
+      const key = String(t.organizationId ?? t.orgId ?? '');
+      openByOrg.set(key, (openByOrg.get(key) ?? 0) + 1);
+    }
+  }
+
+  if (isLoading) return <AppLoader />;
+  if (isError) return <AppErrorState onRetry={refetch} />;
 
   return (
     <Box>
@@ -44,10 +60,8 @@ export default function SupportAgentCustomersPage() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {mockOrgs.map((o) => {
-              const openTickets = tickets.filter(
-                (t) => t.orgId === o.id && t.status !== 'CLOSED' && t.status !== 'RESOLVED',
-              ).length;
+            {(orgs ?? []).map((o) => {
+              const openTickets = openByOrg.get(String(o.id)) ?? 0;
               return (
                 <TableRow key={o.id} hover>
                   <TableCell sx={{ fontWeight: 500 }}>{o.name}</TableCell>
@@ -62,7 +76,7 @@ export default function SupportAgentCustomersPage() {
                       sx={{ fontWeight: 600 }}
                     />
                   </TableCell>
-                  <TableCell>{o.userCount}</TableCell>
+                  <TableCell>{o._count?.users ?? 0}</TableCell>
                   <TableCell>
                     <Chip
                       label={openTickets}

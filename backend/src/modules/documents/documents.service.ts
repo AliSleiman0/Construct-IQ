@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { DocumentEntity, DocumentEntityDocument } from './schemas/document.schema';
 import { Project, ProjectDocument } from '../projects/schemas/project.schema';
+import { Unit, UnitDocument } from '../units/schemas/unit.schema';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -35,8 +36,22 @@ export class DocumentsService {
     @InjectModel(DocumentEntity.name)
     private documentModel: Model<DocumentEntityDocument>,
     @InjectModel(Project.name) private projectModel: Model<ProjectDocument>,
+    @InjectModel(Unit.name) private unitModel: Model<UnitDocument>,
     private readonly s3: S3Service,
   ) {}
+
+  /**
+   * Project ids the user bought a unit in. An external buyer is a member of no
+   * project, so without this their contract and floor-plan documents would be
+   * invisible to them. Mirrors UnitsService.buyerProjectIds.
+   */
+  private async buyerProjectIds(organizationId: string, userId: string): Promise<string[]> {
+    const units = await this.unitModel
+      .find({ organizationId, buyerId: userId })
+      .select('projectId')
+      .lean();
+    return Array.from(new Set(units.map((u: any) => String(u.projectId))));
+  }
 
   /** Project ids the user is a member of, within their org. */
   private async memberProjectIds(organizationId: string, userId: string): Promise<string[]> {
@@ -61,7 +76,11 @@ export class DocumentsService {
     if (dailyReportId) filter.dailyReportId = dailyReportId;
 
     if (viewer && !viewer.orgWide && !isSuperAdmin) {
-      const restrictIds = await this.memberProjectIds(organizationId, viewer.userId);
+      const [memberIds, ownedIds] = await Promise.all([
+        this.memberProjectIds(organizationId, viewer.userId),
+        this.buyerProjectIds(organizationId, viewer.userId),
+      ]);
+      const restrictIds = Array.from(new Set([...memberIds, ...ownedIds]));
       if (restrictIds.length === 0) return [];
       // Honour an explicit project filter only if the caller is a member.
       filter.projectId =

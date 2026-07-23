@@ -2,14 +2,35 @@
 
 import { Box, Paper, Typography } from '@mui/material';
 import dayjs from 'dayjs';
-import { mockProgressPhotos } from '@/mocks/progress.mock';
+import { AppLoader } from '@/components/ui/AppLoader';
+import { useProgressPhotos } from '../hooks/useProgressPhotos';
 
-export function PhotoGallery() {
+interface PhotoGalleryProps {
+  /** Derived from the buyer's own unit — null until that resolves. */
+  projectId: string | null;
+}
+
+export function PhotoGallery({ projectId }: PhotoGalleryProps) {
+  // A buyer is not a project member, so the backend treats the projects they
+  // bought into as visible — otherwise this gallery would always be empty.
+  const { data, isLoading } = useProgressPhotos(
+    projectId ? { projectId } : undefined,
+  );
+  const photos = data ?? [];
+
   return (
     <Box>
       <Typography variant="subtitle1" fontWeight={600} mb={2}>
         Site photos
       </Typography>
+
+      {isLoading && <AppLoader />}
+
+      {!isLoading && photos.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          No site photos have been published yet.
+        </Typography>
+      )}
       <Box
         sx={{
           display: 'grid',
@@ -21,7 +42,7 @@ export function PhotoGallery() {
           },
         }}
       >
-        {mockProgressPhotos.map((p) => (
+        {photos.map((p) => (
           <Paper
             key={p.id}
             elevation={0}
@@ -35,7 +56,7 @@ export function PhotoGallery() {
             <Box
               component="img"
               src={p.url}
-              alt={p.caption}
+              alt={p.caption ?? 'Site photo'}
               sx={{
                 width: '100%',
                 height: 200,

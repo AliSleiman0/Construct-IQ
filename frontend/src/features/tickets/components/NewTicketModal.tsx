@@ -11,8 +11,7 @@ import {
   Stack,
 } from '@mui/material';
 import { useState } from 'react';
-import { useMockState } from '@/store/mock-state.store';
-import { useAuthStore } from '@/store/auth.store';
+import { useCreateTicket } from '../hooks/useTickets';
 import type { TicketPriority } from '@/mocks/tickets.mock';
 
 const PRIORITIES: TicketPriority[] = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
@@ -24,8 +23,10 @@ interface NewTicketModalProps {
 }
 
 export function NewTicketModal({ open, onClose, onCreated }: NewTicketModalProps) {
-  const user = useAuthStore((s) => s.user);
-  const createTicket = useMockState((s) => s.createTicket);
+  // POST /tickets is gated on `create:tickets`, which CLIENT holds — raising a
+  // case is a customer action, not a triage one. The reporter is taken from the
+  // JWT server-side, so nothing about the author is sent from here.
+  const createTicket = useCreateTicket();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('NORMAL');
@@ -37,19 +38,17 @@ export function NewTicketModal({ open, onClose, onCreated }: NewTicketModalProps
   };
 
   const handleSubmit = () => {
-    if (!user || !title.trim() || !body.trim()) return;
-    const t = createTicket({
-      title: title.trim(),
-      body: body.trim(),
-      priority,
-      orgId: user.organization.id,
-      orgName: user.organization.name,
-      reporterId: user.id,
-      reporterName: `${user.firstName} ${user.lastName}`,
-    });
-    reset();
-    onClose();
-    onCreated?.(t.id);
+    if (!title.trim() || !body.trim() || createTicket.isPending) return;
+    createTicket.mutate(
+      { title: title.trim(), body: body.trim(), priority },
+      {
+        onSuccess: (created) => {
+          reset();
+          onClose();
+          if (created?.id) onCreated?.(created.id);
+        },
+      },
+    );
   };
 
   const handleClose = () => {
@@ -99,7 +98,7 @@ export function NewTicketModal({ open, onClose, onCreated }: NewTicketModalProps
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={!title.trim() || !body.trim()}
+          disabled={!title.trim() || !body.trim() || createTicket.isPending}
         >
           Create ticket
         </Button>

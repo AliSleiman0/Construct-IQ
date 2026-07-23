@@ -1,7 +1,8 @@
 'use client';
 
 import { Box, MenuItem, TextField, Stack } from '@mui/material';
-import type { UnitStatus, UnitType } from '@/mocks/units.mock';
+import type { UnitStatus, UnitType } from '@/types/unit.types';
+import { UNIT_TYPES, UNIT_TYPE_LABELS } from '@/types/unit.types';
 
 export interface UnitFilterValue {
   status: 'ALL' | UnitStatus;
@@ -10,17 +11,18 @@ export interface UnitFilterValue {
   maxPrice: 'ALL' | number;
 }
 
-const TYPES: ('ALL' | UnitType)[] = ['ALL', '1BR', '2BR', '3BR', 'Penthouse'];
+const TYPES: ('ALL' | UnitType)[] = ['ALL', ...UNIT_TYPES];
 const STATUSES: ('ALL' | UnitStatus)[] = ['ALL', 'AVAILABLE', 'RESERVED', 'SOLD'];
-const FLOORS = [7, 8, 9, 10, 11, 12];
 const PRICES = [300_000, 400_000, 500_000, 700_000, 1_000_000];
 
 interface UnitFiltersProps {
   value: UnitFilterValue;
   onChange: (next: UnitFilterValue) => void;
+  /** Floors present in the current result set — was a hardcoded 7..12 list. */
+  floors?: number[];
 }
 
-export function UnitFilters({ value, onChange }: UnitFiltersProps) {
+export function UnitFilters({ value, onChange, floors = [] }: UnitFiltersProps) {
   const update = <K extends keyof UnitFilterValue>(key: K, next: UnitFilterValue[K]) =>
     onChange({ ...value, [key]: next });
 
@@ -51,7 +53,7 @@ export function UnitFilters({ value, onChange }: UnitFiltersProps) {
         >
           {TYPES.map((t) => (
             <MenuItem key={t} value={t}>
-              {t === 'ALL' ? 'All types' : t}
+              {t === 'ALL' ? 'All types' : UNIT_TYPE_LABELS[t]}
             </MenuItem>
           ))}
         </TextField>
@@ -69,7 +71,7 @@ export function UnitFilters({ value, onChange }: UnitFiltersProps) {
           sx={{ minWidth: 120 }}
         >
           <MenuItem value="ALL">All floors</MenuItem>
-          {FLOORS.map((f) => (
+          {floors.map((f) => (
             <MenuItem key={f} value={String(f)}>
               Floor {f}
             </MenuItem>

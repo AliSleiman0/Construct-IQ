@@ -16,6 +16,9 @@ import { PurchaseOrder } from '../procurement/schemas/purchase-order.schema';
 import { BoqItem } from '../surveyor/schemas/boq-item.schema';
 import { Variation } from '../surveyor/schemas/variation.schema';
 import { Valuation } from '../surveyor/schemas/valuation.schema';
+import { Milestone } from '../projects/schemas/milestone.schema';
+import { Unit } from '../units/schemas/unit.schema';
+import { Payment } from '../units/schemas/payment.schema';
 
 /** How long an org snapshot is served before a read recomputes + writes it back. */
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000;
@@ -39,7 +42,90 @@ export class DashboardService {
     @InjectModel(BoqItem.name) private boqModel: Model<any>,
     @InjectModel(Variation.name) private variationModel: Model<any>,
     @InjectModel(Valuation.name) private valuationModel: Model<any>,
+    @InjectModel(Milestone.name) private milestoneModel: Model<any>,
+    @InjectModel(Unit.name) private unitModel: Model<any>,
+    @InjectModel(Payment.name) private paymentModel: Model<any>,
   ) {}
+
+  /**
+   * Dashboard for an external buyer — scoped to the unit they own rather than
+   * to project membership, because a CLIENT belongs to no project. Returns null
+   * fields (not an error) when they have no unit yet, so the page can render a
+   * "browse the building" empty state.
+   */
+  async getClientDashboard(organizationId: string, userId: string) {
+    const unit: any = await this.unitModel
+      .findOne({ organizationId, buyerId: userId })
+      .lean();
+
+    if (!unit) {
+      return {
+        hasUnit: false,
+        unitLabel: null,
+        projectName: null,
+        percentComplete: 0,
+        paidToDate: 0,
+        contractTotal: 0,
+        nextMilestoneName: null,
+        nextMilestoneDate: null,
+        nextPaymentAmount: null,
+        nextPaymentDate: null,
+        milestoneProgress: [],
+      };
+    }
+
+    const [project, milestones, payments] = await Promise.all([
+      this.projectModel.findOne({ _id: unit.projectId }).select('name').lean(),
+      this.milestoneModel
+        .find({ projectId: unit.projectId, deletedAt: null })
+        .sort({ targetDate: 1 })
+        .lean(),
+      this.paymentModel.find({ unitId: unit._id }).sort({ dueDate: 1 }).lean(),
+    ]);
+
+    // A PARTIAL installment contributes what was actually received.
+    const paidToDate = payments.reduce(
+      (sum: number, p: any) =>
+        sum + (p.status === 'PAID' ? p.amountUsd : (p.paidAmountUsd ?? 0)),
+      0,
+    );
+    const contractTotal = payments.reduce((sum: number, p: any) => sum + p.amountUsd, 0);
+
+    const percentComplete =
+      milestones.length === 0
+        ? 0
+        : Math.round(
+            milestones.reduce((sum: number, m: any) => sum + (m.percentComplete ?? 0), 0) /
+              milestones.length,
+          );
+
+    const nextMilestone =
+      milestones.find((m: any) => m.status === 'IN_PROGRESS') ??
+      milestones.find((m: any) => m.status === 'PENDING') ??
+      null;
+
+    const nextPayment =
+      payments.find((p: any) => p.status !== 'PAID' && p.status !== 'CANCELLED') ?? null;
+
+    return {
+      hasUnit: true,
+      unitLabel: unit.label,
+      unitType: unit.type,
+      bedrooms: unit.bedrooms,
+      projectName: (project as any)?.name ?? null,
+      percentComplete,
+      paidToDate,
+      contractTotal,
+      nextMilestoneName: nextMilestone?.name ?? null,
+      nextMilestoneDate: nextMilestone?.targetDate ?? null,
+      nextPaymentAmount: nextPayment?.amountUsd ?? null,
+      nextPaymentDate: nextPayment?.dueDate ?? null,
+      milestoneProgress: milestones.map((m: any) => ({
+        label: m.name,
+        value: m.percentComplete ?? 0,
+      })),
+    };
+  }
 
   /**
    * Org dashboard via a persisted snapshot (#36). Serves a fresh snapshot when

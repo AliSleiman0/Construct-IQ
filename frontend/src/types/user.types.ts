@@ -58,6 +58,10 @@ export interface Role {
   id: string;
   name: string;
   description?: string | null;
+  /** Present on the /users/roles listing — the grants that define the role. */
+  permissionKeys?: string[];
+  isSystem?: boolean;
+  userCount?: number;
 }
 
 export interface CreateUserPayload {

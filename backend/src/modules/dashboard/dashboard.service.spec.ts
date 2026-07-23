@@ -15,6 +15,9 @@ import { PurchaseOrder } from '../procurement/schemas/purchase-order.schema';
 import { BoqItem } from '../surveyor/schemas/boq-item.schema';
 import { Variation } from '../surveyor/schemas/variation.schema';
 import { Valuation } from '../surveyor/schemas/valuation.schema';
+import { Milestone } from '../projects/schemas/milestone.schema';
+import { Unit } from '../units/schemas/unit.schema';
+import { Payment } from '../units/schemas/payment.schema';
 
 /**
  * Unit tests for DashboardService.getPmDashboard — member-scoping, the
@@ -52,6 +55,9 @@ describe('DashboardService — getPmDashboard', () => {
         { provide: getModelToken(BoqItem.name), useValue: {} },
         { provide: getModelToken(Variation.name), useValue: {} },
         { provide: getModelToken(Valuation.name), useValue: {} },
+        { provide: getModelToken(Milestone.name), useValue: {} },
+        { provide: getModelToken(Unit.name), useValue: {} },
+        { provide: getModelToken(Payment.name), useValue: {} },
       ],
     }).compile();
     service = moduleRef.get(DashboardService);
@@ -146,6 +152,9 @@ describe('DashboardService — getSiteEngDashboard', () => {
         { provide: getModelToken(BoqItem.name), useValue: {} },
         { provide: getModelToken(Variation.name), useValue: {} },
         { provide: getModelToken(Valuation.name), useValue: {} },
+        { provide: getModelToken(Milestone.name), useValue: {} },
+        { provide: getModelToken(Unit.name), useValue: {} },
+        { provide: getModelToken(Payment.name), useValue: {} },
       ],
     }).compile();
     service = moduleRef.get(DashboardService);
@@ -233,6 +242,9 @@ describe('DashboardService — getSurveyorDashboard', () => {
         { provide: getModelToken(BoqItem.name), useValue: boqModel },
         { provide: getModelToken(Variation.name), useValue: variationModel },
         { provide: getModelToken(Valuation.name), useValue: valuationModel },
+        { provide: getModelToken(Milestone.name), useValue: {} },
+        { provide: getModelToken(Unit.name), useValue: {} },
+        { provide: getModelToken(Payment.name), useValue: {} },
       ],
     }).compile();
     service = moduleRef.get(DashboardService);
@@ -344,6 +356,7 @@ describe('DashboardService — org snapshot (#36)', () => {
 
   const allModelTokens = [
     Project, Task, User, Issue, DailyReport, AuditLog, Expense, Budget, PurchaseOrder, BoqItem, Variation, Valuation,
+    Milestone, Unit, Payment,
   ];
 
   beforeEach(async () => {

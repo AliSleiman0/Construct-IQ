@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { DashboardStats, OrgDashboardData, PmDashboardData, SiteEngDashboardData, SurveyorDashboardData } from '@/types/dashboard.types';
+import type { ClientDashboardData, DashboardStats, OrgDashboardData, PmDashboardData, SiteEngDashboardData, SurveyorDashboardData } from '@/types/dashboard.types';
 import type { Project } from '@/types/project.types';
 
 export const dashboardApi = {
@@ -25,6 +25,11 @@ export const dashboardApi = {
 
   getSiteEngDashboard: async (): Promise<SiteEngDashboardData> => {
     const res = await apiClient.get<SiteEngDashboardData>('/dashboard/site-eng');
+    return res.data;
+  },
+
+  getClientDashboard: async (): Promise<ClientDashboardData> => {
+    const res = await apiClient.get<ClientDashboardData>('/dashboard/client');
     return res.data;
   },
 

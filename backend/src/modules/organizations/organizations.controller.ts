@@ -45,11 +45,18 @@ export class OrganizationsController {
   ) {}
 
   /** Super Admin only — list all organizations on the platform */
+  // Cross-org directory. `read:organizations` alone is not enough — regular
+  // staff (e.g. PM) hold it to read their *own* org, and must never see every
+  // tenant. The list is limited to platform staff: Super Admins and Support
+  // Agents (cross-org support). Gated on the role, not just the permission.
   @Get()
   @RequirePermissions(PERMISSIONS.ORGANIZATIONS.READ)
   findAll(@CurrentUser() user: JwtPayload) {
-    if (!user.isSuperAdmin) {
-      throw new ForbiddenException('Only Super Admins can list all organizations');
+    const isSupportAgent = (user.roles ?? []).includes('SUPPORT_AGENT');
+    if (!user.isSuperAdmin && !isSupportAgent) {
+      throw new ForbiddenException(
+        'Only platform staff can list all organizations',
+      );
     }
     return this.organizationsService.findAll();
   }

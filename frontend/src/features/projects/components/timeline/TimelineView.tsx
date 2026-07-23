@@ -20,6 +20,7 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import { useSnackbar } from 'notistack';
 import { AppButton } from '@/components/ui/AppButton';
 import { useProjects } from '@/features/projects/hooks/useProjects';
+import { useAuthStore } from '@/store/auth.store';
 import {
   useCreatePhase,
   useDeletePhase,
@@ -68,6 +69,15 @@ export function TimelineView() {
   const { enqueueSnackbar } = useSnackbar();
   const { data: projects, isLoading: projectsLoading } = useProjects();
   const [projectId, setProjectId] = useState<string>('');
+
+  // Read-only viewers (Site Engineer holds read:phases/read:milestones only)
+  // may open the schedule but must not be offered create/edit affordances that
+  // would just 403 at the API. PM / Planning Engineer hold manage:* and keep
+  // full control.
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const isSuperAdmin = !!useAuthStore((s) => s.user?.isSuperAdmin);
+  const canManage =
+    isSuperAdmin || hasPermission('manage:phases') || hasPermission('manage:milestones');
 
   // Default to the first project once project list loads.
   useEffect(() => {
@@ -235,11 +245,13 @@ export function TimelineView() {
   const [editMilestone, setEditMilestone] = useState<Milestone | null>(null);
 
   const noProjects = !projectsLoading && (projects?.length ?? 0) === 0;
-  const addDisabledReason = noProjects
-    ? 'Create a project first'
-    : !projectId
-      ? 'Pick a project to add'
-      : undefined;
+  const addDisabledReason = !canManage
+    ? 'You have read-only access to the schedule'
+    : noProjects
+      ? 'Create a project first'
+      : !projectId
+        ? 'Pick a project to add'
+        : undefined;
 
   const handleCreatePhase = async (values: PhaseFormValues) => {
     if (!projectId) return;
@@ -508,8 +520,9 @@ export function TimelineView() {
                   totalHeight={PIN_LANE_HEIGHT + AXIS_HEIGHT + phasesAreaHeight}
                   windowSpanMs={window.endMs - window.startMs}
                   getTrackWidth={getTrackWidth}
-                  onClick={(milestone) => setEditMilestone(milestone)}
-                  onCommitDate={handleMilestoneDate}
+                  canEdit={canManage}
+                  onClick={canManage ? (milestone) => setEditMilestone(milestone) : undefined}
+                  onCommitDate={canManage ? handleMilestoneDate : undefined}
                 />
               ))}
               <DependencyLayer
@@ -534,8 +547,9 @@ export function TimelineView() {
                     window={window}
                     windowSpanMs={window.endMs - window.startMs}
                     getTrackWidth={getTrackWidth}
-                    onClick={(phase) => setEditPhase(phase)}
-                    onCommitDates={handlePhaseDates}
+                    canEdit={canManage}
+                    onClick={canManage ? (phase) => setEditPhase(phase) : undefined}
+                    onCommitDates={canManage ? handlePhaseDates : undefined}
                   />
                 ))}
                 {phases.length === 0 && (

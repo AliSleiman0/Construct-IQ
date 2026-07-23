@@ -4,6 +4,7 @@ import {
   resolveNavigationRoute,
   resolveNavigationScope,
 } from './navigation-catalog';
+import { STANDARD_ROLES } from '../../../common/constants/standard-roles';
 
 /**
  * The navigation catalog is the per-user boundary for the AI assistant: it
@@ -11,51 +12,18 @@ import {
  * assistant offers a Site Engineer the budget page — the exact failure this
  * whole feature exists to prevent.
  *
- * Permission sets below mirror STANDARD_ROLES in organizations.service.ts.
+ * Permission sets are sourced from STANDARD_ROLES (not hand-copied) so this
+ * spec cannot drift from what real orgs actually provision.
  */
-const SITE_ENG_PERMS = [
-  'read:projects',
-  'read:users',
-  'read:tasks',
-  'update:tasks',
-  'create:reports',
-  'read:reports',
-  'read:issues',
-  'read:inspections',
-  'read:rfis',
-  'read:deliveries',
-  'confirm:deliveries',
-  'read:documents',
-  'read:ai',
-  'use:ai',
-  'read:dashboard',
-];
+const permsFor = (roleName: string): string[] => {
+  const role = STANDARD_ROLES.find((r) => r.name === roleName);
+  if (!role) throw new Error(`STANDARD_ROLES has no role ${roleName}`);
+  return role.permissions;
+};
 
-const PM_PERMS = [
-  'read:users',
-  'manage:projects',
-  'manage:phases',
-  'manage:tasks',
-  'manage:reports',
-  'manage:issues',
-  'read:budget',
-  'read:purchase_orders',
-  'manage:documents',
-  'read:dashboard',
-  'use:ai',
-  'manage:bids',
-];
-
-const SURVEYOR_PERMS = [
-  'read:projects',
-  'read:tasks',
-  'read:reports',
-  'manage:budget',
-  'read:purchase_orders',
-  'read:documents',
-  'read:dashboard',
-  'use:ai',
-];
+const SITE_ENG_PERMS = permsFor('SITE_ENG');
+const PM_PERMS = permsFor('PM');
+const SURVEYOR_PERMS = permsFor('SURVEYOR');
 
 /** ChatCompletionTool is a union in the SDK; every tool we build is a function tool. */
 const toolNames = (tools: ReturnType<typeof buildNavigationTools>) =>
@@ -136,8 +104,15 @@ describe('navigation catalog — per-user scoping', () => {
       expect(routes['budget']).toBe('/surveyor/budget');
     });
 
-    it('does NOT offer daily reports — the surveyor has no reports route', () => {
-      expect(keysOf(SURVEYOR_PERMS, ['SURVEYOR'])).not.toContain('daily-reports');
+    it('offers the read-only sections its grants justify (reports, issues)', () => {
+      // SURVEYOR holds read:reports + read:issues, so these routes were added.
+      const routes = Object.fromEntries(scope.destinations.map((d) => [d.key, d.route]));
+      expect(routes['daily-reports']).toBe('/surveyor/reports');
+      expect(routes['issues']).toBe('/surveyor/issues');
+    });
+
+    it('does NOT offer inspections — the surveyor has no inspections grant', () => {
+      expect(keysOf(SURVEYOR_PERMS, ['SURVEYOR'])).not.toContain('inspections');
     });
 
     it('cannot be navigated to a specific project (no projects route)', () => {

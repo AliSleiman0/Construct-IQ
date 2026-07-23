@@ -37,3 +37,12 @@ export function useSurveyorDashboard() {
     enabled: isAuthenticated,
   });
 }
+
+export function useClientDashboard() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery({
+    queryKey: ['dashboard', 'client'],
+    queryFn: dashboardApi.getClientDashboard,
+    enabled: isAuthenticated,
+  });
+}

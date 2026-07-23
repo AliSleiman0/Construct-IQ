@@ -68,10 +68,18 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
   ORG_ADMIN: [
     { label: 'Dashboard', href: '/admin/dashboard', icon: DashboardIcon },
     { label: 'Projects', href: '/admin/projects', icon: FolderOpenIcon },
+    { label: 'Tasks', href: '/admin/tasks', icon: TaskAltIcon },
+    { label: 'Daily Reports', href: '/admin/daily-reports', icon: ArticleIcon },
+    { label: 'Issues', href: '/admin/issues', icon: ReportProblemIcon },
+    { label: 'Budget', href: '/admin/budget', icon: AccountBalanceWalletIcon },
+    { label: 'Procurement', href: '/admin/procurement', icon: LocalShippingIcon },
+    { label: 'Documents', href: '/admin/documents', icon: FolderIcon },
     { label: 'People', href: '/admin/people', icon: PeopleIcon },
+    { label: 'Roles', href: '/admin/roles', icon: AdminPanelSettingsIcon },
+    { label: 'Analytics', href: '/admin/reports', icon: AssessmentIcon },
+    { label: 'Audit Log', href: '/admin/audit-log', icon: HistoryIcon },
     { label: 'Subscription', href: '/admin/subscription', icon: CardMembershipIcon },
     { label: 'Billing', href: '/admin/billing', icon: ReceiptLongIcon },
-    { label: 'Reports', href: '/admin/reports', icon: AssessmentIcon },
     { label: 'Support', href: '/admin/support', icon: SupportAgentIcon },
     { label: 'Settings', href: '/admin/settings', icon: SettingsIcon },
   ],
@@ -83,6 +91,8 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Tasks', href: '/pm/tasks', icon: TaskAltIcon },
     { label: 'Daily Reports', href: '/pm/reports', icon: ArticleIcon },
     { label: 'Issues', href: '/pm/issues', icon: ReportProblemIcon },
+    { label: 'Inspections', href: '/pm/inspections', icon: FactCheckIcon },
+    { label: 'RFIs', href: '/pm/rfis', icon: QuestionAnswerIcon },
     { label: 'Budget', href: '/pm/budget', icon: AccountBalanceWalletIcon },
     { label: 'Procurement', href: '/pm/procurement', icon: LocalShippingIcon },
     { label: 'Bids', href: '/pm/bids', icon: GavelIcon },
@@ -96,6 +106,7 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Purchase Orders', href: '/procurement/orders', icon: ShoppingCartIcon },
     { label: 'Deliveries', href: '/procurement/deliveries', icon: LocalShippingIcon },
     { label: 'Bids', href: '/procurement/bids', icon: GavelIcon },
+    { label: 'Documents', href: '/procurement/documents', icon: FolderIcon },
   ],
 
   SURVEYOR: [
@@ -105,10 +116,34 @@ export const SIDEBAR_BY_ROLE: Record<Role, NavItem[]> = {
     { label: 'Valuations', href: '/surveyor/valuations', icon: CalculateIcon },
     { label: 'Purchase Orders', href: '/surveyor/orders', icon: ShoppingCartIcon },
     { label: 'Budget', href: '/surveyor/budget', icon: AccountBalanceWalletIcon },
+    { label: 'Daily Reports', href: '/surveyor/reports', icon: ArticleIcon },
+    { label: 'Issues', href: '/surveyor/issues', icon: ReportProblemIcon },
+  ],
+
+  PLANNING_ENG: [
+    { label: 'Dashboard', href: '/planning-eng/dashboard', icon: DashboardIcon },
+    // Schedule (TimelineView) already renders phases *and* milestones with full
+    // CRUD via MilestoneModal — a separate Milestones page would duplicate it.
+    { label: 'Schedule', href: '/planning-eng/schedule', icon: CalendarMonthIcon },
+    { label: 'Tasks', href: '/planning-eng/tasks', icon: TaskAltIcon },
+    { label: 'Daily Reports', href: '/planning-eng/reports', icon: ArticleIcon },
+    { label: 'Issues', href: '/planning-eng/issues', icon: ReportProblemIcon },
+    { label: 'Budget', href: '/planning-eng/budget', icon: AccountBalanceWalletIcon },
+    { label: 'Documents', href: '/planning-eng/documents', icon: FolderIcon },
+  ],
+
+  FINANCE_VIEWER: [
+    { label: 'Dashboard', href: '/finance/dashboard', icon: DashboardIcon },
+    { label: 'Budget', href: '/finance/budget', icon: AccountBalanceWalletIcon },
+    { label: 'Purchase Orders', href: '/finance/orders', icon: ShoppingCartIcon },
+    { label: 'Suppliers', href: '/finance/suppliers', icon: StoreIcon },
+    { label: 'Daily Reports', href: '/finance/reports', icon: ArticleIcon },
+    { label: 'Documents', href: '/finance/documents', icon: FolderIcon },
   ],
 
   SITE_ENG: [
     { label: 'Dashboard', href: '/site-eng/dashboard', icon: DashboardIcon },
+    { label: 'Schedule', href: '/site-eng/schedule', icon: CalendarMonthIcon },
     { label: 'Tasks', href: '/site-eng/tasks', icon: TaskAltIcon },
     { label: 'Daily Reports', href: '/site-eng/reports', icon: ArticleIcon },
     { label: 'Issues', href: '/site-eng/issues', icon: ReportProblemIcon },

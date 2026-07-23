@@ -83,3 +83,25 @@ export interface SurveyorDashboardData {
   committedCost: number;
   budgetVariancePct: number;
 }
+
+/**
+ * Buyer-facing dashboard (`GET /dashboard/client`). Scoped to the unit the
+ * caller owns rather than to project membership — a CLIENT belongs to no
+ * project. `hasUnit: false` is a valid, non-error state for a buyer who has
+ * not reserved yet.
+ */
+export interface ClientDashboardData {
+  hasUnit: boolean;
+  unitLabel: string | null;
+  unitType?: string;
+  bedrooms?: number | null;
+  projectName: string | null;
+  percentComplete: number;
+  paidToDate: number;
+  contractTotal: number;
+  nextMilestoneName: string | null;
+  nextMilestoneDate: string | null;
+  nextPaymentAmount: number | null;
+  nextPaymentDate: string | null;
+  milestoneProgress: { label: string; value: number }[];
+}

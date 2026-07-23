@@ -42,6 +42,8 @@ const DEMO_ACCOUNTS: { email: string; role: string; password: string }[] = [
   { email: 'procurement@constructiq.com', role: 'PROCUREMENT',   password: 'Demo@1234' },
   { email: 'qs@constructiq.com',          role: 'SURVEYOR',      password: 'Demo@1234' },
   { email: 'engineer@constructiq.com',    role: 'SITE_ENG',      password: 'Demo@1234' },
+  { email: 'planner@constructiq.com',     role: 'PLANNING_ENG',  password: 'Demo@1234' },
+  { email: 'finance@constructiq.com',     role: 'FINANCE_VIEWER',password: 'Demo@1234' },
   { email: 'client@constructiq.com',      role: 'CLIENT',        password: 'Demo@1234' },
 ];
 

@@ -31,8 +31,15 @@ export interface NavDestination {
   routes: Partial<Record<string, string>>;
 }
 
-const { ADMIN, PROJECT_MANAGER, PROCUREMENT_OFFICER, QUANTITY_SURVEYOR, SITE_ENGINEER } =
-  ROLES;
+const {
+  ADMIN,
+  PROJECT_MANAGER,
+  PROCUREMENT_OFFICER,
+  QUANTITY_SURVEYOR,
+  SITE_ENGINEER,
+  PLANNING_ENGINEER,
+  FINANCE_VIEWER,
+} = ROLES;
 
 export const NAV_DESTINATIONS: NavDestination[] = [
   {
@@ -45,6 +52,8 @@ export const NAV_DESTINATIONS: NavDestination[] = [
       [PROCUREMENT_OFFICER]: '/procurement/dashboard',
       [QUANTITY_SURVEYOR]: '/surveyor/dashboard',
       [SITE_ENGINEER]: '/site-eng/dashboard',
+      [PLANNING_ENGINEER]: '/planning-eng/dashboard',
+      [FINANCE_VIEWER]: '/finance/dashboard',
     },
   },
   {
@@ -70,6 +79,8 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     requires: [PERMISSIONS.PHASES.READ],
     routes: {
       [PROJECT_MANAGER]: '/pm/schedule',
+      [PLANNING_ENGINEER]: '/planning-eng/schedule',
+      [SITE_ENGINEER]: '/site-eng/schedule',
     },
   },
   {
@@ -77,8 +88,10 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Tasks',
     requires: [PERMISSIONS.TASKS.READ],
     routes: {
+      [ADMIN]: '/admin/tasks',
       [PROJECT_MANAGER]: '/pm/tasks',
       [SITE_ENGINEER]: '/site-eng/tasks',
+      [PLANNING_ENGINEER]: '/planning-eng/tasks',
     },
   },
   {
@@ -86,9 +99,22 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Daily Reports',
     requires: [PERMISSIONS.REPORTS.READ],
     routes: {
-      [ADMIN]: '/admin/reports',
+      // Org Admin's /admin/reports is now the Analytics roll-up; the raw daily
+      // report list lives at /admin/daily-reports.
+      [ADMIN]: '/admin/daily-reports',
       [PROJECT_MANAGER]: '/pm/reports',
       [SITE_ENGINEER]: '/site-eng/reports',
+      [PLANNING_ENGINEER]: '/planning-eng/reports',
+      [QUANTITY_SURVEYOR]: '/surveyor/reports',
+      [FINANCE_VIEWER]: '/finance/reports',
+    },
+  },
+  {
+    key: 'analytics',
+    label: 'Analytics',
+    requires: [PERMISSIONS.DASHBOARD.READ],
+    routes: {
+      [ADMIN]: '/admin/reports',
     },
   },
   {
@@ -96,8 +122,11 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Issues',
     requires: [PERMISSIONS.ISSUES.READ],
     routes: {
+      [ADMIN]: '/admin/issues',
       [PROJECT_MANAGER]: '/pm/issues',
       [SITE_ENGINEER]: '/site-eng/issues',
+      [PLANNING_ENGINEER]: '/planning-eng/issues',
+      [QUANTITY_SURVEYOR]: '/surveyor/issues',
     },
   },
   {
@@ -105,6 +134,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Inspections',
     requires: [PERMISSIONS.INSPECTIONS.READ],
     routes: {
+      [PROJECT_MANAGER]: '/pm/inspections',
       [SITE_ENGINEER]: '/site-eng/inspections',
     },
   },
@@ -113,6 +143,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'RFIs',
     requires: [PERMISSIONS.RFIS.READ],
     routes: {
+      [PROJECT_MANAGER]: '/pm/rfis',
       [SITE_ENGINEER]: '/site-eng/rfis',
     },
   },
@@ -121,8 +152,11 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Budget',
     requires: [PERMISSIONS.BUDGET.READ],
     routes: {
+      [ADMIN]: '/admin/budget',
       [PROJECT_MANAGER]: '/pm/budget',
       [QUANTITY_SURVEYOR]: '/surveyor/budget',
+      [PLANNING_ENGINEER]: '/planning-eng/budget',
+      [FINANCE_VIEWER]: '/finance/budget',
     },
   },
   {
@@ -154,6 +188,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Procurement',
     requires: [PERMISSIONS.PURCHASE_ORDERS.READ],
     routes: {
+      [ADMIN]: '/admin/procurement',
       [PROJECT_MANAGER]: '/pm/procurement',
     },
   },
@@ -164,6 +199,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     routes: {
       [PROCUREMENT_OFFICER]: '/procurement/orders',
       [QUANTITY_SURVEYOR]: '/surveyor/orders',
+      [FINANCE_VIEWER]: '/finance/orders',
     },
   },
   {
@@ -180,6 +216,7 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     requires: [PERMISSIONS.SUPPLIERS.READ],
     routes: {
       [PROCUREMENT_OFFICER]: '/procurement/suppliers',
+      [FINANCE_VIEWER]: '/finance/suppliers',
     },
   },
   {
@@ -205,8 +242,28 @@ export const NAV_DESTINATIONS: NavDestination[] = [
     label: 'Documents',
     requires: [PERMISSIONS.DOCUMENTS.READ],
     routes: {
+      [ADMIN]: '/admin/documents',
       [PROJECT_MANAGER]: '/pm/documents',
+      [PROCUREMENT_OFFICER]: '/procurement/documents',
       [SITE_ENGINEER]: '/site-eng/documents',
+      [PLANNING_ENGINEER]: '/planning-eng/documents',
+      [FINANCE_VIEWER]: '/finance/documents',
+    },
+  },
+  {
+    key: 'roles',
+    label: 'Roles',
+    requires: [PERMISSIONS.ROLES.READ],
+    routes: {
+      [ADMIN]: '/admin/roles',
+    },
+  },
+  {
+    key: 'audit-log',
+    label: 'Audit Log',
+    requires: [PERMISSIONS.AUDIT_LOGS.READ],
+    routes: {
+      [ADMIN]: '/admin/audit-log',
     },
   },
   {

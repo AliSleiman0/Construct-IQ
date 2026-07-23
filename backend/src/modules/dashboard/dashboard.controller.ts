@@ -31,6 +31,14 @@ export class DashboardController {
     return this.dashboardService.getSiteEngDashboard(user.organizationId, user.sub);
   }
 
+  // Buyer-scoped, not member-scoped: a CLIENT belongs to no project, so this
+  // resolves everything from the unit they own.
+  @Get('client')
+  @RequirePermissions(PERMISSIONS.DASHBOARD.READ)
+  getClientDashboard(@CurrentUser() user: JwtPayload) {
+    return this.dashboardService.getClientDashboard(user.organizationId, user.sub);
+  }
+
   @Get('surveyor')
   @RequirePermissions(PERMISSIONS.DASHBOARD.READ)
   getSurveyorDashboard(@CurrentUser() user: JwtPayload) {

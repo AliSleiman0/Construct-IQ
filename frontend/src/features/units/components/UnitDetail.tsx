@@ -6,7 +6,10 @@ import BathtubIcon from '@mui/icons-material/Bathtub';
 import SquareFootIcon from '@mui/icons-material/SquareFoot';
 import LayersIcon from '@mui/icons-material/Layers';
 import { useSnackbar } from 'notistack';
-import { findUnitById, type UnitStatus } from '@/mocks/units.mock';
+import { AppLoader } from '@/components/ui/AppLoader';
+import { AppErrorState } from '@/components/ui/AppErrorState';
+import type { UnitStatus } from '@/types/unit.types';
+import { useUnit } from '../hooks/useUnits';
 
 const STATUS_COLOR: Record<UnitStatus, 'success' | 'warning' | 'default'> = {
   AVAILABLE: 'success',
@@ -22,7 +25,12 @@ const STATUS_LABEL: Record<UnitStatus, string> = {
 
 export function UnitDetail({ unitId }: { unitId: string }) {
   const { enqueueSnackbar } = useSnackbar();
-  const unit = findUnitById(unitId);
+  // 404s for a buyer who does not own this unit — the backend scopes the
+  // lookup, so an out-of-scope id is indistinguishable from a missing one.
+  const { data: unit, isLoading, isError, refetch } = useUnit(unitId);
+
+  if (isLoading) return <AppLoader />;
+  if (isError) return <AppErrorState onRetry={refetch} />;
 
   if (!unit) {
     return (
@@ -47,7 +55,7 @@ export function UnitDetail({ unitId }: { unitId: string }) {
       >
         <Box
           component="img"
-          src={unit.imageUrl}
+          src={unit.imageUrl ?? undefined}
           alt={`Unit ${unit.label}`}
           sx={{ width: '100%', height: 380, objectFit: 'cover', display: 'block' }}
         />
@@ -75,8 +83,8 @@ export function UnitDetail({ unitId }: { unitId: string }) {
             }}
           >
             <SpecRow icon={LayersIcon} label="Floor" value={String(unit.floor)} />
-            <SpecRow icon={KingBedIcon} label="Bedrooms" value={String(unit.bedrooms)} />
-            <SpecRow icon={BathtubIcon} label="Bathrooms" value={String(unit.bathrooms)} />
+            <SpecRow icon={KingBedIcon} label="Bedrooms" value={unit.bedrooms == null ? '—' : String(unit.bedrooms)} />
+            <SpecRow icon={BathtubIcon} label="Bathrooms" value={unit.bathrooms == null ? '—' : String(unit.bathrooms)} />
             <SpecRow icon={SquareFootIcon} label="Area" value={`${Math.round(unit.sqft)} ft²`} />
           </Box>
         </Box>
